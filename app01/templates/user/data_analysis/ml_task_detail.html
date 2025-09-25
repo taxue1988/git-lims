@@ -1,0 +1,162 @@
+{% extends 'user_base.html' %}
+
+{% block title %}任务详情 - 自动实验管理系统{% endblock %}
+
+{% block sidebar_menu %}
+<li class="nav-item mb-3">
+    <a href="{% url 'user_task_management' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-vials fa-lg me-3 text-primary"></i>
+        <span class="text-white">实验任务</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'user_analysis_train' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-chart-line fa-lg me-3 text-success"></i>
+        <span class="text-white">数据分析</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'ml_model_creation' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-brain fa-lg me-3 text-info"></i>
+        <span class="text-white">创建模型</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'ml_task_management' %}" class="nav-link active bg-primary rounded shadow">
+        <i class="fas fa-tasks fa-lg me-3"></i>
+        <span class="text-white fw-bold">任务管理</span>
+    </a>
+</li>
+{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">任务详情</h1>
+            <p class="text-muted">查看机器学习任务的详细信息</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'ml_task_management' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>返回列表
+            </a>
+        </div>
+    </div>
+
+    <!-- 任务基本信息 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">任务信息</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>任务名称：</strong>{{ task.name }}</p>
+                    <p><strong>任务描述：</strong>{{ task.description|default:"无" }}</p>
+                    <p><strong>算法：</strong>{{ task.algorithm.display_name }}</p>
+                    <p><strong>状态：</strong>
+                        <span class="badge 
+                            {% if task.status == 'completed' %}bg-success
+                            {% elif task.status == 'running' %}bg-warning
+                            {% elif task.status == 'failed' %}bg-danger
+                            {% else %}bg-secondary{% endif %}">
+                            {{ task.get_status_display }}
+                        </span>
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>创建时间：</strong>{{ task.created_at|date:"Y-m-d H:i:s" }}</p>
+                    <p><strong>开始时间：</strong>{{ task.started_at|date:"Y-m-d H:i:s"|default:"未开始" }}</p>
+                    <p><strong>完成时间：</strong>{{ task.completed_at|date:"Y-m-d H:i:s"|default:"未完成" }}</p>
+                    <p><strong>进度：</strong>{{ task.progress|floatformat:1 }}%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据文件信息 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">数据文件</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <h6>训练数据文件</h6>
+                    <p><strong>文件名：</strong>{{ task.train_data_file.original_filename|default:"未指定" }}</p>
+                    <p><strong>行数：</strong>{{ task.train_data_file.total_rows|default:"-" }}</p>
+                    <p><strong>列数：</strong>{{ task.train_data_file.total_columns|default:"-" }}</p>
+                </div>
+                <div class="col-md-4">
+                    <h6>测试数据文件</h6>
+                    <p><strong>文件名：</strong>{{ task.test_data_file.original_filename|default:"未指定" }}</p>
+                    <p><strong>行数：</strong>{{ task.test_data_file.total_rows|default:"-" }}</p>
+                    <p><strong>列数：</strong>{{ task.test_data_file.total_columns|default:"-" }}</p>
+                </div>
+                <div class="col-md-4">
+                    <h6>算法参数</h6>
+                    <pre class="bg-light p-2 rounded">{{ task.algorithm_parameters|pprint }}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务结果 -->
+    {% if task.result %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">训练结果</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card border-success">
+                        <div class="card-body text-center">
+                            <h6 class="text-success">准确率</h6>
+                            <h4>{{ task.result.accuracy|floatformat:4|default:"-" }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-info">
+                        <div class="card-body text-center">
+                            <h6 class="text-info">R²分数</h6>
+                            <h4>{{ task.result.r2_score|floatformat:4|default:"-" }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-warning">
+                        <div class="card-body text-center">
+                            <h6 class="text-warning">均方误差</h6>
+                            <h4>{{ task.result.mse|floatformat:4|default:"-" }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-primary">
+                        <div class="card-body text-center">
+                            <h6 class="text-primary">F1分数</h6>
+                            <h4>{{ task.result.f1_score|floatformat:4|default:"-" }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 错误信息 -->
+    {% if task.error_message %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-danger">错误信息</h6>
+        </div>
+        <div class="card-body">
+            <pre class="text-danger">{{ task.error_message }}</pre>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

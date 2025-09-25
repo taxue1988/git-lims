@@ -1,0 +1,103 @@
+<html lang='zh-CN'>
+<head>
+    <meta charset='UTF-8'/>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'/>
+    <title>用户登录</title>
+    <script src='https://res.gemcoder.com/js/reload.js'></script>
+    <script src='https://cdn.tailwindcss.com'></script>
+    <link href='https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css' rel='stylesheet'/>
+</head>
+<body class='bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen flex items-center justify-center p-4'>
+
+<!-- 登录卡片容器 -->
+<div class='w-full max-w-md'>
+    <!-- 品牌/Logo区域 -->
+    <div class='text-center mb-8'>
+        <img src='https://design.gemcoder.com/staticResource/echoAiSystemImages/62638f3cce90fd6c5d335103895c7c23.png' alt='品牌Logo'
+             class='w-24 h-24 mx-auto rounded-full shadow-lg mb-4 object-cover'/>
+        <h1 class='text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-gray-800 tracking-tight'>
+            智慧精准有机合成实验室
+        </h1>
+        <p class='text-gray-500 mt-2'>
+            请登录您的账户
+        </p>
+    </div>
+    <!-- 登录表单卡片 -->
+    <div class='bg-white rounded-2xl shadow-xl overflow-hidden transform transition-all duration-300 hover:shadow-2xl'>
+        <!-- 表单头部 -->
+        <div class='bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4'>
+            <h2 class='text-white text-xl font-semibold'>
+                用户登录
+            </h2>
+        </div>
+        <!-- 表单内容 -->
+        <div class='p-6'>
+            {% if error_message %}
+            <div class='mb-4 p-3 bg-red-100 text-red-700 rounded'>
+                {{ error_message }}
+            </div>
+            {% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <!-- 用户名输入 -->
+                <div class='mb-5'>
+                    <label for='username' class='block text-sm font-medium text-gray-700 mb-1'>
+                        用户名
+                    </label>
+                    <div class='relative'>
+                        <div class='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                            <i class='fas fa-user text-gray-400'>
+                            </i>
+                        </div>
+                        <input type='text' id='username' name='username' value="{{ username|default:'' }}"
+                               class='block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200'
+                               placeholder='请输入用户名' required/>
+                    </div>
+                </div>
+                <!-- 密码输入 -->
+                <div class='mb-6'>
+                    <div class='flex justify-between items-center mb-1'>
+                        <label for='password' class='block text-sm font-medium text-gray-700'>
+                            密码
+                        </label>
+                        <a href='javascript:void(0);' class='text-sm text-blue-600 hover:text-blue-500 transition-colors'>
+                            忘记密码?
+                        </a>
+                    </div>
+                    <div class='relative'>
+                        <div class='absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none'>
+                            <i class='fas fa-lock text-gray-400'>
+                            </i>
+                        </div>
+                        <input type='password' id='password' name='password'
+                               class='block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200'
+                               placeholder='请输入密码' required/>
+                    </div>
+                </div>
+                <!-- 记住我 -->
+                <div class='flex items-center mb-6'>
+                    <input id='remember' name='remember' type='checkbox' class='h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition duration-200'/>
+                    <label for='remember' class='ml-2 block text-sm text-gray-700'>
+                        记住我
+                    </label>
+                </div>
+                <!-- 登录按钮 -->
+                <button type='submit'
+                        class='w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-200 transform hover:translate-y-[-2px] active:translate-y-0'>
+                    登录
+                </button>
+            </form>
+        </div>
+    </div>
+    <!-- 联系管理员提示 -->
+    <div class='mt-5 text-center'>
+        <p class='text-gray-600'>
+            还没有账户?
+            <span class='font-medium text-gray-500'>
+                请联系管理员创建账户
+            </span>
+        </p>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1026 @@
+{% extends 'user_base.html' %}
+{% load static %}
+
+{% block title %}任务管理 - 自动实验管理系统{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">任务管理</h1>
+            <p class="text-muted">查看和管理机器学习训练任务</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="refreshTasks()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+            <button class="btn btn-primary" onclick="goToModelCreation()">
+                <i class="fas fa-plus me-1"></i>创建新任务
+            </button>
+        </div>
+    </div>
+
+    <!-- 任务统计 -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                总任务数
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-tasks">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-tasks fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                运行中
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="running-tasks">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-spinner fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                已完成
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="completed-tasks">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                失败
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="failed-tasks">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 筛选和搜索 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">任务筛选</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>状态筛选：</label>
+                        <select class="form-select" id="status-filter">
+                            <option value="">全部状态</option>
+                            <option value="pending">等待中</option>
+                            <option value="running">运行中</option>
+                            <option value="completed">已完成</option>
+                            <option value="failed">失败</option>
+                            <option value="cancelled">已取消</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>算法筛选：</label>
+                        <select class="form-select" id="algorithm-filter">
+                            <option value="">全部算法</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>搜索任务：</label>
+                        <input type="text" class="form-control" id="search-input" placeholder="输入任务名称搜索">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary d-block w-100" onclick="applyFilters()">
+                            <i class="fas fa-search me-1"></i>搜索
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务列表 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">任务列表</h6>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteSelectedTasks()">
+                    <i class="fas fa-trash me-1"></i>删除选中
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="select-all-tasks">
+                            </th>
+                            <th>任务名称</th>
+                            <th>算法</th>
+                            <th>状态</th>
+                            <th>进度</th>
+                            <th>创建者</th>
+                            <th>创建时间</th>
+                            <th>运行时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasks-list-body">
+                        <tr>
+                            <td colspan="9" class="text-center text-muted">暂无任务</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 分页 -->
+            <nav class="mt-3">
+                <ul class="pagination justify-content-center" id="pagination">
+                    <!-- 分页将通过JavaScript动态生成 -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- 任务详情模态框 -->
+<div class="modal fade" id="task-detail-modal" tabindex="-1" aria-labelledby="task-detail-title" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="task-detail-title">任务详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="task-detail-content">
+                    <!-- 任务详情内容将通过JavaScript动态加载 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" onclick="viewTaskResult()">查看结果</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 任务结果模态框 -->
+<div class="modal fade" id="task-result-modal" tabindex="-1" aria-labelledby="task-result-title" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="task-result-title">训练结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="task-result-content">
+                    <!-- 任务结果内容将通过JavaScript动态加载 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+<!--                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>-->
+<!--                <button type="button" class="btn btn-success" onclick="downloadModel()">下载模型</button>-->
+                 <button type="button" class="btn btn-success" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    
+    .progress-sm {
+        height: 8px;
+    }
+    
+    .task-status-badge {
+        font-size: 0.75rem;
+        padding: 0.35em 0.65em;
+    }
+    
+    .modal-xl {
+        max-width: 90%;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentTaskId = null;
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTasks();
+        loadAlgorithms();
+        setupEventListeners();
+        
+        // 每30秒自动刷新一次
+        setInterval(loadTasks, 30000);
+    });
+
+    // 设置事件监听器
+    function setupEventListeners() {
+        // 全选/取消全选
+        document.getElementById('select-all-tasks').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.task-checkbox');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+        });
+        
+        // 搜索输入框回车事件
+        document.getElementById('search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                applyFilters();
+            }
+        });
+    }
+
+    // 加载任务列表
+    function loadTasks(page = 1) {
+        const status = document.getElementById('status-filter').value;
+        const algorithm = document.getElementById('algorithm-filter').value;
+        const search = document.getElementById('search-input').value;
+        
+        const params = new URLSearchParams({
+            page: page,
+            page_size: 10
+        });
+        
+        if (status) params.append('status', status);
+        if (algorithm) params.append('algorithm', algorithm);
+        if (search) params.append('search', search);
+        
+        fetch(`/api/ml/tasks/?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderTasks(data.tasks);
+                updatePagination(data.pagination);
+                updateStatistics(data.statistics);
+                currentPage = page;
+            }
+        })
+        .catch(error => {
+            console.error('加载任务列表失败:', error);
+        });
+    }
+
+    // 渲染任务列表
+    function renderTasks(tasks) {
+        const tbody = document.getElementById('tasks-list-body');
+        tbody.innerHTML = '';
+        
+        if (tasks.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">暂无任务</td></tr>';
+            return;
+        }
+        
+        tasks.forEach(task => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <input type="checkbox" class="task-checkbox" value="${task.id}">
+                </td>
+                <td>
+                    <div>
+                        <strong>${task.task_name}</strong>
+                        ${task.description ? `<br><small class="text-muted">${task.description}</small>` : ''}
+                    </div>
+                </td>
+                <td>
+                    <span class="badge bg-info">${task.algorithm_display_name}</span>
+                </td>
+                <td>
+                    <span class="badge task-status-badge ${getStatusBadgeClass(task.status)}">${task.get_status_display}</span>
+                </td>
+                <td>
+                    ${task.status === 'running' ? `
+                        <div class="progress progress-sm">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: ${task.progress}%">
+                                ${Math.round(task.progress)}%
+                            </div>
+                        </div>
+                    ` : task.status === 'completed' ? '<span class="text-success">100%</span>' : '-'}
+                </td>
+                <td>${task.user_username}</td>
+                <td>${task.created_at}</td>
+                <td>${task.get_duration_display}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="viewTaskDetail(${task.id})" title="查看详情">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        ${task.status === 'completed' ? `
+                            <button class="btn btn-outline-success" onclick="viewTaskResult(${task.id})" title="查看结果">
+                                <i class="fas fa-chart-bar"></i>
+                            </button>
+                        ` : ''}
+                        ${task.status === 'running' ? `
+                            <button class="btn btn-outline-warning" onclick="stopTask(${task.id})" title="停止任务">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-outline-danger" onclick="deleteTask(${task.id})" title="删除任务">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // 获取状态徽章类
+    function getStatusBadgeClass(status) {
+        const statusMap = {
+            'pending': 'bg-secondary',
+            'running': 'bg-warning',
+            'completed': 'bg-success',
+            'failed': 'bg-danger',
+            'cancelled': 'bg-dark'
+        };
+        return statusMap[status] || 'bg-secondary';
+    }
+
+    // 更新分页
+    function updatePagination(pagination) {
+        const paginationEl = document.getElementById('pagination');
+        paginationEl.innerHTML = '';
+        
+        totalPages = pagination.total_pages;
+        
+        if (totalPages <= 1) return;
+        
+        // 上一页
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${pagination.current_page === 1 ? 'disabled' : ''}`;
+        prevLi.innerHTML = `
+            <a class="page-link" href="#" onclick="loadTasks(${pagination.current_page - 1})">
+                <span aria-hidden="true">&laquo;</span>
+            </a>
+        `;
+        paginationEl.appendChild(prevLi);
+        
+        // 页码
+        const startPage = Math.max(1, pagination.current_page - 2);
+        const endPage = Math.min(totalPages, pagination.current_page + 2);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const li = document.createElement('li');
+            li.className = `page-item ${i === pagination.current_page ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#" onclick="loadTasks(${i})">${i}</a>`;
+            paginationEl.appendChild(li);
+        }
+        
+        // 下一页
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${pagination.current_page === totalPages ? 'disabled' : ''}`;
+        nextLi.innerHTML = `
+            <a class="page-link" href="#" onclick="loadTasks(${pagination.current_page + 1})">
+                <span aria-hidden="true">&raquo;</span>
+            </a>
+        `;
+        paginationEl.appendChild(nextLi);
+    }
+
+    // 更新统计信息
+    function updateStatistics(stats) {
+        document.getElementById('total-tasks').textContent = stats.total || 0;
+        document.getElementById('running-tasks').textContent = stats.running || 0;
+        document.getElementById('completed-tasks').textContent = stats.completed || 0;
+        document.getElementById('failed-tasks').textContent = stats.failed || 0;
+    }
+
+    // 加载算法列表
+    function loadAlgorithms() {
+        fetch('/api/ml/algorithms/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('algorithm-filter');
+                select.innerHTML = '<option value="">全部算法</option>';
+                
+                data.algorithms.forEach(algorithm => {
+                    const option = document.createElement('option');
+                    option.value = algorithm.id;
+                    option.textContent = algorithm.display_name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('加载算法列表失败:', error);
+        });
+    }
+
+    // 应用筛选
+    function applyFilters() {
+        loadTasks(1);
+    }
+
+    // 查看任务详情
+    function viewTaskDetail(taskId) {
+        currentTaskId = taskId;
+        
+        fetch(`/api/ml/tasks/${taskId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showTaskDetail(data.task);
+            } else {
+                showToast('获取任务详情失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('获取任务详情失败：网络错误', 'error');
+        });
+    }
+
+    // 显示任务详情
+    function showTaskDetail(task) {
+        const content = document.getElementById('task-detail-content');
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>基本信息</h6>
+                    <table class="table table-sm">
+                        <tr><td><strong>任务名称：</strong></td><td>${task.task_name}</td></tr>
+                        <tr><td><strong>描述：</strong></td><td>${task.description || '无'}</td></tr>
+                        <tr><td><strong>算法：</strong></td><td>${task.algorithm_display_name}</td></tr>
+                        <tr><td><strong>状态：</strong></td><td><span class="badge ${getStatusBadgeClass(task.status)}">${task.get_status_display}</span></td></tr>
+                        <tr><td><strong>进度：</strong></td><td>${Math.round(task.progress)}%</td></tr>
+                        <tr><td><strong>创建者：</strong></td><td>${task.user_username}</td></tr>
+                        <tr><td><strong>创建时间：</strong></td><td>${task.created_at}</td></tr>
+                        <tr><td><strong>开始时间：</strong></td><td>${task.started_at || '未开始'}</td></tr>
+                        <tr><td><strong>完成时间：</strong></td><td>${task.completed_at || '未完成'}</td></tr>
+                        <tr><td><strong>运行时长：</strong></td><td>${task.get_duration_display}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>配置信息</h6>
+                    <table class="table table-sm">
+                        <tr><td><strong>训练集文件：</strong></td><td>${task.train_data_file_name || task.data_file_name}</td></tr>
+                        <tr><td><strong>测试集文件：</strong></td><td>${task.test_data_file_name || '未指定'}</td></tr>
+                        <tr><td><strong>目标列：</strong></td><td>${task.target_column}</td></tr>
+                        <tr><td><strong>特征列：</strong></td><td>${task.feature_columns.join(', ')}</td></tr>
+                    </table>
+                </div>
+            </div>
+            ${task.training_log ? `
+                <div class="mt-3">
+                    <h6>训练日志</h6>
+                    <div class="bg-dark text-light p-3 rounded" style="height: 200px; overflow-y: auto;">
+                        <pre>${task.training_log}</pre>
+                    </div>
+                </div>
+            ` : ''}
+        `;
+        
+        document.getElementById('task-detail-title').textContent = `任务详情 - ${task.task_name}`;
+        const modal = new bootstrap.Modal(document.getElementById('task-detail-modal'));
+        modal.show();
+    }
+
+    // 查看任务结果
+    function viewTaskResult(taskId = null) {
+        const taskIdToUse = taskId || currentTaskId;
+        if (!taskIdToUse) return;
+        
+        fetch(`/api/ml/tasks/${taskIdToUse}/result/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showTaskResult(data.result);
+            } else {
+                showToast('获取任务结果失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('获取任务结果失败：网络错误', 'error');
+        });
+    }
+
+    // 显示任务结果
+    function showTaskResult(result) {
+        try {
+            const content = document.getElementById('task-result-content');
+            if (!content) {
+                showToast('无法找到结果显示区域', 'error');
+                return;
+            }
+            
+            // 判断是否为回归模型
+            const isRegression = result.mse !== null && result.mse !== undefined;
+            
+            content.innerHTML = `
+                <div class=\"row\">
+                    <div class=\"col-md-6 mb-3\">
+                        <div class=\"card shadow-sm h-100\">
+                            <div class=\"card-header py-2\"><h6 class=\"m-0\">评估指标</h6></div>
+                            <div class=\"card-body\">
+                                <table class=\"table table-sm mb-0\">
+                                    ${result.accuracy !== null && result.accuracy !== undefined ? `<tr><td><strong>准确率：</strong></td><td>${(result.accuracy * 100).toFixed(2)}%</td></tr>` : ''}
+                                    ${result.precision !== null && result.precision !== undefined ? `<tr><td><strong>精确率：</strong></td><td>${(result.precision * 100).toFixed(2)}%</td></tr>` : ''}
+                                    ${result.recall !== null && result.recall !== undefined ? `<tr><td><strong>召回率：</strong></td><td>${(result.recall * 100).toFixed(2)}%</td></tr>` : ''}
+                                    ${result.f1_score !== null && result.f1_score !== undefined ? `<tr><td><strong>F1分数：</strong></td><td>${result.f1_score.toFixed(4)}</td></tr>` : ''}
+                                    ${result.mse !== null && result.mse !== undefined ? `<tr><td><strong>均方误差：</strong></td><td>${result.mse.toFixed(4)}</td></tr>` : ''}
+                                    ${result.mae !== null && result.mae !== undefined ? `<tr><td><strong>平均绝对误差：</strong></td><td>${result.mae.toFixed(4)}</td></tr>` : ''}
+                                    ${result.r2_score !== null && result.r2_score !== undefined ? `<tr><td><strong>R²分数：</strong></td><td>${result.r2_score.toFixed(4)}</td></tr>` : ''}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class=\"col-md-6 mb-3\">
+                        <div class=\"card shadow-sm h-100\">
+                            <div class=\"card-header py-2\"><h6 class=\"m-0\">特征重要性</h6></div>
+                            <div class=\"card-body\">
+                                <div id=\"feature-importance-chart\" style=\"height: 360px;\"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class=\"row\">
+                    <div class=\"col-md-6 mb-3\">
+                        <div class=\"card shadow-sm h-100\">
+                            <div class=\"card-header py-2\"><h6 class=\"m-0\">回归模型预测效果评估</h6></div>
+                            <div class=\"card-body\">
+                                ${isRegression ? `
+                                    <div id=\"regression-effect-chart\" style=\"height: 360px;\"></div>
+                                ` : `
+                                    <div id=\"learning-curve-chart\" style=\"height: 360px;\"></div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                    <div class=\"col-md-6 mb-3\">
+                        <div class=\"card shadow-sm h-100\">
+                            <div class=\"card-header py-2\"><h6 class=\"m-0\">特征相关性热力图</h6></div>
+                            <div class=\"card-body\">
+                                <div id=\"feature-correlation-heatmap-chart\" style=\"height: 360px;\"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const titleElement = document.getElementById('task-result-title');
+            if (titleElement) {
+                titleElement.textContent = `训练结果 - ${result.task_name || '未知任务'}`;
+            }
+            
+            const modalEl = document.getElementById('task-result-modal');
+            const modal = new bootstrap.Modal(modalEl);
+            // 模态框完全显示后再渲染，避免容器宽高为0导致空白
+            const onShown = () => {
+                try { renderResultCharts(result); } finally {
+                    modalEl.removeEventListener('shown.bs.modal', onShown);
+                }
+            };
+            modalEl.addEventListener('shown.bs.modal', onShown);
+            modal.show();
+            
+        } catch (error) {
+            console.error('显示任务结果时发生错误:', error);
+            showToast('显示任务结果失败：' + error.message, 'error');
+        }
+    }
+
+    // 渲染结果图表
+    function renderResultCharts(result) {
+        try {
+            // 判断是否为回归模型
+            const isRegression = result.mse !== null && result.mse !== undefined;
+            
+            // 特征重要性图表
+            if (result.feature_importance && result.feature_importance.features && result.feature_importance.importance) {
+                const featureChartElement = document.getElementById('feature-importance-chart');
+                if (featureChartElement) {
+                    const featureChart = echarts.init(featureChartElement);
+                    const featureOption = {
+                        title: {
+                            text: '特征重要性',
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: { type: 'shadow' }
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: result.feature_importance.features,
+                            axisLabel: { rotate: 45 }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '重要性'
+                        },
+                        series: [{
+                            data: result.feature_importance.importance,
+                            type: 'bar',
+                            itemStyle: { color: '#1cc88a' }
+                        }]
+                    };
+                    featureChart.setOption(featureOption);
+                }
+            } else {
+                const featureChartElement = document.getElementById('feature-importance-chart');
+                if (featureChartElement) {
+                    featureChartElement.innerHTML = '<p class="text-muted text-center">暂无特征重要性数据</p>';
+                }
+            }
+            
+            if (isRegression) {
+                // 回归模型：预测效果评估（y_test vs y_pred 散点图）
+                const effectEl = document.getElementById('regression-effect-chart');
+                if (effectEl && result.chart_data && result.chart_data.prediction_vs_actual) {
+                    const effectChart = echarts.init(effectEl);
+                    const actualData = result.chart_data.prediction_vs_actual.actual;
+                    const predictionData = result.chart_data.prediction_vs_actual.predictions;
+                    const minVal = Math.min(...actualData, ...predictionData);
+                    const maxVal = Math.max(...actualData, ...predictionData);
+
+                    const option = {
+                        title: { text: '回归模型预测效果评估', left: 'center', textStyle: { fontSize: 14 } },
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: (p) => `真实值: ${p.data[0]}<br/>预测值: ${p.data[1]}`
+                        },
+                        grid: { left: 50, right: 50, top: 50, bottom: 50 },
+                        xAxis: { type: 'value', name: '真实值 (y_test)', nameLocation: 'middle', nameGap: 28, min: minVal, max: maxVal },
+                        yAxis: { type: 'value', name: '预测值 (y_pred)', nameLocation: 'middle', nameGap: 40, min: minVal, max: maxVal },
+                        series: [
+                            {
+                                name: '预测点',
+                                type: 'scatter',
+                                data: actualData.map((a, i) => [a, predictionData[i]]),
+                                symbolSize: 5,
+                                itemStyle: { color: 'purple', opacity: 0.5 }
+                            },
+                            {
+                                name: '理想线 y=x',
+                                type: 'line',
+                                data: [[minVal, minVal], [maxVal, maxVal]],
+                                symbol: 'none',
+                                lineStyle: { color: '#000', type: 'dashed', width: 2 }
+                            }
+                        ],
+                        graphic: [
+                            {
+                                type: 'text', right: 10, top: 10,
+                                style: { text: `MSE: ${(result.mse || 0).toFixed(4)}\nR²: ${(result.r2_score || 0).toFixed(4)}`, fill: '#333', fontSize: 12, lineHeight: 18, textAlign: 'right' }
+                            }
+                        ]
+                    };
+                    effectChart.setOption(option);
+                } else if (effectEl) {
+                    effectEl.innerHTML = '<p class="text-muted text-center">暂无预测数据</p>';
+                }
+            } else {
+                // 分类模型：学习曲线图表
+                if (result.learning_curve && result.learning_curve.epochs) {
+                    const learningChartElement = document.getElementById('learning-curve-chart');
+                    if (learningChartElement) {
+                        const learningChart = echarts.init(learningChartElement);
+                        const learningOption = {
+                            title: {
+                                text: '学习曲线（准确率）',
+                                left: 'center',
+                                textStyle: { fontSize: 14 }
+                            },
+                            tooltip: {
+                                trigger: 'axis'
+                            },
+                            xAxis: {
+                                type: 'category',
+                                data: result.learning_curve.epochs,
+                                name: '训练轮数'
+                            },
+                            yAxis: {
+                                type: 'value',
+                                name: '准确率',
+                                min: 0,
+                                max: 1
+                            },
+                            series: []
+                        };
+                        
+                        if (result.learning_curve.train_accuracy) {
+                            learningOption.series.push({
+                                data: result.learning_curve.train_accuracy,
+                                type: 'line',
+                                name: '训练准确率',
+                                itemStyle: { color: '#4e73df' }
+                            });
+                        }
+                        
+                        if (result.learning_curve.val_accuracy) {
+                            learningOption.series.push({
+                                data: result.learning_curve.val_accuracy,
+                                type: 'line',
+                                name: '验证准确率',
+                                itemStyle: { color: '#e74a3b' }
+                            });
+                        }
+                        
+                        learningChart.setOption(learningOption);
+                    }
+                } else {
+                    const learningChartElement = document.getElementById('learning-curve-chart');
+                    if (learningChartElement) {
+                        learningChartElement.innerHTML = '<p class="text-muted text-center">暂无学习曲线数据</p>';
+                    }
+                }
+            }
+            
+            // 特征相关性热力图（需要后端提供 correlation_matrix: { labels:[], matrix:[[]] }）
+            (function renderFeatureCorrelation() {
+                const el = document.getElementById('feature-correlation-heatmap-chart');
+                if (!el) return;
+                const corr = result.chart_data && result.chart_data.correlation_matrix;
+                if (!corr || !Array.isArray(corr.matrix) || !Array.isArray(corr.labels)) {
+                    el.innerHTML = '<p class="text-muted text-center">暂无相关性数据</p>';
+                    return;
+                }
+
+                const chart = echarts.init(el);
+                const labels = corr.labels;
+                const matrix = corr.matrix;
+                const data = [];
+                for (let i = 0; i < matrix.length; i++) {
+                    for (let j = 0; j < matrix[i].length; j++) {
+                        data.push([j, i, matrix[i][j]]);
+                    }
+                }
+                const option = {
+                    tooltip: {
+                        position: 'top',
+                        backgroundColor: 'rgba(33,37,41,0.9)',
+                        borderColor: 'rgba(33,37,41,0.9)',
+                        textStyle: { color: '#fff' },
+                        formatter: (p) => `${labels[p.data[1]]} vs ${labels[p.data[0]]}: ${Number(p.data[2]).toFixed(3)}`
+                    },
+                    grid: { left: 80, right: 80, top: 20, bottom: 60 },
+                    xAxis: { type: 'category', data: labels, axisLabel: { rotate: 45 } },
+                    yAxis: { type: 'category', data: labels },
+                    visualMap: {
+                        min: -1, max: 1, calculable: true, orient: 'vertical', right: 10, top: 'middle',
+                        inRange: { color: ['#5B8FF9','#61DDAA','#65789B','#F6BD16','#7262fd','#78D3F8','#9661BC','#F6903D','#E86452','#6DC8EC'] }
+                    },
+                    series: [{ 
+                        type: 'heatmap', 
+                        data, 
+                        label: { show: false },
+                        emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.35)' } }
+                    }]
+                };
+                chart.setOption(option);
+            })();
+
+            if (!isRegression) {
+                // 分类模型：混淆矩阵图表
+                if (result.confusion_matrix && result.confusion_matrix.data) {
+                    const confusionChartElement = document.getElementById('confusion-matrix-chart');
+                    if (confusionChartElement) {
+                        const confusionChart = echarts.init(confusionChartElement);
+                        const matrix = result.confusion_matrix.data || [];
+                        const labels = result.confusion_matrix.labels || result.confusion_matrix.classes || [];
+                        const yLabels = (Array.isArray(labels) && labels.length) ? labels : matrix.map((_, i) => `C${i}`);
+                        const xLabels = (Array.isArray(labels) && labels.length) ? labels : (matrix[0] ? matrix[0].map((_, i) => `C${i}`) : []);
+
+                        const heatmapData = [];
+                        for (let i = 0; i < matrix.length; i++) {
+                            const row = matrix[i] || [];
+                            for (let j = 0; j < row.length; j++) {
+                                heatmapData.push([j, i, row[j]]);
+                            }
+                        }
+
+                        const maxVal = heatmapData.length ? Math.max(...heatmapData.map(d => (typeof d[2] === 'number' ? d[2] : 0)), 1) : 1;
+
+                        const confusionOption = {
+                            title: { text: '混淆矩阵', left: 'center' },
+                            tooltip: { 
+                                position: 'top',
+                                formatter: (p) => {
+                                    const x = xLabels[p.data[0]] ?? p.data[0];
+                                    const y = yLabels[p.data[1]] ?? p.data[1];
+                                    return `${y} → ${x}: ${p.data[2]}`;
+                                }
+                            },
+                            grid: { left: 80, right: 20, top: 60, bottom: 40 },
+                            xAxis: { type: 'category', data: xLabels, axisLabel: { rotate: 45 } },
+                            yAxis: { type: 'category', data: yLabels },
+                            visualMap: {
+                                min: 0,
+                                max: maxVal,
+                                calculable: true,
+                                orient: 'horizontal',
+                                left: 'center',
+                                bottom: 0
+                            },
+                            series: [{
+                                name: 'Confusion',
+                                type: 'heatmap',
+                                data: heatmapData,
+                                label: { show: true },
+                                emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
+                            }]
+                        };
+                        confusionChart.setOption(confusionOption);
+                    }
+                } else {
+                    const confusionChartElement = document.getElementById('confusion-matrix-chart');
+                    if (confusionChartElement) {
+                        confusionChartElement.innerHTML = '<p class="text-muted text-center">暂无混淆矩阵数据</p>';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('渲染图表时发生错误:', error);
+            // 显示错误信息
+            const chartElements = ['feature-importance-chart', 'learning-curve-chart', 'confusion-matrix-chart', 'regression-effect-chart', 'feature-correlation-heatmap-chart'];
+            chartElements.forEach(elementId => {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    element.innerHTML = '<p class="text-danger text-center">图表渲染失败</p>';
+                }
+            });
+        }
+    }
+
+    // 停止任务
+    function stopTask(taskId) {
+        if (confirm('确定要停止这个任务吗？')) {
+            fetch(`/api/ml/tasks/${taskId}/stop/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('任务已停止', 'info');
+                    loadTasks(currentPage);
+                } else {
+                    showToast('停止任务失败：' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('停止任务失败：网络错误', 'error');
+            });
+        }
+    }
+
+    // 删除任务
+    function deleteTask(taskId) {
+        if (confirm('确定要删除这个任务吗？此操作不可恢复。')) {
+            fetch(`/api/ml/tasks/${taskId}/delete/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('任务已删除', 'success');
+                    loadTasks(currentPage);
+                } else {
+                    showToast('删除任务失败：' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('删除任务失败：网络错误', 'error');
+            });
+        }
+    }
+
+    // 删除选中的任务
+    function deleteSelectedTasks() {
+        const checkboxes = document.querySelectorAll('.task-checkbox:checked');
+        if (checkboxes.length === 0) {
+            showToast('请选择要删除的任务', 'warning');
+            return;
+        }
+        
+        if (confirm(`确定要删除选中的 ${checkboxes.length} 个任务吗？此操作不可恢复。`)) {
+            const promises = Array.from(checkboxes).map(checkbox => 
+                fetch(`/api/ml/tasks/${checkbox.value}/delete/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                })
+            );
+            
+            Promise.all(promises)
+            .then(() => {
+                showToast('任务已删除', 'success');
+                loadTasks(currentPage);
+            })
+            .catch(error => {
+                showToast('删除失败：网络错误', 'error');
+            });
+        }
+    }
+
+    // 下载模型
+    function downloadModel() {
+        if (currentTaskId) {
+            window.open(`/api/ml/tasks/${currentTaskId}/download/`, '_blank');
+        }
+    }
+
+    // 跳转到模型创建页面
+    function goToModelCreation() {
+        window.location.href = "{% url 'ml_model_creation' %}";
+    }
+
+    // 刷新任务
+    function refreshTasks() {
+        loadTasks(currentPage);
+        showToast('任务列表已刷新', 'success');
+    }
+
+    // 获取CSRF令牌
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

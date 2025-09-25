@@ -1,0 +1,1028 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}用户管理 - 自动实验管理系统{% endblock %}
+
+{% block sidebar_menu %}
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_dashboard' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-tachometer-alt fa-lg me-3 text-primary"></i>
+        <span class="text-white">仪表板</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_experiment_tasks' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-vials fa-lg me-3"></i>
+        <span class="text-white">实验任务</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_material_requirements' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-boxes fa-lg me-3 text-warning"></i>
+        <span class="text-white">物料需求</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_user_management' %}" class="nav-link active bg-success rounded shadow">
+        <i class="fas fa-users fa-lg me-3 text-success"></i>
+        <span class="text-white fw-bold">用户管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_equipment_management' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-flask fa-lg me-3 text-info"></i>
+        <span class="text-white">设备管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-chart-bar fa-lg me-3 text-warning"></i>
+        <span class="text-white">数据统计</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-cog fa-lg me-3 text-secondary"></i>
+        <span class="text-white">系统设置</span>
+    </a>
+</li>
+{% endblock %}
+
+{% block main_content %}
+<h1 class="h3 mb-4 text-gray-800">用户管理仪表板</h1>
+
+<!-- 用户统计信息卡片 -->
+<div class="row mb-4 g-2 align-items-stretch row-cols-1 row-cols-sm-2 row-cols-lg-4">
+    <div class="col mb-2" data-filter="all" id="filter-all-users" style="cursor:pointer;">
+        <div class="card stat-card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            总用户数
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-users-count">{{ total_users }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col mb-2" data-filter="active" id="filter-active-users" style="cursor:pointer;">
+        <div class="card stat-card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            活跃用户
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="active-users-count">{{ active_users }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col mb-2" data-filter="admin" id="filter-admin-users" style="cursor:pointer;">
+        <div class="card stat-card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            管理员
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="admin-users-count">{{ admin_users }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-shield fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col mb-2" data-filter="preparator" id="filter-preparator-users" style="cursor:pointer;">
+        <div class="card stat-card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            备料员
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="preparator-users-count">{{ preparator_users }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-boxes fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col mb-2" data-filter="new" id="filter-new-users" style="cursor:pointer;">
+        <div class="card stat-card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            本月新增
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="new-users-count">{{ new_users_this_month }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-user-plus fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 用户管理主要内容 -->
+<div class="row">
+    <!-- 用户列表 -->
+    <div class="col-12 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-success">用户列表</h6>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-success btn-sm" id="add-user-btn">
+                            <i class="fas fa-plus me-1"></i>添加用户
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="export-users-btn">
+                            <i class="fas fa-download me-1"></i>导出用户
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 搜索和筛选 -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <select class="form-select" id="role-filter">
+                            <option value="">所有角色</option>
+                            <option value="admin">管理员</option>
+                            <option value="user">普通用户</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" id="status-filter">
+                            <option value="">所有状态</option>
+                            <option value="active">活跃</option>
+                            <option value="inactive">非活跃</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" id="search-input" placeholder="搜索用户名...">
+                    </div>
+                </div>
+
+                <!-- 用户列表表格 -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px;">
+                                    <input type="checkbox" id="select-all-users">
+                                </th>
+                                <th>用户名</th>
+                                <th>邮箱</th>
+                                <th>角色</th>
+                                <th>状态</th>
+                                <th>注册时间</th>
+                                <th>最后登录</th>
+                                <th style="width:120px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <!-- 用户数据将通过JavaScript动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                <nav id="pagination-nav" style="display: none;">
+                    <ul class="pagination" id="pagination-ul">
+                        <!-- 分页将通过JavaScript动态生成 -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- 添加/编辑用户模态框 -->
+<div class="modal fade" id="user-modal" tabindex="-1" aria-labelledby="user-modal-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="user-modal-title">添加用户</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="user-form">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">用户名 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="username" name="username" required 
+                               placeholder="只能包含字母、数字和下划线，长度3-20位">
+                        <div class="invalid-feedback" id="username-error"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">邮箱 <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="email" name="email" required 
+                               placeholder="请输入有效的邮箱地址，如：user@example.com">
+                        <div class="invalid-feedback" id="email-error"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">密码 <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="password" name="password" required 
+                               placeholder="长度至少6位，建议包含字母、数字和特殊字符">
+                        <div class="invalid-feedback" id="password-error"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm-password" class="form-label">确认密码 <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="confirm-password" name="confirm_password" required 
+                               placeholder="请再次输入密码">
+                        <div class="invalid-feedback" id="confirm-password-error"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="role" class="form-label">角色</label>
+                        <select class="form-select" id="role" name="role">
+                            <option value="user">普通用户</option>
+                            <option value="preparator">备料员</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="is_active" class="form-label">状态</label>
+                        <select class="form-select" id="is_active" name="is_active">
+                            <option value="true">活跃</option>
+                            <option value="false">非活跃</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" id="save-user-btn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作结果提示模态框 -->
+<div class="modal fade" id="operation-result-modal" tabindex="-1" aria-labelledby="operation-result-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="operation-result-title">操作结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="operation-result-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 验证错误提示模态框 -->
+<div class="modal fade" id="validation-error-modal" tabindex="-1" aria-labelledby="validation-error-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="validation-error-title">
+                    <i class="fas fa-exclamation-triangle"></i> 数据验证失败
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <h6><i class="fas fa-info-circle"></i> 请检查以下问题：</h6>
+                    <div id="validation-error-details"></div>
+                </div>
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-lightbulb"></i> 输入规则提示：</h6>
+                    <ul class="mb-0">
+                        <li><strong>用户名：</strong>字母、数字、下划线，3-20位</li>
+                        <li><strong>邮箱：</strong>标准邮箱格式，如：user@example.com</li>
+                        <li><strong>密码：</strong>至少6位</li>
+                        <li><strong>确认密码：</strong>两次输入必须一致</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" onclick="focusFirstError()">查看问题</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        border-radius: 0.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        transition: transform 0.2s ease-in-out;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .border-left-primary {
+        border-left: 0.25rem solid #0d6efd !important;
+    }
+
+    .border-left-success {
+        border-left: 0.25rem solid #198754 !important;
+    }
+
+    .border-left-warning {
+        border-left: 0.25rem solid #ffc107 !important;
+    }
+
+    .border-left-info {
+        border-left: 0.25rem solid #0dcaf0 !important;
+    }
+    
+    /* 表单验证样式 */
+    .form-control.is-invalid {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+    
+    .form-control.is-valid {
+        border-color: #198754;
+        box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+    }
+    
+
+    
+    .invalid-feedback {
+        display: block;
+        width: 100%;
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+        color: #dc3545;
+    }
+    
+    .valid-feedback {
+        display: block;
+        width: 100%;
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+        color: #198754;
+    }
+    
+    /* 实时验证状态指示器 */
+    .validation-indicator {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1.2rem;
+    }
+    
+    .validation-indicator.valid {
+        color: #198754;
+    }
+    
+    .validation-indicator.invalid {
+        color: #dc3545;
+    }
+
+    .table th:last-child,
+    .table td:last-child {
+        width: 200px;
+        min-width: 200px;
+    }
+
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.35em 0.65em;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 全局变量
+    let currentPage = 1;
+    let currentRole = '';
+    let currentStatus = '';
+    let currentUser = null;
+
+    // 页面加载完成后初始化
+    $(document).ready(function() {
+        console.log('用户管理页面加载完成，开始初始化...');
+        
+        // 加载用户统计
+        loadUserStatistics();
+        
+        // 加载用户列表
+        loadUsers();
+        
+        // 绑定统计卡片筛选事件
+        bindStatCardFilters();
+        
+        // 绑定筛选事件
+        $('#role-filter').on('change', function() {
+            currentRole = $(this).val();
+            currentPage = 1;
+            loadUsers();
+        });
+        
+        $('#status-filter').on('change', function() {
+            currentStatus = $(this).val();
+            currentPage = 1;
+            loadUsers();
+        });
+        
+        // 绑定搜索事件
+        $('#search-input').on('keypress', function(e) {
+            if (e.which === 13) {
+                currentPage = 1;
+                loadUsers();
+            }
+        });
+        
+        // 全选/取消全选
+        $('#select-all-users').on('change', function() {
+            const checkboxes = $('.user-checkbox');
+            checkboxes.prop('checked', this.checked);
+        });
+        
+        // 添加用户按钮
+        $('#add-user-btn').on('click', function() {
+            showUserModal();
+        });
+        
+        // 保存用户按钮
+        $('#save-user-btn').on('click', function() {
+            saveUser();
+        });
+        
+        // 绑定实时验证事件
+        bindValidationEvents();
+    });
+
+    // 加载用户统计数据
+    function loadUserStatistics() {
+        $.ajax({
+            url: '/api/user/statistics/',
+            method: 'GET',
+            dataType: 'json',
+            success: function(response) {
+                if (response.ok) {
+                    updateStatisticsDisplay(response.data);
+                } else {
+                    console.error('获取用户统计失败:', response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('获取用户统计网络错误:', error);
+            }
+        });
+    }
+
+    // 更新统计显示
+    function updateStatisticsDisplay(data) {
+        // 更新统计卡片
+        $('#total-users-count').text(data.total_users);
+        $('#active-users-count').text(data.active_users);
+        $('#new-users-count').text(data.new_users_this_month);
+        $('#admin-users-count').text(data.admin_users);
+    }
+
+    // 显示用户模态框
+    function showUserModal(user = null) {
+        currentUser = user;
+        
+        if (user) {
+            $('#user-modal-title').text('编辑用户');
+            $('#username').val(user.username);
+            $('#email').val(user.email);
+            $('#role').val(user.role);
+            $('#is_active').val(user.is_active.toString());
+            $('#password').prop('required', false);
+            $('#confirm-password').prop('required', false);
+            
+            // 编辑模式下清除验证状态
+            clearValidationStates();
+        } else {
+            $('#user-modal-title').text('添加用户');
+            $('#user-form')[0].reset();
+            $('#password').prop('required', true);
+            $('#confirm-password').prop('required', true);
+            
+            // 添加模式下清除验证状态
+            clearValidationStates();
+        }
+        
+        const modal = new bootstrap.Modal(document.getElementById('user-modal'));
+        modal.show();
+    }
+    
+    // 绑定实时验证事件
+    function bindValidationEvents() {
+        // 用户名验证
+        $('#username').on('input blur', function() {
+            validateUsername($(this).val());
+        });
+        
+        // 邮箱验证
+        $('#email').on('input blur', function() {
+            validateEmail($(this).val());
+        });
+        
+        // 密码验证
+        $('#password').on('input blur', function() {
+            validatePassword($(this).val());
+        });
+        
+        // 确认密码验证
+        $('#confirm-password').on('input blur', function() {
+            validateConfirmPassword($(this).val(), $('#password').val());
+        });
+    }
+    
+    // 清除验证状态
+    function clearValidationStates() {
+        $('.form-control').removeClass('is-valid is-invalid');
+        $('.invalid-feedback').hide();
+        $('.valid-feedback').hide();
+    }
+    
+    // 用户名验证
+    function validateUsername(username) {
+        const usernameField = $('#username');
+        const usernameError = $('#username-error');
+        
+        if (!username || username.trim() === '') {
+            showFieldError(usernameField, usernameError, '用户名不能为空');
+            return false;
+        }
+        
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+            showFieldError(usernameField, usernameError, '用户名只能包含字母、数字和下划线，长度3-20位');
+            return false;
+        }
+        
+        showFieldSuccess(usernameField, usernameError);
+        return true;
+    }
+    
+    // 邮箱验证
+    function validateEmail(email) {
+        const emailField = $('#email');
+        const emailError = $('#email-error');
+        
+        if (!email || email.trim() === '') {
+            showFieldError(emailField, emailError, '邮箱不能为空');
+            return false;
+        }
+        
+        if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+            showFieldError(emailField, emailError, '邮箱格式不正确');
+            return false;
+        }
+        
+        showFieldSuccess(emailField, emailError);
+        return true;
+    }
+    
+    // 密码验证
+    function validatePassword(password) {
+        const passwordField = $('#password');
+        const passwordError = $('#password-error');
+        
+        if (!password || password.trim() === '') {
+            showFieldError(passwordField, passwordError, '密码不能为空');
+            return false;
+        }
+        
+        if (password.length < 6) {
+            showFieldError(passwordField, passwordError, '密码长度至少6位');
+            return false;
+        }
+        
+        showFieldSuccess(passwordField, passwordError);
+        return true;
+    }
+    
+    // 确认密码验证
+    function validateConfirmPassword(confirmPassword, password) {
+        const confirmPasswordField = $('#confirm-password');
+        const confirmPasswordError = $('#confirm-password-error');
+        
+        if (!confirmPassword || confirmPassword.trim() === '') {
+            showFieldError(confirmPasswordField, confirmPasswordError, '确认密码不能为空');
+            return false;
+        }
+        
+        if (confirmPassword !== password) {
+            showFieldError(confirmPasswordField, confirmPasswordError, '两次输入的密码不一致');
+            return false;
+        }
+        
+        showFieldSuccess(confirmPasswordField, confirmPasswordError);
+        return true;
+    }
+    
+    // 显示字段错误
+    function showFieldError(field, errorElement, message) {
+        field.removeClass('is-valid').addClass('is-invalid');
+        errorElement.text(message).show();
+    }
+    
+    // 显示字段成功
+    function showFieldSuccess(field, errorElement) {
+        field.removeClass('is-invalid').addClass('is-valid');
+        errorElement.hide();
+    }
+    
+    // 验证所有字段
+    function validateAllFields() {
+        const username = $('#username').val();
+        const email = $('#email').val();
+        const password = $('#password').val();
+        const confirmPassword = $('#confirm-password').val();
+        
+        const usernameValid = validateUsername(username);
+        const emailValid = validateEmail(email);
+        const passwordValid = validatePassword(password);
+        const confirmPasswordValid = validateConfirmPassword(confirmPassword, password);
+        
+        return usernameValid && emailValid && passwordValid && confirmPasswordValid;
+    }
+    
+    // 显示验证错误模态框
+    function showValidationErrorModal(errorDetails) {
+        const detailsHtml = errorDetails.map(detail => `<li>${detail}</li>`).join('');
+        $('#validation-error-details').html(`<ul class="mb-0">${detailsHtml}</ul>`);
+        
+        const modal = new bootstrap.Modal(document.getElementById('validation-error-modal'));
+        modal.show();
+    }
+    
+    // 聚焦到第一个错误字段
+    function focusFirstError() {
+        // 关闭验证错误模态框
+        bootstrap.Modal.getInstance(document.getElementById('validation-error-modal')).hide();
+        
+        // 聚焦到第一个有错误的字段
+        const firstErrorField = $('.form-control.is-invalid').first();
+        if (firstErrorField.length > 0) {
+            firstErrorField.focus();
+            // 滚动到字段位置
+            firstErrorField[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    // 保存用户
+    function saveUser() {
+        // 先进行前端验证
+        if (!validateAllFields()) {
+            AdminCommon.showAlert('请检查输入信息，确保所有字段都符合要求', 'warning');
+            return;
+        }
+        
+        const formData = new FormData($('#user-form')[0]);
+        const data = Object.fromEntries(formData);
+        
+        // 验证密码
+        if (data.password !== data.confirm_password) {
+            AdminCommon.showAlert('两次输入的密码不一致', 'danger');
+            return;
+        }
+        
+        // 如果是编辑用户且密码为空，则删除密码字段
+        if (currentUser && (!data.password || data.password.trim() === '')) {
+            delete data.password;
+            delete data.confirm_password;
+        }
+        
+        // 显示加载状态
+        $('#save-user-btn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 保存中...');
+        
+        const url = currentUser ? `/api/user/${currentUser.id}/update/` : '/api/user/create/';
+        const method = currentUser ? 'PUT' : 'POST';
+        
+        $.ajax({
+            url: url,
+            method: method,
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': AdminCommon.getCSRFToken()
+            },
+            data: JSON.stringify(data),
+            success: function(response) {
+                if (response.ok) {
+                    AdminCommon.showOperationResult('success', currentUser ? '用户更新成功' : '用户创建成功');
+                    bootstrap.Modal.getInstance(document.getElementById('user-modal')).hide();
+                    loadUsers();
+                    loadUserStatistics(); // 重新加载统计数据
+                } else {
+                    AdminCommon.showOperationResult('danger', `操作失败: ${response.message}`);
+                }
+            },
+            error: function(xhr, status, error) {
+                let errorMsg = '网络错误';
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.details && response.details.length > 0) {
+                        // 显示详细的验证错误信息
+                        showValidationErrorModal(response.details);
+                    } else {
+                        errorMsg = response.message || errorMsg;
+                        AdminCommon.showOperationResult('danger', `操作失败: ${errorMsg}`);
+                    }
+                } catch (e) {
+                    console.error('解析错误响应失败:', e);
+                    AdminCommon.showOperationResult('danger', `操作失败: ${errorMsg}`);
+                }
+            },
+            complete: function() {
+                $('#save-user-btn').prop('disabled', false).html('保存');
+            }
+        });
+    }
+
+    // 加载用户数据
+    function loadUsers() {
+        const searchTerm = $('#search-input').val();
+        
+        const params = new URLSearchParams({
+            page: currentPage
+        });
+        
+        if (currentRole) {
+            params.append('role', currentRole);
+        }
+        
+        if (currentStatus) {
+            params.append('status', currentStatus);
+        }
+        
+        if (searchTerm) {
+            params.append('search', searchTerm);
+        }
+        
+        $('#users-table-body').html('<tr><td colspan="8" class="text-center">加载中...</td></tr>');
+        
+        $.ajax({
+            url: '/api/users/',
+            method: 'GET',
+            data: params.toString(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.ok) {
+                    renderUsers(response.data.users);
+                    renderPagination(response.data.pagination);
+                } else {
+                    $('#users-table-body').html('<tr><td colspan="8" class="text-center text-danger">加载失败: ' + response.message + '</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#users-table-body').html('<tr><td colspan="8" class="text-center text-danger">网络错误: ' + error + '</td></tr>');
+            }
+        });
+    }
+
+    // 渲染用户列表
+    function renderUsers(users) {
+        if (users.length === 0) {
+            $('#users-table-body').html('<tr><td colspan="8" class="text-center">暂无用户</td></tr>');
+            return;
+        }
+        
+        let html = '';
+        users.forEach(function(user) {
+            // 根据角色设置样式和显示文本
+            let roleClass, roleText;
+            if (user.role === 'admin') {
+                roleClass = 'bg-danger';
+                roleText = '管理员';
+            } else if (user.role === 'preparator') {
+                roleClass = 'bg-success';
+                roleText = '备料员';
+            } else {
+                roleClass = 'bg-primary';
+                roleText = '普通用户';
+            }
+            
+            const statusClass = user.is_active ? 'bg-success' : 'bg-secondary';
+            
+            html += `
+                <tr>
+                    <td>
+                        <input type="checkbox" class="user-checkbox" value="${user.id}">
+                    </td>
+                    <td>${user.username}</td>
+                    <td>${user.email}</td>
+                    <td><span class="badge ${roleClass}">${roleText}</span></td>
+                    <td><span class="badge ${statusClass}">${user.is_active ? '活跃' : '非活跃'}</span></td>
+                    <td>${user.date_joined}</td>
+                    <td>${user.last_login || '从未登录'}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="editUser(${user.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-warning btn-sm" onclick="toggleUserStatus(${user.id})">
+                                <i class="fas fa-toggle-on"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteUser(${user.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        $('#users-table-body').html(html);
+    }
+
+    // 渲染分页
+    function renderPagination(data) {
+        if (data.total_pages <= 1) {
+            $('#pagination-nav').hide();
+            return;
+        }
+        
+        let html = '';
+        
+        if (data.has_previous) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${data.current_page - 1})">&laquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&laquo;</span></li>`;
+        }
+        
+        for (let i = 1; i <= data.total_pages; i++) {
+            if (i === data.current_page) {
+                html += `<li class="page-item active"><span class="page-link">${i}</span></li>`;
+            } else {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${i})">${i}</a></li>`;
+            }
+        }
+        
+        if (data.has_next) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${data.current_page + 1})">&raquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&raquo;</span></li>`;
+        }
+        
+        $('#pagination-ul').html(html);
+        $('#pagination-nav').show();
+    }
+
+    // 跳转到指定页面
+    function goToPage(page) {
+        currentPage = page;
+        loadUsers();
+    }
+
+    // 绑定统计卡片筛选事件
+    function bindStatCardFilters() {
+        const map = [
+            { id: 'filter-all-users', key: 'all' },
+            { id: 'filter-active-users', key: 'active' },
+            { id: 'filter-admin-users', key: 'admin' },
+            { id: 'filter-preparator-users', key: 'preparator' },
+            { id: 'filter-new-users', key: 'new' },
+        ];
+        map.forEach(({ id, key }) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('click', function() {
+                // 更新筛选条件
+                if (key === 'all') {
+                    currentRole = '';
+                    currentStatus = '';
+                } else if (key === 'active') {
+                    currentRole = '';
+                    currentStatus = 'active';
+                } else if (key === 'admin') {
+                    currentRole = 'admin';
+                    currentStatus = '';
+                } else if (key === 'preparator') {
+                    currentRole = 'preparator';
+                    currentStatus = '';
+                } else if (key === 'new') {
+                    // 本月新增用户筛选逻辑
+                    currentRole = '';
+                    currentStatus = '';
+                    // 这里可以添加日期筛选逻辑
+                }
+                currentPage = 1;
+                loadUsers();
+            });
+        });
+    }
+
+    // 编辑用户
+    function editUser(userId) {
+        // 获取用户详情
+        $.ajax({
+            url: `/api/user/${userId}/`,
+            method: 'GET',
+            dataType: 'json',
+            success: function(response) {
+                if (response.ok) {
+                    showUserModal(response.data.user);
+                } else {
+                    AdminCommon.showAlert('获取用户信息失败: ' + response.message, 'danger');
+                }
+            },
+            error: function(xhr, status, error) {
+                AdminCommon.showAlert('网络错误: ' + error, 'danger');
+            }
+        });
+    }
+
+    // 切换用户状态
+    function toggleUserStatus(userId) {
+        if (confirm('确定要切换此用户的状态吗？')) {
+            $.ajax({
+                url: `/api/user/${userId}/toggle-status/`,
+                method: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': AdminCommon.getCSRFToken()
+                },
+                success: function(response) {
+                                    if (response.ok) {
+                    AdminCommon.showAlert(response.message, 'success');
+                    loadUsers();
+                    loadUserStatistics(); // 重新加载统计数据
+                } else {
+                    AdminCommon.showAlert('操作失败: ' + response.message, 'danger');
+                }
+                },
+                error: function(xhr, status, error) {
+                    let errorMsg = '网络错误';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        errorMsg = response.message || errorMsg;
+                                } catch (e) {
+                console.error('解析错误响应失败:', e);
+            }
+            AdminCommon.showAlert('操作失败: ' + errorMsg, 'danger');
+                }
+            });
+        }
+    }
+
+    // 删除用户
+    function deleteUser(userId) {
+        if (confirm('确定要删除此用户吗？此操作不可恢复！')) {
+            $.ajax({
+                url: `/api/user/${userId}/delete/`,
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': AdminCommon.getCSRFToken()
+                },
+                success: function(response) {
+                                    if (response.ok) {
+                    AdminCommon.showAlert(response.message, 'success');
+                    loadUsers();
+                    loadUserStatistics(); // 重新加载统计数据
+                } else {
+                    AdminCommon.showAlert('删除失败: ' + response.message, 'danger');
+                }
+                },
+                error: function(xhr, status, error) {
+                    let errorMsg = '网络错误';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        errorMsg = response.message || errorMsg;
+                                } catch (e) {
+                console.error('解析错误响应失败:', e);
+            }
+            AdminCommon.showAlert('删除失败: ' + errorMsg, 'danger');
+                }
+            });
+        }
+    }
+</script>
+{% endblock %}

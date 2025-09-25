@@ -1,0 +1,1107 @@
+{% extends 'user_base.html' %}
+
+{% block title %}实验任务管理 - 自动实验管理系统{% endblock %}
+
+
+{% block main_content %}
+<!-- 实验任务页面 -->
+<section id="experiment-tasks">
+    <div class="container-fluid">
+        <h1 class="h3 mb-4 text-gray-800">实验任务管理</h1>
+
+        <!-- 实验任务统计信息（自适应网格，无横向滚动） -->
+        <div class="stats-row mb-4">
+            <div class="stat-col" data-filter="all" id="filter-all" style="cursor:pointer;">
+                <div class="card stat-card border-left-primary shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    总实验数
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="draft" id="filter-draft" style="cursor:pointer;">
+                <div class="card stat-card border-left-secondary shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                                    草稿
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="draft-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-edit fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="pending" id="filter-pending" style="cursor:pointer;">
+                <div class="card stat-card border-left-info shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    待审核
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="pending-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-hourglass-half fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="approved" id="filter-approved" style="cursor:pointer;">
+                <div class="card stat-card border-left-primary shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    已通过
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="approved-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="scheduled" id="filter-scheduled" style="cursor:pointer;">
+                <div class="card stat-card border-left-warning shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    已排程
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="scheduled-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="inprogress" id="filter-inprogress" style="cursor:pointer;">
+                <div class="card stat-card border-left-warning shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    进行中
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="in-progress-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-spinner fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="completed" id="filter-completed" style="cursor:pointer;">
+                <div class="card stat-card border-left-success shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                    已完成
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="completed-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="rejected" id="filter-rejected" style="cursor:pointer;">
+                <div class="card stat-card border-left-danger shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                    已驳回
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="rejected-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-times-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-col" data-filter="cancelled" id="filter-cancelled" style="cursor:pointer;">
+                <div class="card stat-card border-left-dark shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-dark text-uppercase mb-1">
+                                    已取消
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="cancelled-experiments">0</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-ban fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 搜索和新增实验 -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">实验任务操作</h6>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <a id="add-experiment-btn" class="btn btn-success" href="{% url 'task_edit' %}">
+                            <i class="fas fa-plus me-1"></i>增加新实验
+                        </a>
+                        <button id="submit-selected-mock" class="btn btn-warning" title="提交选中任务">
+                            <i class="fas fa-cloud-upload-alt me-1"></i>提交任务
+                        </button>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-nowrap">
+                        <input type="text" id="search-experiment-name" class="form-control" placeholder="按实验名称搜索" style="min-width: 220px;">
+                        <input type="date" id="search-experiment-date" class="form-control">
+                        <button id="search-experiment-btn" class="btn btn-primary" style="min-width: 110px;">
+                            <i class="fas fa-search me-1"></i>搜索
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 实验任务列表 -->
+        <div class="card shadow mb-4 experiment-table">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">实验任务列表</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px;">
+                                    <input type="checkbox" id="select-all-tasks">
+                                </th>
+                                <th>实验名称</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="experiment-list-body">
+                            <!-- 任务数据将通过JavaScript动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                {% if paginator and page_obj %}
+                    <nav>
+                        <ul class="pagination">
+                            <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                                {% if page_obj.has_previous %}
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                                        <span aria-hidden="true">&laquo;</span>
+                                    </a>
+                                {% else %}
+                                    <span class="page-link" aria-label="Previous">
+                                        <span aria-hidden="true">&laquo;</span>
+                                    </span>
+                                {% endif %}
+                            </li>
+                            {% for num in paginator.page_range %}
+                                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endfor %}
+                            <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                                {% if page_obj.has_next %}
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </a>
+                                {% else %}
+                                    <span class="page-link" aria-label="Next">
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </span>
+                                {% endif %}
+                            </li>
+                        </ul>
+                    </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+    <!-- 实验详情 Modal-->
+    <div class="modal fade" id="task-detail-modal" tabindex="-1" aria-labelledby="submit-confirm-title"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="submit-confirm-title">任务详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="task-detail-summary"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        border-radius: 0.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    /* 自适应网格容器：大屏一行显示，小屏自动换行 */
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(9, minmax(140px, 1fr));
+        gap: 6px;
+    }
+    .stat-col { min-width: 0; }
+
+    /* 响应式断点：逐步减少列数，避免横向滚动 */
+    @media (max-width: 1400px) {
+        .stats-row { grid-template-columns: repeat(8, minmax(120px, 1fr)); }
+    }
+    @media (max-width: 1200px) {
+        .stats-row { grid-template-columns: repeat(6, minmax(120px, 1fr)); }
+    }
+    @media (max-width: 992px) {
+        .stats-row { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
+    }
+    @media (max-width: 768px) {
+        .stats-row { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
+    }
+    @media (max-width: 576px) {
+        .stats-row { grid-template-columns: 1fr; }
+    }
+
+    /* 统计卡片紧凑样式 */
+    .stat-card .card-body { padding: 0.45rem 0.6rem; }
+    .stat-card .text-xs { font-size: 0.7rem; }
+    .stat-card .h5 { font-size: 0.95rem; margin: 0; }
+    .stat-card i { font-size: 1rem !important; }
+
+    .experiment-table {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+
+    .modal-content {
+        border-radius: 0.5rem;
+    }
+
+    /* 操作按钮样式优化 */
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        border-radius: 0.2rem;
+        margin: 0 1px;
+    }
+
+    .btn-group-sm .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .btn-group-sm .btn i {
+        font-size: 0.8rem;
+    }
+
+    /* 表格操作列宽度优化 */
+    .table th:last-child,
+    .table td:last-child {
+        width: 200px;
+        min-width: 200px;
+    }
+
+    /* 状态徽章样式 */
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.35em 0.65em;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<!-- 查看实验结果模态框 -->
+<div class="modal fade" id="view-result-modal" tabindex="-1" aria-labelledby="view-result-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="view-result-title">实验结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="view-result-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新增/编辑实验模态框 -->
+<div class="modal fade" id="experiment-modal" tabindex="-1" aria-labelledby="experiment-modal-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="experiment-modal-title">新增实验</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="experiment-form">
+                    <input type="hidden" id="experiment-id"/>
+                    <div class="mb-3">
+                        <label for="experiment-name" class="form-label">实验名称</label>
+                        <input type="text" class="form-control" id="experiment-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="experiment-date" class="form-label">实验时间</label>
+                        <input type="date" class="form-control" id="experiment-date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="experiment-status" class="form-label">状态</label>
+                        <select class="form-select" id="experiment-status" required>
+                            <option value="草稿">草稿</option>
+                            <option value="待审核">待审核</option>
+                            <option value="已通过">已通过</option>
+                            <option value="已排程">已排程</option>
+                            <option value="进行中">进行中</option>
+                            <option value="已完成">已完成</option>
+                            <option value="已驳回">已驳回</option>
+                            <option value="已取消">已取消</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="save-experiment-btn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+    // 页面加载完成后，从服务器加载任务并渲染（以服务器为准）
+    document.addEventListener('DOMContentLoaded', function() {
+        let dbTasks = [];
+        function fetchTasksAndRender() {
+            TaskService.list({ page_size: 100 })
+                .then(resp => {
+                    if (resp && resp.ok) {
+                        dbTasks = resp.tasks || [];
+                        renderList();
+                    } else {
+                        dbTasks = [];
+                        renderList();
+                    }
+                })
+                .catch(() => {
+                    dbTasks = [];
+                    renderList();
+                });
+        }
+
+        // 统一状态标准化
+        function getStandardStatus(raw) {
+            const s0 = (raw || '').trim();
+            const s = s0.replace(/\s+/g, '');
+            if (s === '草稿' || s === '未提交' || s === '待提交') return '草稿';
+            if (s === '待审核') return '待审核';
+            if (s === '已通过') return '已通过';
+            if (s === '已排程') return '已排程';
+            if (s === '进行中') return '进行中';
+            if (s === '已完成') return '已完成';
+            if (s === '已驳回' || s === '驳回') return '已驳回';
+            if (s === '已取消') return '已取消';
+            return s || '草稿';
+        }
+
+        function canEditTask(task) {
+            const s = getStandardStatus(task && task.status);
+            return s === '草稿' || s === '已驳回';
+        }
+
+        // 仅使用服务器任务
+        function mergedTasks() {
+            return (dbTasks || []).map(dbTask => ({
+                ...dbTask,
+                isFromDb: true,
+                canEdit: canEditTask(dbTask),
+                client_id: dbTask.client_id || dbTask.id
+            }));
+        }
+
+        // 更新统计数据
+        function updateStats(tasks) {
+            const total = tasks.length;
+            const draft = tasks.filter(t => t.status === '草稿').length;
+            const pending = tasks.filter(t => t.status === '待审核').length;
+            const approved = tasks.filter(t => t.status === '已通过').length;
+            const scheduled = tasks.filter(t => t.status === '已排程').length;
+            const inProgress = tasks.filter(t => t.status === '进行中').length;
+            const completed = tasks.filter(t => t.status === '已完成').length;
+            const rejected = tasks.filter(t => t.status === '已驳回').length;
+            const cancelled = tasks.filter(t => t.status === '已取消').length;
+            
+            document.getElementById('total-experiments').textContent = total;
+            document.getElementById('draft-experiments').textContent = draft;
+            document.getElementById('pending-experiments').textContent = pending;
+            document.getElementById('approved-experiments').textContent = approved;
+            document.getElementById('scheduled-experiments').textContent = scheduled;
+            document.getElementById('in-progress-experiments').textContent = inProgress;
+            document.getElementById('completed-experiments').textContent = completed;
+            document.getElementById('rejected-experiments').textContent = rejected;
+            document.getElementById('cancelled-experiments').textContent = cancelled;
+            
+            console.log('更新统计数据:', { 
+                total, 
+                draft,
+                pending, 
+                approved,
+                scheduled,
+                inProgress, 
+                completed, 
+                rejected,
+                cancelled
+            });
+        }
+
+        // 当前筛选状态
+        let currentFilter = 'all';
+
+        function applyFilter(tasks) {
+            if (!Array.isArray(tasks)) return [];
+            switch (currentFilter) {
+                case 'draft':
+                    return tasks.filter(t => getStandardStatus(t.status) === '草稿');
+                case 'pending':
+                    return tasks.filter(t => getStandardStatus(t.status) === '待审核');
+                case 'approved':
+                    return tasks.filter(t => getStandardStatus(t.status) === '已通过');
+                case 'scheduled':
+                    return tasks.filter(t => getStandardStatus(t.status) === '已排程');
+                case 'inprogress':
+                    return tasks.filter(t => getStandardStatus(t.status) === '进行中');
+                case 'completed':
+                    return tasks.filter(t => getStandardStatus(t.status) === '已完成');
+                case 'rejected':
+                    return tasks.filter(t => getStandardStatus(t.status) === '已驳回');
+                case 'cancelled':
+                    return tasks.filter(t => getStandardStatus(t.status) === '已取消');
+                case 'all':
+                default:
+                    return tasks;
+            }
+        }
+
+        // 渲染任务列表
+        function renderList() {
+            const all = mergedTasks();
+            const tasks = applyFilter(all);
+            // 修复：始终使用全部任务更新统计数据，而不是筛选后的任务
+            updateStats(all);
+            
+            const tbody = document.getElementById('experiment-list-body');
+            tbody.innerHTML = '';
+            
+            if (tasks.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="6" class="text-center">暂无实验任务</td>';
+                tbody.appendChild(tr);
+                return;
+            }
+            
+            tasks.forEach(task => {
+                const tr = document.createElement('tr');
+                const statusClass = getStatusClass(task.status);
+                const sourceText = '';
+                const taskId = task.client_id || task.id;
+                
+                // 计算标准化状态用于操作按钮显示逻辑
+                const standardStatus = getStandardStatus(task.status);
+                
+                tr.innerHTML = `
+                    <td>
+                        <input type="checkbox" class="task-checkbox" value="${taskId}" data-isdb="${task.isFromDb}">
+                    </td>
+                    <td title="${task.remark || ''}">${task.name}</td>
+                    <td>
+                        <span class="badge ${statusClass}">${task.status}</span>
+                    </td>
+                    
+                    <td>${task.created_at || task.date || ''}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="copyTask('${taskId}', ${task.isFromDb})" title="复制任务">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            ${task.canEdit ? `
+                                <button class="btn btn-outline-warning btn-sm" onclick="editTask('${taskId}', ${task.isFromDb})" title="编辑任务">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-outline-info btn-sm" onclick="viewTask('${taskId}', ${task.isFromDb})" title="查看详情">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${task.status === '已完成' ? `
+                                <button class="btn btn-outline-success btn-sm" onclick="viewResult('${taskId}', ${task.isFromDb})" title="查看结果">
+                                    <i class="fas fa-chart-bar"></i>
+                                </button>
+                            ` : ''}
+                            ${standardStatus === '草稿' || standardStatus === '已驳回' ? `
+                                <button class="btn btn-outline-primary btn-sm" onclick="submitTask('${taskId}', ${task.isFromDb})" title="提交任务">
+                                    <i class="fas fa-cloud-upload-alt me-1"></i>
+                                </button>
+                            ` : ''}
+                            ${standardStatus === '已驳回' || standardStatus === '草稿' || standardStatus === '已取消' ? `
+                                <button class="btn btn-outline-danger btn-sm" onclick="deleteTask('${taskId}', ${task.isFromDb})" title="删除任务">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            console.log('渲染完成，显示任务数量:', tasks.length);
+        }
+
+        // 获取状态对应的CSS类
+        function getStatusClass(status) {
+            switch (status) {
+                case '草稿': return 'bg-secondary';
+                case '待审核': return 'bg-info';
+                case '已通过': return 'bg-primary';
+                case '已排程': return 'bg-warning';
+                case '进行中': return 'bg-warning';
+                case '已完成': return 'bg-success';
+                case '已驳回': return 'bg-danger';
+                case '已取消': return 'bg-dark';
+                default: return 'bg-secondary';
+            }
+        }
+
+        // 任务操作函数
+        window.copyTask = function(taskId, isFromDb) {
+            const fallbackSrc = dbTasks.find(t => t.id == taskId || t.client_id == taskId);
+            if (!fallbackSrc) { showToast('任务不存在', 'danger'); return; }
+
+            // 优先使用后端提供的复制接口，确保字段完整
+            if (isFromDb) {
+                Network.post(`/api/user/task/${taskId}/copy/`).then(function(resp){
+                    if (resp && resp.ok) {
+                        showToast('任务已复制', 'success');
+                        fetchTasksAndRender();
+                    } else {
+                        showToast('复制失败：' + (resp && resp.message ? resp.message : '未知错误'), 'danger');
+                    }
+                }).catch(function(){ showToast('网络错误，复制失败', 'danger'); });
+                return;
+            }
+
+            // 非数据库任务（理论上已不再使用本地任务），保底走原创建逻辑
+            const payload = {
+                name: (fallbackSrc.name || '') + ' (副本)',
+                remark: fallbackSrc.remark || '',
+                stations: fallbackSrc.stations || null,
+                date: fallbackSrc.date || '',
+                status: '草稿'
+            };
+            TaskService.create(payload).then(function(resp) {
+                if (resp && resp.ok) {
+                    showToast('任务已复制', 'success');
+                    fetchTasksAndRender();
+                } else {
+                    showToast('复制失败：' + (resp && resp.message ? resp.message : '未知错误'), 'danger');
+                }
+            }).catch(function() { showToast('网络错误，复制失败', 'danger'); });
+        };
+
+        window.editTask = function(taskId, isFromDb) {
+            window.location.href = "{% url 'task_edit' %}?id=" + encodeURIComponent(taskId);
+        };
+
+        function generateTaskSummaryHtml(task) {
+            const stations = task.stations || {};
+            const solid = stations.solidLiquid || {};
+            const glove = stations.glovebox || {};
+            const react = stations.reaction || {};
+            const gcms = stations.gcms || {};
+            const evap = stations.evaporation || {};
+            const tlc = stations.tlc || {};
+
+            // 固液配料表格
+            const reagentRows = (solid.enabled && Array.isArray(solid.reagents) && solid.reagents.length)
+                ? solid.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+                : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+            // 手套箱配料表格
+            const gloveboxReagentRows = (glove.enabled && Array.isArray(glove.reagents) && glove.reagents.length)
+                ? glove.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+                : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+            // 手套箱反应参数
+            const gp = glove.params || {};
+            const gloveboxReactionHtml = glove.enabled ? `
+                <ul class="list-group mb-3">
+                    <li class="list-group-item">反应温度：${gp.temperature ?? '-'} °C</li>
+                    <li class="list-group-item">搅拌速度：${gp.stirringSpeed ?? '-'} rpm</li>
+                    <li class="list-group-item">反应时长：${gp.duration ?? '-'} min</li>
+                    <li class="list-group-item">采样间隔：${gp.samplingInterval ?? '-'} min</li>
+                    <li class="list-group-item">采样体积：${gp.samplingVolume ?? '-'} μL</li>
+                    <li class="list-group-item">淬灭剂：${gp.quenchingAgent ?? '-'}</li>
+                    <li class="list-group-item">淬灭剂体积：${gp.quenchingAgentVolume ?? '-'} μL</li>
+                    <li class="list-group-item">采样分析方式：${gp.samplingAnalysis ?? '-'}</li>
+                </ul>
+            ` : '';
+
+            // 反应工站参数
+            const rp = react.params || {};
+            const reactionHtml = react.enabled ? `
+                <ul class="list-group mb-3">
+                    <li class="list-group-item">反应温度：${rp.temperature ?? '-'} °C</li>
+                    <li class="list-group-item">搅拌速度：${rp.stirringSpeed ?? '-'} rpm</li>
+                    <li class="list-group-item">反应时长：${rp.duration ?? '-'} min</li>
+                    <li class="list-group-item">采样间隔：${rp.samplingInterval ?? '-'} min</li>
+                    <li class="list-group-item">采样体积：${rp.samplingVolume ?? '-'} μL</li>
+                    <li class="list-group-item">淬灭剂：${rp.quenchingAgent ?? '-'}</li>
+                    <li class="list-group-item">淬灭剂体积：${rp.quenchingAgentVolume ?? '-'} μL</li>
+                    <li class="list-group-item">采样分析方式：${rp.samplingAnalysis ?? '-'}</li>
+                </ul>
+            ` : '';
+
+            // GCMS
+            const gcp = gcms.params || {};
+            const gcmsHtml = gcms.enabled ? `<div class="mb-3">序列：${gcp.sequence || '-'}</div>` : '';
+
+            // 旋蒸
+            const ep = evap.params || {};
+            const evaporationHtml = evap.enabled ? `
+                <div class="mb-3">
+                    <strong>旋蒸模式：</strong>${(ep.mode === 'manual') ? '手动模式' : '自动模式'}
+                    ${(ep.mode === 'manual') ? `
+                        <ul class="list-group mt-2">
+                            <li class="list-group-item">旋转速度：${ep.rotationSpeed ?? '-'} rpm</li>
+                            <li class="list-group-item">浴热温度：${ep.bathTemperature ?? '-'} °C</li>
+                            <li class="list-group-item">真空压力：${ep.vacuumPressure ?? '-'} mbar</li>
+                            <li class="list-group-item">冷凝温度：${ep.condenserTemperature ?? '-'} °C</li>
+                        </ul>
+                    ` : ''}
+                </div>
+            ` : '';
+
+            // TLC
+            const tp = tlc.params || {};
+            const uv = tp.uvWavelengths || {};
+            const tlcHtml = tlc.enabled ? `
+                <div class="mb-3">
+                    <strong>展开剂体系：</strong>${tp.developerSystem || '-'}
+                    ${(tp.developerSystem === 'custom') ?
+                        `<br><strong>自定义展开剂：</strong>${tp.customSolvent1 || '-'} / ${tp.customSolvent2 || '-'} ${tp.customSolvent3 ? '/ ' + tp.customSolvent3 : ''}` : ''}
+                    <br><strong>展开剂比例：</strong>${tp.developerRatio || '-'}
+                    ${(tp.developerRatio === 'custom') ?
+                        `<br><strong>自定义比例：</strong>${tp.customRatio1 || '-'} : ${tp.customRatio2 || '-'} ${tp.customRatio3 ? ' : ' + tp.customRatio3 : ''}` : ''}
+                    <br><strong>灯光波长：</strong>${uv.uv254 ? '254nm' : ''}${(uv.uv254 && uv.uv365) ? ', ' : ''}${uv.uv365 ? '365nm' : ''}
+                    <br><strong>TLC板类型：</strong>${tp.plateType || '-'}
+                    <br><strong>板尺寸：</strong>${tp.plateSize || '-'}
+                    <br><strong>展开时间：</strong>${tp.developingTime || '-'} 分钟
+                    <br><strong>展开缸类型：</strong>${tp.chamberType || '-'}
+                    <br><strong>展开温度：</strong>${tp.temperature || '-'} °C
+                    <br><strong>样品浓度：</strong>${tp.sampleConcentration || '-'} mg/mL
+                    <br><strong>点样体积：</strong>${tp.spotVolume || '-'} μL
+                    <br><strong>预期Rf值：</strong>${tp.expectedRfMin || '-'} - ${tp.expectedRfMax || '-'}
+                    <br><strong>检测方法：</strong>${tp.detectionMethod || '-'}
+                </div>
+            ` : '';
+
+            const createdAt = task.created_at || task.date || '';
+            const summaryHtml = `
+                <div class="mb-3"><strong>实验名称：</strong>${task.name || '-'}</div>
+                <div class="mb-3"><strong>实验备注：</strong>${(task.remark || '').trim() || '-'}</div>
+                <div class="mb-3"><strong>提交时间：</strong>${createdAt}</div>
+                <div class="mb-3"><strong>状态：</strong>${task.status || '-'}</div>
+                <div class="mb-3"><strong>固液配料工站：</strong>${solid.enabled ? '已启用' : '未启用'}</div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                        <tbody>${reagentRows}</tbody>
+                    </table>
+                </div>
+                <div class="mb-3"><strong>手套箱配料与反应工站：</strong>${glove.enabled ? '已启用' : '未启用'}</div>
+                ${gloveboxReactionHtml}
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                        <tbody>${gloveboxReagentRows}</tbody>
+                    </table>
+                </div>
+                <div class="mb-3"><strong>反应工站：</strong>${react.enabled ? '已启用' : '未启用'}</div>
+                ${reactionHtml}
+                <div class="mb-3"><strong>GCMS工站：</strong>${gcms.enabled ? '已启用' : '未启用'}</div>
+                ${gcmsHtml}
+                <div class="mb-3"><strong>旋蒸工站：</strong>${evap.enabled ? '已启用' : '未启用'}</div>
+                ${evaporationHtml}
+                <div class="mb-3"><strong>TLC分析工站：</strong>${tlc.enabled ? '已启用' : '未启用'}</div>
+                ${tlcHtml}
+            `;
+            return summaryHtml;
+        }
+
+        window.viewTask = function(taskId, isFromDb) {
+            TaskService.detail(taskId)
+                .then(function(response) {
+                    if (response && response.ok) {
+                        const task = response.task || {};
+                        const html = generateTaskSummaryHtml(task);
+                        const container = document.getElementById('task-detail-summary');
+                        container.innerHTML = html;
+                        const modalEl = document.getElementById('task-detail-modal');
+                        const modal = new bootstrap.Modal(modalEl);
+                        modal.show();
+                    } else {
+                        showToast('获取任务详情失败：' + (response && response.message ? response.message : '未知错误'), 'danger');
+                    }
+                })
+                .catch(function() {
+                    showToast('网络错误，无法获取任务详情', 'danger');
+                });
+        };
+
+        window.submitTask = function(taskId, isFromDb) {
+            confirmAction('确定要提交这个任务吗？提交后将无法编辑。', function() {
+                TaskService.submit(taskId)
+                    .then(function(response) {
+                        if (response.ok) {
+                            showToast('任务已提交', 'success');
+                            fetchTasksAndRender();
+                        } else {
+                            showToast('提交失败：' + response.message, 'danger');
+                        }
+                    })
+                    .catch(function() {
+                        showToast('网络错误，提交失败', 'danger');
+                    });
+            });
+        };
+
+        window.viewResult = function(taskId, isFromDb) {
+            if (isFromDb) {
+                // 查看数据库任务结果
+                $.get(`/api/user/task/${taskId}/result/`)
+                    .done(function(response) {
+                        if (response.ok) {
+                            showResultModal(response.result);
+                        } else {
+                            showToast('获取结果失败：' + response.message, 'danger');
+                        }
+                    })
+                    .fail(function() {
+                        showToast('网络错误，无法获取结果', 'danger');
+                    });
+            } else {
+                // 查看本地任务结果（模拟）
+                const localTasks = loadLocalTasks();
+                const task = localTasks.find(t => t.id == taskId || t.client_id == taskId);
+                
+                if (task) {
+                    // 模拟结果显示
+                    const mockResult = {
+                        task_name: task.name,
+                        status: task.status,
+                        completion_date: task.created_at,
+                        results: {
+                            yield: '85.2%',
+                            purity: '98.5%',
+                            temperature: '25°C',
+                            pressure: '1.0 atm',
+                            duration: '2.5 hours'
+                        },
+                        charts: [
+                            {
+                                type: 'line',
+                                title: '反应进度曲线',
+                                data: [10, 25, 45, 70, 85, 95, 100]
+                            },
+                            {
+                                type: 'bar',
+                                title: '产物分析',
+                                data: [85.2, 98.5, 92.1, 88.7]
+                            }
+                        ]
+                    };
+                    showResultModal(mockResult);
+                } else {
+                    showToast('任务不存在', 'danger');
+                }
+            }
+        };
+
+        window.deleteTask = function(taskId, isFromDb) {
+            confirmAction('确定要删除这个任务吗？此操作不可恢复。', function() {
+                TaskService.remove(taskId)
+                    .then(function(response) {
+                        if (response.ok) {
+                            showToast('任务已删除', 'success');
+                            fetchTasksAndRender();
+                        } else {
+                            showToast('删除失败：' + response.message, 'danger');
+                        }
+                    })
+                    .catch(function() {
+                        showToast('网络错误，删除失败', 'danger');
+                    });
+            });
+        };
+
+        // 兼容保留：不再使用本地存储承载编辑态
+        window.clearEditingId = function() { };
+
+        // 全选/取消全选
+        document.getElementById('select-all-tasks').addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.task-checkbox');
+            checkboxes.forEach(cb => cb.checked = this.checked);
+        });
+
+        // 提交选中任务到服务器
+        document.getElementById('submit-selected-mock').addEventListener('click', function() {
+            const selectedCbs = Array.from(document.querySelectorAll('.task-checkbox:checked'));
+            if (selectedCbs.length === 0) {
+                showToast('请选择要提交的任务', 'warning');
+                return;
+            }
+            confirmAction(`确定要提交选中的 ${selectedCbs.length} 个任务吗？`, function() {
+                const ids = selectedCbs.map(cb => cb.value);
+                Promise.all(ids.map(id => TaskService.submit(id)))
+                    .then(() => {
+                        showToast('已提交选中任务', 'success');
+                        fetchTasksAndRender();
+                    })
+                    .catch(() => {
+                        showToast('部分任务提交失败，请重试', 'danger');
+                        fetchTasksAndRender();
+                    });
+            });
+        });
+
+        // 搜索功能
+        document.getElementById('search-experiment-btn').addEventListener('click', function() {
+            const name = document.getElementById('search-experiment-name').value;
+            const date = document.getElementById('search-experiment-date').value;
+            
+            showToast(`搜索：名称包含"${name}"，日期：${date}`, 'info');
+        });
+
+        // 显示结果模态框
+        function showResultModal(result) {
+            const modalEl = document.getElementById('view-result-modal');
+            const titleEl = document.getElementById('view-result-title');
+            const contentEl = document.getElementById('view-result-content');
+            
+            titleEl.textContent = `实验结果 - ${result.task_name}`;
+            
+            let content = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>基本信息</h6>
+                        <table class="table table-sm">
+                            <tr><td>任务名称：</td><td>${result.task_name}</td></tr>
+                            <tr><td>状态：</td><td><span class="badge bg-success">${result.status}</span></td></tr>
+                            <tr><td>完成时间：</td><td>${result.completion_date}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>实验结果</h6>
+                        <table class="table table-sm">
+                            <tr><td>产率：</td><td><span class="text-success fw-bold">${result.results.yield}</span></td></tr>
+                            <tr><td>纯度：</td><td><span class="text-primary fw-bold">${result.results.purity}</span></td></tr>
+                            <tr><td>温度：</td><td>${result.results.temperature}</td></tr>
+                            <tr><td>压力：</td><td>${result.results.pressure}</td></tr>
+                            <tr><td>反应时间：</td><td>${result.results.duration}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>数据图表</h6>
+                        <div id="result-charts" style="height: 400px;"></div>
+                    </div>
+                </div>
+            `;
+            
+            contentEl.innerHTML = content;
+            
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+            
+            // 渲染图表
+            setTimeout(() => {
+                renderResultCharts(result.charts);
+            }, 100);
+        }
+        
+        // 渲染结果图表
+        function renderResultCharts(charts) {
+            const chartContainer = document.getElementById('result-charts');
+            if (!chartContainer || !charts || charts.length === 0) return;
+            
+            // 清空容器
+            chartContainer.innerHTML = '';
+            
+            charts.forEach((chart, index) => {
+                const chartDiv = document.createElement('div');
+                chartDiv.id = `chart-${index}`;
+                chartDiv.style.height = '200px';
+                chartDiv.style.marginBottom = '20px';
+                chartContainer.appendChild(chartDiv);
+                
+                const chartInstance = echarts.init(chartDiv);
+                
+                let option;
+                if (chart.type === 'line') {
+                    option = {
+                        title: {
+                            text: chart.title,
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: ['0h', '0.5h', '1h', '1.5h', '2h', '2.5h', '3h']
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '完成度 (%)'
+                        },
+                        series: [{
+                            data: chart.data,
+                            type: 'line',
+                            smooth: true,
+                            lineStyle: {
+                                color: '#0d6efd'
+                            },
+                            areaStyle: {
+                                color: {
+                                    type: 'linear',
+                                    x: 0, y: 0, x2: 0, y2: 1,
+                                    colorStops: [{
+                                        offset: 0, color: 'rgba(13, 110, 253, 0.3)'
+                                    }, {
+                                        offset: 1, color: 'rgba(13, 110, 253, 0.1)'
+                                    }]
+                                }
+                            }
+                        }]
+                    };
+                } else if (chart.type === 'bar') {
+                    option = {
+                        title: {
+                            text: chart.title,
+                            left: 'center'
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: ['产率', '纯度', '选择性', '转化率']
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '百分比 (%)'
+                        },
+                        series: [{
+                            data: chart.data,
+                            type: 'bar',
+                            itemStyle: {
+                                color: function(params) {
+                                    const colors = ['#0d6efd', '#198754', '#ffc107', '#dc3545'];
+                                    return colors[params.dataIndex];
+                                }
+                            }
+                        }]
+                    };
+                }
+                
+                chartInstance.setOption(option);
+            });
+        }
+
+        // 顶部统计卡片点击筛选
+        function bindStatCardFilters() {
+            const map = [
+                { id: 'filter-all', key: 'all' },
+                { id: 'filter-draft', key: 'draft' },
+                { id: 'filter-pending', key: 'pending' },
+                { id: 'filter-approved', key: 'approved' },
+                { id: 'filter-scheduled', key: 'scheduled' },
+                { id: 'filter-inprogress', key: 'inprogress' },
+                { id: 'filter-completed', key: 'completed' },
+                { id: 'filter-rejected', key: 'rejected' },
+                { id: 'filter-cancelled', key: 'cancelled' },
+            ];
+            map.forEach(({ id, key }) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('click', function() {
+                    currentFilter = key;
+                    renderList();
+                });
+            });
+        }
+
+        // 初始加载
+        bindStatCardFilters();
+        fetchTasksAndRender();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,1273 @@
+{% extends 'user_base.html' %}
+{% load static %}
+{% block title %}创建模型 - 自动实验管理系统{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">创建模型</h1>
+            <p class="text-muted">选择算法和参数，训练机器学习模型</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="refreshData()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+    </div>
+
+    <!-- 步骤指示器 -->
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center step-indicator" id="step-1">
+                                <span class="fw-bold">1</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">选择数据</h6>
+                            <small class="text-muted">选择训练数据集</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center step-indicator" id="step-2">
+                                <span class="fw-bold">2</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">配置特征</h6>
+                            <small class="text-muted">选择特征和目标列</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center step-indicator" id="step-3">
+                                <span class="fw-bold">3</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">选择算法</h6>
+                            <small class="text-muted">选择机器学习算法</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center step-indicator" id="step-4">
+                                <span class="fw-bold">4</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">开始训练</h6>
+                            <small class="text-muted">配置参数并开始训练</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 步骤1：选择数据 -->
+    <div class="card shadow mb-4" id="step-1-content">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">步骤1：选择训练集与测试集数据文件</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>训练集数据文件：</label>
+                        <select class="form-select" id="train-data-file-select">
+                            <option value="">请选择训练集数据文件</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>测试集数据文件：</label>
+                        <select class="form-select" id="test-data-file-select">
+                            <option value="">请选择测试集数据文件</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>任务名称：</label>
+                        <input type="text" class="form-control" id="task-name" placeholder="输入任务名称">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 训练集文件信息 -->
+            <div id="train-file-info" class="mt-3" style="display: none;">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card border-info">
+                            <div class="card-body text-center">
+                                <h6 class="text-info">训练集总行数</h6>
+                                <h4 id="train-file-rows">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <h6 class="text-success">训练集总列数</h6>
+                                <h4 id="train-file-columns">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <h6 class="text-warning">训练集文件大小</h6>
+                                <h4 id="train-file-size">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-primary">
+                            <div class="card-body text-center">
+                                <h6 class="text-primary">训练集状态</h6>
+                                <h4 id="train-file-status">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 测试集文件信息 -->
+            <div id="test-file-info" class="mt-3" style="display: none;">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card border-info">
+                            <div class="card-body text-center">
+                                <h6 class="text-info">测试集总行数</h6>
+                                <h4 id="test-file-rows">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <h6 class="text-success">测试集总列数</h6>
+                                <h4 id="test-file-columns">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <h6 class="text-warning">测试集文件大小</h6>
+                                <h4 id="test-file-size">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-primary">
+                            <div class="card-body text-center">
+                                <h6 class="text-primary">测试集状态</h6>
+                                <h4 id="test-file-status">-</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-primary" onclick="nextStep(2)" disabled id="next-step-1">
+                    下一步
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 步骤2：配置特征 -->
+    <div class="card shadow mb-4" id="step-2-content" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">步骤2：配置特征和目标列</h6>
+        </div>
+        <div class="card-body">
+            <!-- 文件名展示与一致性提示 -->
+            <div class="alert alert-secondary mb-3">
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                    <div><strong>训练集文件：</strong><span id="step2-train-file-name">-</span></div>
+                    <div><strong>测试集文件：</strong><span id="step2-test-file-name">-</span></div>
+                </div>
+            </div>
+            <div id="columns-compat-warning" class="alert alert-warning" style="display: none;">
+                <div class="mb-1"><strong>提示：</strong>训练集与测试集列不完全一致，请确认两者可用。</div>
+                <div class="small"><strong>仅训练集有：</strong><span class="diff-train-only"></span></div>
+                <div class="small"><strong>仅测试集有：</strong><span class="diff-test-only"></span></div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>目标列（预测目标）：</label>
+                        <select class="form-select" id="target-column">
+                            <option value="">请选择目标列</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>问题类型：</label>
+                        <select class="form-select" id="problem-type">
+                            <option value="">自动检测</option>
+                            <option value="classification">分类</option>
+                            <option value="regression">回归</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <label>特征列（选择用于训练的特征）：</label>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="select-all-features">
+                            <label class="form-check-label" for="select-all-features">
+                                全选
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearAllFeatures()">
+                            清空选择
+                        </button>
+                    </div>
+                </div>
+                <div id="features-list" class="mt-2">
+                    <!-- 特征列表将通过JavaScript动态生成 -->
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-secondary" onclick="prevStep(1)">上一步</button>
+                <button class="btn btn-primary" onclick="nextStep(3)" disabled id="next-step-2">下一步</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 步骤3：选择算法 -->
+    <div class="card shadow mb-4" id="step-3-content" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">步骤3：选择机器学习算法</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>算法类型：</label>
+                        <select class="form-select" id="algorithm-type">
+                            <option value="">请选择算法类型</option>
+                            <option value="classification">分类算法</option>
+                            <option value="regression">回归算法</option>
+                            <option value="clustering">聚类算法</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="form-group">
+                        <label>具体算法：</label>
+                        <select class="form-select" id="algorithm-select" disabled>
+                            <option value="">请先选择算法类型</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 算法描述 -->
+            <div id="algorithm-description" class="mt-3" style="display: none;">
+                <div class="alert alert-info">
+                    <h6>算法描述</h6>
+                    <p id="algorithm-desc-text"></p>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-secondary" onclick="prevStep(2)">上一步</button>
+                <button class="btn btn-primary" onclick="nextStep(4)" disabled id="next-step-3">下一步</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 步骤4：配置参数和开始训练 -->
+    <div class="card shadow mb-4" id="step-4-content" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">步骤4：配置参数并开始训练</h6>
+        </div>
+        <div class="card-body">
+            <!-- 选中文件名展示 -->
+            <div class="alert alert-secondary mb-3">
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                    <div><strong>训练集文件：</strong><span id="step4-train-file-name">-</span></div>
+                    <div><strong>测试集文件：</strong><span id="step4-test-file-name">-</span></div>
+                </div>
+            </div>
+            <!-- 算法参数配置 -->
+            <div id="algorithm-parameters">
+                <h6>算法参数配置</h6>
+                <div id="parameters-form">
+                    <!-- 参数表单将通过JavaScript动态生成 -->
+                </div>
+            </div>
+            
+            
+            <!-- 任务描述 -->
+            <div class="mt-3">
+                <div class="form-group">
+                    <label>任务描述（可选）：</label>
+                    <textarea class="form-control" id="task-description" rows="3" placeholder="描述这个训练任务的目的和预期结果..."></textarea>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-secondary" onclick="prevStep(3)">上一步</button>
+                <button class="btn btn-success" onclick="startTraining()" id="start-training-btn">
+                    <i class="fas fa-play me-1"></i>开始训练
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 训练进度 -->
+    <div class="card shadow mb-4" id="training-progress" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">训练进度</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="progress mb-3" style="height: 25px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%" id="progress-bar">
+                            0%
+                        </div>
+                    </div>
+                    <div id="training-log" class="bg-dark text-light p-3 rounded" style="height: 200px; overflow-y: auto;">
+                        <!-- 训练日志将在这里显示 -->
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-info">
+                        <div class="card-body">
+                            <h6 class="text-info">训练信息</h6>
+                            <p><strong>任务名称：</strong><span id="progress-task-name">-</span></p>
+                            <p><strong>算法：</strong><span id="progress-algorithm">-</span></p>
+                            <p><strong>开始时间：</strong><span id="progress-start-time">-</span></p>
+                            <p><strong>预计完成：</strong><span id="progress-eta">-</span></p>
+                            <p><strong>当前状态：</strong><span id="progress-status">-</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-danger" onclick="stopTraining()" id="stop-training-btn">
+                    <i class="fas fa-stop me-1"></i>停止训练
+                </button>
+                <button class="btn btn-outline-primary ms-2" onclick="viewTaskManagement()">
+                    <i class="fas fa-tasks me-1"></i>查看任务管理
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .step-indicator {
+        width: 40px;
+        height: 40px;
+        transition: all 0.3s ease;
+    }
+    
+    .step-indicator.active {
+        background-color: #007bff !important;
+    }
+    
+    .step-indicator.completed {
+        background-color: #28a745 !important;
+    }
+    
+    .feature-checkbox {
+        margin-right: 10px;
+    }
+    
+    .parameter-group {
+        margin-bottom: 15px;
+    }
+    
+    .parameter-group label {
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentStep = 1;
+    let selectedTrainFile = null;
+    let selectedTestFile = null;
+    let selectedTrainFileName = '';
+    let selectedTestFileName = '';
+    let selectedAlgorithm = null;
+    let trainingTaskId = null;
+    let progressInterval = null;
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDataFiles();
+        // 确保步骤1事件在初始渲染时绑定，正确控制"下一步"按钮
+        setupStep1();
+    });
+
+    // 加载数据文件列表
+    function loadDataFiles() {
+        fetch('/api/ml/data-files/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderDataFiles(data.files);
+            }
+        })
+        .catch(error => {
+            console.error('加载数据文件失败:', error);
+        });
+    }
+
+    // 渲染数据文件列表
+    function renderDataFiles(files) {
+        const trainSelect = document.getElementById('train-data-file-select');
+        const testSelect = document.getElementById('test-data-file-select');
+        trainSelect.innerHTML = '<option value="">请选择训练集数据文件</option>';
+        testSelect.innerHTML = '<option value="">请选择测试集数据文件</option>';
+        
+        files.forEach(file => {
+            if (file.status === 'ready') {
+                const optionTrain = document.createElement('option');
+                optionTrain.value = file.id;
+                optionTrain.textContent = `${file.original_filename} (${file.total_rows}行, ${file.total_columns}列)`;
+                trainSelect.appendChild(optionTrain);
+
+                const optionTest = document.createElement('option');
+                optionTest.value = file.id;
+                optionTest.textContent = `${file.original_filename} (${file.total_rows}行, ${file.total_columns}列)`;
+                testSelect.appendChild(optionTest);
+            }
+        });
+    }
+
+
+    // 下一步
+    function nextStep(step) {
+        if (validateCurrentStep()) {
+            hideCurrentStep();
+            showStep(step);
+            updateStepIndicators(step);
+            currentStep = step;
+        }
+    }
+
+    // 上一步
+    function prevStep(step) {
+        hideCurrentStep();
+        showStep(step);
+        updateStepIndicators(step);
+        currentStep = step;
+    }
+
+    // 隐藏当前步骤
+    function hideCurrentStep() {
+        document.getElementById(`step-${currentStep}-content`).style.display = 'none';
+    }
+
+    // 显示步骤
+    function showStep(step) {
+        document.getElementById(`step-${step}-content`).style.display = 'block';
+        
+        // 根据步骤执行相应操作
+        switch(step) {
+            case 1:
+                setupStep1();
+                break;
+            case 2:
+                setupStep2();
+                break;
+            case 3:
+                setupStep3();
+                break;
+            case 4:
+                setupStep4();
+                break;
+        }
+    }
+
+    // 更新步骤指示器
+    function updateStepIndicators(currentStep) {
+        for (let i = 1; i <= 4; i++) {
+            const indicator = document.getElementById(`step-${i}`);
+            indicator.classList.remove('active', 'completed');
+            
+            if (i < currentStep) {
+                indicator.classList.add('completed');
+            } else if (i === currentStep) {
+                indicator.classList.add('active');
+            }
+        }
+    }
+
+    // 验证当前步骤
+    function validateCurrentStep() {
+        switch(currentStep) {
+            case 1:
+                const trainSelect = document.getElementById('train-data-file-select');
+                const testSelect = document.getElementById('test-data-file-select');
+                const taskName = document.getElementById('task-name');
+                if (!trainSelect.value) {
+                    showToast('请选择训练集数据文件', 'warning');
+                    return false;
+                }
+                if (!testSelect.value) {
+                    showToast('请选择测试集数据文件', 'warning');
+                    return false;
+                }
+                if (!taskName.value.trim()) {
+                    showToast('请输入任务名称', 'warning');
+                    return false;
+                }
+                if (trainSelect.value === testSelect.value) {
+                    showToast('训练集与测试集不能是同一文件', 'warning');
+                    return false;
+                }
+                selectedTrainFile = trainSelect.value;
+                selectedTestFile = testSelect.value;
+                return true;
+                
+            case 2:
+                const targetColumn = document.getElementById('target-column');
+                const features = document.querySelectorAll('.feature-checkbox:checked');
+                if (!targetColumn.value) {
+                    showToast('请选择目标列', 'warning');
+                    return false;
+                }
+                if (features.length === 0) {
+                    showToast('请至少选择一个特征列', 'warning');
+                    return false;
+                }
+                return true;
+                
+            case 3:
+                const algorithm = document.getElementById('algorithm-select');
+                if (!algorithm.value) {
+                    showToast('请选择算法', 'warning');
+                    return false;
+                }
+                selectedAlgorithm = algorithm.value;
+                return true;
+                
+            default:
+                return true;
+        }
+    }
+
+    // 设置步骤1
+    function setupStep1() {
+        const trainSelect = document.getElementById('train-data-file-select');
+        const testSelect = document.getElementById('test-data-file-select');
+        const taskNameInput = document.getElementById('task-name');
+
+        const updateStep1NextButton = () => {
+            const enabled = trainSelect.value && testSelect.value && trainSelect.value !== testSelect.value && taskNameInput.value.trim();
+            document.getElementById('next-step-1').disabled = !enabled;
+        };
+
+        trainSelect.addEventListener('change', function() {
+            if (this.value) {
+                loadFileInfo(this.value, 'train');
+            } else {
+                document.getElementById('train-file-info').style.display = 'none';
+            }
+            updateStep1NextButton();
+        });
+
+        testSelect.addEventListener('change', function() {
+            if (this.value) {
+                loadFileInfo(this.value, 'test');
+            } else {
+                document.getElementById('test-file-info').style.display = 'none';
+            }
+            updateStep1NextButton();
+        });
+
+        taskNameInput.addEventListener('input', updateStep1NextButton);
+    }
+
+    // 加载文件信息
+    function loadFileInfo(fileId, role) {
+        fetch(`/api/ml/data-files/${fileId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const file = data.file;
+                const prefix = role === 'test' ? 'test' : 'train';
+                document.getElementById(`${prefix}-file-rows`).textContent = file.total_rows || '-';
+                document.getElementById(`${prefix}-file-columns`).textContent = file.total_columns || '-';
+                document.getElementById(`${prefix}-file-size`).textContent = file.file_size_display || '-';
+                document.getElementById(`${prefix}-file-status`).textContent = file.get_status_display || '-';
+                document.getElementById(`${prefix}-file-info`).style.display = 'block';
+
+                // 保存文件名供步骤2/4展示
+                if (prefix === 'train') {
+                    selectedTrainFileName = file.original_filename || '';
+                } else {
+                    selectedTestFileName = file.original_filename || '';
+                }
+
+                // 若步骤2/4的文件名展示节点已存在则同步更新
+                const step2TrainName = document.getElementById('step2-train-file-name');
+                const step2TestName = document.getElementById('step2-test-file-name');
+                if (step2TrainName) step2TrainName.textContent = selectedTrainFileName || '-';
+                if (step2TestName) step2TestName.textContent = selectedTestFileName || '-';
+
+                const step4TrainName = document.getElementById('step4-train-file-name');
+                const step4TestName = document.getElementById('step4-test-file-name');
+                if (step4TrainName) step4TrainName.textContent = selectedTrainFileName || '-';
+                if (step4TestName) step4TestName.textContent = selectedTestFileName || '-';
+            }
+        })
+        .catch(error => {
+            console.error('加载文件信息失败:', error);
+        });
+    }
+
+    // 设置步骤2
+    function setupStep2() {
+        // 展示所选文件名
+        const step2TrainName = document.getElementById('step2-train-file-name');
+        const step2TestName = document.getElementById('step2-test-file-name');
+        if (step2TrainName) step2TrainName.textContent = selectedTrainFileName || '-';
+        if (step2TestName) step2TestName.textContent = selectedTestFileName || '-';
+
+        // 固定问题类型为回归并禁用修改
+        const problemTypeSelect = document.getElementById('problem-type');
+        if (problemTypeSelect) {
+            problemTypeSelect.value = 'regression';
+            problemTypeSelect.disabled = true;
+        }
+
+        loadColumns();
+        setupFeatureSelection();
+    }
+
+    // 加载列信息
+    function loadColumns() {
+        // 并行获取训练集与测试集列信息，用训练集渲染，并提示不一致
+        Promise.all([
+            fetch(`/api/ml/data-files/${selectedTrainFile}/`).then(r => r.json()),
+            fetch(`/api/ml/data-files/${selectedTestFile}/`).then(r => r.json())
+        ])
+        .then(([trainData, testData]) => {
+            if (trainData.success) {
+                const trainColumns = trainData.file.column_names || [];
+                const testColumns = (testData && testData.success) ? (testData.file.column_names || []) : [];
+
+                // 渲染（基于训练集）
+                const targetSelect = document.getElementById('target-column');
+                targetSelect.innerHTML = '<option value="">请选择目标列</option>';
+                trainColumns.forEach(column => {
+                    const option = document.createElement('option');
+                    option.value = column;
+                    option.textContent = column;
+                    targetSelect.appendChild(option);
+                });
+
+                const featuresList = document.getElementById('features-list');
+                featuresList.innerHTML = '';
+                trainColumns.forEach(column => {
+                    const div = document.createElement('div');
+                    div.className = 'form-check';
+                    div.innerHTML = `
+                        <input class="form-check-input feature-checkbox" type="checkbox" value="${column}" id="feature-${column}">
+                        <label class="form-check-label" for="feature-${column}">
+                            ${column}
+                        </label>
+                    `;
+                    featuresList.appendChild(div);
+                });
+
+                targetSelect.addEventListener('change', function() {
+                    updateFeatureSelection();
+                });
+
+                // 一致性校验提示
+                const warning = document.getElementById('columns-compat-warning');
+                if (warning) {
+                    const setA = new Set(trainColumns);
+                    const setB = new Set(testColumns);
+                    let compatible = setA.size === setB.size && [...setA].every(x => setB.has(x));
+                    if (!compatible) {
+                        warning.style.display = 'block';
+                        // 可选地显示差异数量
+                        const diffA = [...setA].filter(x => !setB.has(x));
+                        const diffB = [...setB].filter(x => !setA.has(x));
+                        warning.querySelector('.diff-train-only').textContent = diffA.join(', ') || '无';
+                        warning.querySelector('.diff-test-only').textContent = diffB.join(', ') || '无';
+                    } else {
+                        warning.style.display = 'none';
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('加载列信息失败:', error);
+        });
+    }
+
+    // 设置特征选择
+    function setupFeatureSelection() {
+        const selectAll = document.getElementById('select-all-features');
+        selectAll.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.feature-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateNextButton();
+        });
+        
+        // 监听特征选择变化
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('feature-checkbox')) {
+                updateNextButton();
+            }
+        });
+    }
+
+    // 更新特征选择
+    function updateFeatureSelection() {
+        const targetColumn = document.getElementById('target-column').value;
+        const checkboxes = document.querySelectorAll('.feature-checkbox');
+        
+        checkboxes.forEach(checkbox => {
+            if (checkbox.value === targetColumn) {
+                checkbox.disabled = true;
+                checkbox.checked = false;
+            } else {
+                checkbox.disabled = false;
+            }
+        });
+        
+        updateNextButton();
+    }
+
+    // 清空所有特征选择
+    function clearAllFeatures() {
+        const checkboxes = document.querySelectorAll('.feature-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        document.getElementById('select-all-features').checked = false;
+        updateNextButton();
+    }
+
+    // 更新下一步按钮状态
+    function updateNextButton() {
+        const targetColumn = document.getElementById('target-column').value;
+        const features = document.querySelectorAll('.feature-checkbox:checked');
+        const nextButton = document.getElementById('next-step-2');
+        
+        nextButton.disabled = !targetColumn || features.length === 0;
+    }
+
+    // 仍固定为回归问题，但算法从后端获取（确保使用数值ID）
+
+    // 各算法默认参数
+    const ALGORITHM_PARAMETERS = {
+        ols: { fit_intercept: true, positive: false },
+        ridge: { alpha: 1.0, fit_intercept: true, solver: 'auto' },
+        lasso: { alpha: 1.0, fit_intercept: true, max_iter: 1000 },
+        bayesian_ridge: { n_iter: 300, alpha_1: 1e-6, alpha_2: 1e-6, lambda_1: 1e-6, lambda_2: 1e-6 },
+        ard: { n_iter: 300, tol: 1e-3, alpha_1: 1e-6, alpha_2: 1e-6, lambda_1: 1e-6, lambda_2: 1e-6 },
+        glm: { family: 'gaussian', link: 'identity' },
+        polynomial: { degree: 2, include_bias: true },
+        svr: { C: 1.0, epsilon: 0.1, kernel: 'rbf' },
+        knn: { n_neighbors: 5, weights: 'uniform', algorithm: 'auto' },
+        gpr: { alpha: 1e-10, kernel: 'RBF' },
+        decision_tree: { max_depth: null, min_samples_split: 2, min_samples_leaf: 1 },
+        bagging: { n_estimators: 10, max_samples: 1.0, max_features: 1.0 },
+        random_forest: { n_estimators: 100, max_depth: null, min_samples_split: 2, min_samples_leaf: 1 }
+    };
+
+    // 参数规格（类型、默认值、选项、说明）
+    const ALGORITHM_PARAM_SPECS = {
+        ols: {
+            fit_intercept: { type: 'boolean', default: true, help: '是否拟合截距项。' },
+            positive: { type: 'boolean', default: false, help: '是否约束系数为非负。' }
+        },
+        ridge: {
+            alpha: { type: 'number', default: 1.0, min: 0, step: 0.1, help: 'L2正则化强度，越大正则越强。' },
+            fit_intercept: { type: 'boolean', default: true, help: '是否拟合截距项。' },
+            solver: { type: 'select', default: 'auto', options: ['auto','svd','cholesky','lsqr','sparse_cg','sag','saga'], help: '求解器类型。' }
+        },
+        lasso: {
+            alpha: { type: 'number', default: 1.0, min: 0, step: 0.1, help: 'L1正则化强度，越大稀疏性越强。' },
+            fit_intercept: { type: 'boolean', default: true, help: '是否拟合截距项。' },
+            max_iter: { type: 'number', default: 1000, min: 100, step: 100, help: '最大迭代次数。' }
+        },
+        bayesian_ridge: {
+            n_iter: { type: 'number', default: 300, min: 100, step: 50, help: '迭代次数。' },
+            alpha_1: { type: 'number', default: 1e-6, step: 1e-6, help: 'alpha先验的Gamma分布参数。' },
+            alpha_2: { type: 'number', default: 1e-6, step: 1e-6, help: 'alpha先验的Gamma分布参数。' },
+            lambda_1: { type: 'number', default: 1e-6, step: 1e-6, help: 'lambda先验的Gamma分布参数。' },
+            lambda_2: { type: 'number', default: 1e-6, step: 1e-6, help: 'lambda先验的Gamma分布参数。' }
+        },
+        ard: {
+            n_iter: { type: 'number', default: 300, min: 100, step: 50, help: '迭代次数。' },
+            tol: { type: 'number', default: 1e-3, step: 1e-4, help: '收敛容忍度。' },
+            alpha_1: { type: 'number', default: 1e-6, step: 1e-6, help: 'alpha先验参数。' },
+            alpha_2: { type: 'number', default: 1e-6, step: 1e-6, help: 'alpha先验参数。' },
+            lambda_1: { type: 'number', default: 1e-6, step: 1e-6, help: 'lambda先验参数。' },
+            lambda_2: { type: 'number', default: 1e-6, step: 1e-6, help: 'lambda先验参数。' }
+        },
+        glm: {
+            family: { type: 'select', default: 'gaussian', options: ['gaussian','poisson','gamma','inverse_gaussian'], help: '分布族。' },
+            link: { type: 'select', default: 'identity', options: ['identity','log','inverse','logit'], help: '链接函数。' }
+        },
+        polynomial: {
+            degree: { type: 'number', default: 2, min: 1, step: 1, help: '多项式阶数。' },
+            include_bias: { type: 'boolean', default: true, help: '是否包含偏置项。' }
+        },
+        svr: {
+            C: { type: 'number', default: 1.0, min: 0.01, step: 0.1, help: '正则化参数，越大越重视训练误差。' },
+            epsilon: { type: 'number', default: 0.1, min: 0, step: 0.05, help: 'ε-不敏感区间宽度。' },
+            kernel: { type: 'select', default: 'rbf', options: ['rbf','linear','poly','sigmoid'], help: '核函数类型。' }
+        },
+        knn: {
+            n_neighbors: { type: 'number', default: 5, min: 1, step: 1, help: '邻居数量。' },
+            weights: { type: 'select', default: 'uniform', options: ['uniform','distance'], help: '投票权重策略。' },
+            algorithm: { type: 'select', default: 'auto', options: ['auto','ball_tree','kd_tree','brute'], help: '近邻搜索算法。' }
+        },
+        gpr: {
+            alpha: { type: 'number', default: 1e-10, step: 1e-10, help: '观测噪声的加性项。' },
+            kernel: { type: 'select', default: 'RBF', options: ['RBF','Matern','RationalQuadratic','DotProduct'], help: '核函数类型。' }
+        },
+        decision_tree: {
+            max_depth: { type: 'number', default: null, help: '最大深度，null为不限制。' },
+            min_samples_split: { type: 'number', default: 2, min: 2, step: 1, help: '内部节点再划分所需最小样本数。' },
+            min_samples_leaf: { type: 'number', default: 1, min: 1, step: 1, help: '叶子节点最少样本数。' }
+        },
+        bagging: {
+            n_estimators: { type: 'number', default: 10, min: 1, step: 1, help: '基学习器数量。' },
+            max_samples: { type: 'number', default: 1.0, min: 0.1, max: 1.0, step: 0.1, help: '每个基学习器采样的样本占比。' },
+            max_features: { type: 'number', default: 1.0, min: 0.1, max: 1.0, step: 0.1, help: '每个基学习器采样的特征占比。' }
+        },
+        random_forest: {
+            n_estimators: { type: 'number', default: 100, min: 10, step: 10, help: '树的数量。' },
+            max_depth: { type: 'number', default: null, help: '最大深度，null为不限制。' },
+            min_samples_split: { type: 'number', default: 2, min: 2, step: 1, help: '内部节点再划分所需最小样本数。' },
+            min_samples_leaf: { type: 'number', default: 1, min: 1, step: 1, help: '叶子节点最少样本数。' }
+        }
+    };
+
+    // 设置步骤3
+    function setupStep3() {
+        loadAlgorithms();
+    }
+
+    // 加载算法列表
+    function loadAlgorithms() {
+        // 固定算法类型为回归并禁用选择
+        const typeSelect = document.getElementById('algorithm-type');
+        if (typeSelect) {
+            typeSelect.value = 'regression';
+            typeSelect.disabled = true;
+        }
+        fetch('/api/ml/algorithms/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const list = Array.isArray(data.algorithms) ? data.algorithms : [];
+                const onlyRegression = list.filter(alg => (String(alg.algorithm_type || '')).toLowerCase() === 'regression');
+                if (onlyRegression.length > 0) {
+                    renderAlgorithms(onlyRegression);
+                } else {
+                    const algorithmSelect = document.getElementById('algorithm-select');
+                    algorithmSelect.innerHTML = '<option value="">后端未提供回归算法，请先在后台配置</option>';
+                    algorithmSelect.disabled = true;
+                    document.getElementById('next-step-3').disabled = true;
+                    showToast('未找到回归算法，请在后台配置后重试', 'warning');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('加载算法列表失败:', error);
+            const algorithmSelect = document.getElementById('algorithm-select');
+            algorithmSelect.innerHTML = '<option value="">加载算法失败</option>';
+            algorithmSelect.disabled = true;
+            document.getElementById('next-step-3').disabled = true;
+            showToast('加载算法失败，请稍后重试', 'error');
+        });
+    }
+
+    // 渲染算法列表
+    function renderAlgorithms(algorithms) {
+        const typeSelect = document.getElementById('algorithm-type');
+        const algorithmSelect = document.getElementById('algorithm-select');
+
+        algorithmSelect.innerHTML = '<option value="">请选择具体算法</option>';
+        algorithmSelect.disabled = false;
+        algorithms.forEach(algorithm => {
+            const option = document.createElement('option');
+            option.value = algorithm.id; // 数值ID
+            option.textContent = algorithm.display_name;
+            option.dataset.description = algorithm.description || '';
+            algorithmSelect.appendChild(option);
+        });
+
+        algorithmSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                document.getElementById('algorithm-desc-text').textContent = selectedOption.dataset.description || '暂无描述';
+                document.getElementById('algorithm-description').style.display = 'block';
+                document.getElementById('next-step-3').disabled = false;
+                loadAlgorithmParameters(selectedOption.value);
+            } else {
+                document.getElementById('algorithm-description').style.display = 'none';
+                document.getElementById('next-step-3').disabled = true;
+            }
+        });
+
+        if (typeSelect) {
+            typeSelect.value = 'regression';
+            typeSelect.disabled = true;
+        }
+    }
+
+    // 加载算法参数
+    function loadAlgorithmParameters(algorithmId) {
+        // 从后端按算法ID获取参数定义
+        fetch(`/api/ml/algorithms/${algorithmId}/parameters/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 优先使用 schema 渲染（带类型/范围/说明），回退到 parameters 值
+                const schema = data.schema && Object.keys(data.schema).length > 0 ? data.schema : null;
+                if (schema) {
+                    renderAlgorithmParameters(schema, true);
+                } else {
+                    renderAlgorithmParameters(data.parameters);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('加载算法参数失败:', error);
+        });
+    }
+
+    // 渲染算法参数
+    function renderAlgorithmParameters(parameters, isSpec = false) {
+        const form = document.getElementById('parameters-form');
+        form.innerHTML = '';
+        
+        if (parameters && Object.keys(parameters).length > 0) {
+            Object.entries(parameters).forEach(([key, value]) => {
+                const div = document.createElement('div');
+                div.className = 'parameter-group';
+                
+                let inputHtml = '';
+                if (isSpec) {
+                    const spec = value;
+                    const help = spec.help ? `<small class="text-muted">${spec.help}</small>` : '';
+                    if (spec.type === 'boolean') {
+                        inputHtml = `
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="param-${key}" ${spec.default ? 'checked' : ''}>
+                                <label class="form-check-label" for="param-${key}">
+                                    ${key}
+                                </label>
+                            </div>
+                            ${help}
+                        `;
+                    } else if (spec.type === 'number') {
+                        const minAttr = spec.min !== undefined ? `min="${spec.min}"` : '';
+                        const maxAttr = spec.max !== undefined ? `max="${spec.max}"` : '';
+                        const stepAttr = spec.step !== undefined ? `step="${spec.step}"` : 'step="any"';
+                        inputHtml = `
+                            <input type="number" class="form-control" id="param-${key}" value="${spec.default}" ${minAttr} ${maxAttr} ${stepAttr}>
+                            ${help}
+                        `;
+                    } else if (spec.type === 'select') {
+                        const options = (spec.options || []).map(opt => `<option value="${opt}" ${opt === spec.default ? 'selected' : ''}>${opt}</option>`).join('');
+                        inputHtml = `
+                            <select class="form-select" id="param-${key}">
+                                ${options}
+                            </select>
+                            ${help}
+                        `;
+                    } else {
+                        inputHtml = `
+                            <input type="text" class="form-control" id="param-${key}" value="${spec.default ?? ''}">
+                            ${help}
+                        `;
+                    }
+                } else {
+                    if (typeof value === 'boolean') {
+                        inputHtml = `
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="param-${key}" ${value ? 'checked' : ''}>
+                                <label class="form-check-label" for="param-${key}">
+                                    ${key}
+                                </label>
+                            </div>
+                        `;
+                    } else if (typeof value === 'number') {
+                        inputHtml = `
+                            <input type="number" class="form-control" id="param-${key}" value="${value}" step="any">
+                        `;
+                    } else {
+                        inputHtml = `
+                            <input type="text" class="form-control" id="param-${key}" value="${value}">
+                        `;
+                    }
+                }
+                
+                div.innerHTML = `
+                    <label for="param-${key}">${key}:</label>
+                    ${inputHtml}
+                `;
+                form.appendChild(div);
+            });
+        } else {
+            form.innerHTML = '<p class="text-muted">该算法无需额外参数配置</p>';
+        }
+    }
+
+    // 设置步骤4
+    function setupStep4() {
+        // 步骤4的设置已在页面加载时完成
+    }
+
+    // 开始训练
+    function startTraining() {
+        if (!validateTrainingConfig()) {
+            return;
+        }
+        
+        const trainingData = collectTrainingConfig();
+        
+        fetch('/api/ml/tasks/create/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(trainingData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                trainingTaskId = data.task_id;
+                showTrainingProgress();
+                startProgressMonitoring();
+                showToast('训练任务已创建', 'success');
+                // 创建成功后跳转到任务管理页，确保列表即时可见
+                setTimeout(() => {
+                    window.location.href = "/ml/task-management/";
+                }, 800);
+            } else {
+                showToast('创建训练任务失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('创建训练任务失败：网络错误', 'error');
+        });
+    }
+
+    // 验证训练配置
+    function validateTrainingConfig() {
+        const taskName = document.getElementById('task-name').value.trim();
+        if (!taskName) {
+            showToast('请输入任务名称', 'warning');
+            return false;
+        }
+        
+        const targetColumn = document.getElementById('target-column').value;
+        if (!targetColumn) {
+            showToast('请选择目标列', 'warning');
+            return false;
+        }
+        
+        const features = Array.from(document.querySelectorAll('.feature-checkbox:checked')).map(cb => cb.value);
+        if (features.length === 0) {
+            showToast('请至少选择一个特征列', 'warning');
+            return false;
+        }
+        
+        const algorithm = document.getElementById('algorithm-select').value;
+        if (!algorithm) {
+            showToast('请选择算法', 'warning');
+            return false;
+        }
+        
+        return true;
+    }
+
+    // 收集训练配置
+    function collectTrainingConfig() {
+        const features = Array.from(document.querySelectorAll('.feature-checkbox:checked')).map(cb => cb.value);
+        const parameters = {};
+        
+        // 收集算法参数
+        const paramInputs = document.querySelectorAll('#parameters-form input, #parameters-form select');
+        paramInputs.forEach(input => {
+            const key = input.id.replace('param-', '');
+            if (input.type === 'checkbox') {
+                parameters[key] = input.checked;
+            } else if (input.type === 'number') {
+                parameters[key] = parseFloat(input.value);
+            } else {
+                parameters[key] = input.value;
+            }
+        });
+        
+        return {
+            task_name: document.getElementById('task-name').value.trim(),
+            description: document.getElementById('task-description').value.trim(),
+            data_file: selectedTrainFile,
+            train_data_file: selectedTrainFile,
+            test_data_file: selectedTestFile,
+            target_column: document.getElementById('target-column').value,
+            feature_columns: features,
+            algorithm: selectedAlgorithm ? Number(selectedAlgorithm) : null,
+            algorithm_parameters: parameters,
+            train_ratio: 1.0,
+            test_ratio: 0.0,
+            validation_ratio: 0.0
+        };
+    }
+
+    // 显示训练进度
+    function showTrainingProgress() {
+        document.getElementById('training-progress').style.display = 'block';
+        document.getElementById('progress-task-name').textContent = document.getElementById('task-name').value;
+        document.getElementById('progress-algorithm').textContent = document.getElementById('algorithm-select').options[document.getElementById('algorithm-select').selectedIndex].text;
+        document.getElementById('progress-start-time').textContent = new Date().toLocaleString();
+        document.getElementById('progress-status').textContent = '准备中';
+
+        // 同步显示训练/测试文件名
+        const step4TrainName = document.getElementById('step4-train-file-name');
+        const step4TestName = document.getElementById('step4-test-file-name');
+        if (step4TrainName) step4TrainName.textContent = selectedTrainFileName || '-';
+        if (step4TestName) step4TestName.textContent = selectedTestFileName || '-';
+    }
+
+    // 开始进度监控
+    function startProgressMonitoring() {
+        progressInterval = setInterval(() => {
+            if (trainingTaskId) {
+                fetch(`/api/ml/tasks/${trainingTaskId}/progress/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateProgress(data.progress);
+                    }
+                })
+                .catch(error => {
+                    console.error('获取进度失败:', error);
+                });
+            }
+        }, 2000);
+    }
+
+    // 更新进度
+    function updateProgress(progress) {
+        const progressBar = document.getElementById('progress-bar');
+        const log = document.getElementById('training-log');
+        
+        progressBar.style.width = progress.progress + '%';
+        progressBar.textContent = Math.round(progress.progress) + '%';
+        
+        document.getElementById('progress-status').textContent = progress.status;
+        
+        if (progress.log) {
+            log.innerHTML = progress.log;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        if (progress.status === 'completed' || progress.status === 'failed') {
+            clearInterval(progressInterval);
+            document.getElementById('stop-training-btn').disabled = true;
+            
+            if (progress.status === 'completed') {
+                showToast('训练完成！', 'success');
+            } else {
+                showToast('训练失败：' + progress.error_message, 'error');
+            }
+        }
+    }
+
+    // 停止训练
+    function stopTraining() {
+        if (trainingTaskId && confirm('确定要停止训练吗？')) {
+            fetch(`/api/ml/tasks/${trainingTaskId}/stop/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    clearInterval(progressInterval);
+                    showToast('训练已停止', 'info');
+                } else {
+                    showToast('停止训练失败：' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('停止训练失败：网络错误', 'error');
+            });
+        }
+    }
+
+    // 查看任务管理
+    function viewTaskManagement() {
+        window.location.href = "{% url 'ml_task_management' %}";
+    }
+
+    // 刷新数据
+    function refreshData() {
+        loadDataFiles();
+        showToast('数据已刷新', 'success');
+    }
+
+    // 获取CSRF令牌
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,937 @@
+{% extends 'user_base.html' %}
+
+{% block title %}数据解析{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">数据解析</h1>
+            <p class="text-muted">上传CSV文件，进行数据质量分析和预处理</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="refreshData()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+    </div>
+
+    <!-- 文件上传区域 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">文件上传</h6>
+        </div>
+        <div class="card-body">
+            <div class="upload-area" id="upload-area">
+                <div class="text-center">
+                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">拖拽CSV文件到此处或点击选择文件</h5>
+                    <p class="text-muted">支持.csv格式，最大文件大小：50MB</p>
+                    <input type="file" id="file-input" accept=".csv" style="display: none;">
+                    <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+                        <i class="fas fa-plus me-1"></i>选择文件
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 上传进度 -->
+            <div id="upload-progress" class="mt-3" style="display: none;">
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <small class="text-muted">上传中...</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 已上传文件列表 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">已上传文件</h6>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteSelectedFiles()">
+                    <i class="fas fa-trash me-1"></i>删除选中
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="select-all-files">
+                            </th>
+                            <th>文件名</th>
+                            <th>大小</th>
+                            <th>行数</th>
+                            <th>列数</th>
+                            <th>状态</th>
+                            <th>上传时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="files-list-body">
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">暂无文件</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 列类型选择与统计 -->
+    <div class="card shadow mb-4" id="quality-analysis-card" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">列类型与统计</h6>
+        </div>
+        <div class="card-body">
+            <div class="mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="m-0">列类型与统计</h6>
+                    <div>
+                        <button id="apply-column-types-btn" class="btn btn-success btn-sm" onclick="applyColumnTypes()" disabled>
+                            <i class="fas fa-check me-1"></i>应用
+                        </button>
+                        </div>
+                    </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle" id="column-stats-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>列名</th>
+                                <th style="width:160px;">类型</th>
+                                <th>缺失值</th>
+                                <th>异常值</th>
+                                <th>最小值</th>
+                                <th>最大值</th>
+                                <th>均值</th>
+                                <th>标准差</th>
+                                <th style="width:180px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="column-stats-body">
+                        </tbody>
+                    </table>
+                </div>
+                <small id="column-type-hint" class="text-muted">如果列类型选择与检测结果不一致，则无法点击“应用”。</small>
+                    </div>
+                </div>
+            </div>
+            
+    <!-- 缺失/异常处理弹窗 -->
+    <div class="modal fade" id="processModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">数据处理</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">处理列</label>
+                        <input type="text" id="process-col-name" class="form-control" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">处理类型</label>
+                        <input type="text" id="process-type" class="form-control" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">处理方式</label>
+                        <select id="process-strategy" class="form-select">
+                            <option value="remove">删除</option>
+                            <option value="mean">均值</option>
+                            <option value="median">中位数</option>
+                            </select>
+                        </div>
+                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmProcess()">应用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据分割 -->
+    <div class="card shadow mb-4" id="data-split-card" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">数据分割</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">训练集比例</label>
+                    <input type="number" class="form-control" id="train-ratio" min="0.5" max="0.99" step="0.01" value="0.8">
+                    <small class="text-muted">0.50 ~ 0.99</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">测试集比例</label>
+                    <input type="number" class="form-control" id="test-ratio" min="0.01" max="0.5" step="0.01" value="0.2" disabled>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">总行数</label>
+                    <input type="text" class="form-control" id="total-rows-display" disabled>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <button class="btn btn-success" onclick="splitData()">
+                    <i class="fas fa-cut me-1"></i>分割数据
+                </button>
+            </div>
+            
+            <!-- 分割预览与命名 -->
+            <div id="split-preview" class="mt-3" style="display: none;">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <h6 class="text-success">训练集</h6>
+                                <h4 id="train-count">0</h4>
+                                <small class="text-muted">行</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-info">
+                            <div class="card-body text-center">
+                                <h6 class="text-info">测试集</h6>
+                                <h4 id="test-count">0</h4>
+                                <small class="text-muted">行</small>
+                            </div>
+                        </div>
+                    </div>
+                            </div>
+                <div class="row mt-3 g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">训练集文件名</label>
+                        <input type="text" class="form-control" id="train-filename" placeholder="自动生成">
+                        </div>
+                    <div class="col-md-6">
+                        <label class="form-label">测试集文件名</label>
+                        <input type="text" class="form-control" id="test-filename" placeholder="自动生成">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-primary" onclick="saveSplit()">
+                        <i class="fas fa-save me-1"></i>保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据预览 -->
+    <div class="card shadow mb-4" id="data-preview-card" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">数据预览</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-sm" id="data-preview-table">
+                    <!-- 数据将通过JavaScript动态加载 -->
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 0.5rem;
+        padding: 3rem;
+        transition: all 0.3s ease;
+    }
+    
+    .upload-area:hover {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    
+    .upload-area.dragover {
+        border-color: #007bff;
+        background-color: #e3f2fd;
+    }
+    
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+    
+    .border-left-danger {
+        border-left: 0.25rem solid #e74a3b !important;
+    }
+    
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+    let selectedFile = null;
+    let fileData = null;
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadFilesList();
+        setupFileUpload();
+        setupDataSplitSliders();
+    });
+
+    // 设置文件上传
+    function setupFileUpload() {
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        
+        // 拖拽上传
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+        
+        // 点击上传
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+    }
+
+    // 下载文件
+    function downloadFile(fileId) {
+        // 直接打开下载链接
+        window.location.href = `/api/ml/data-files/${fileId}/download/`;
+    }
+
+    // 处理文件上传
+    function handleFileUpload(file) {
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            showToast('请选择CSV文件', 'error');
+            return;
+        }
+        
+        if (file.size > 50 * 1024 * 1024) { // 50MB
+            showToast('文件大小不能超过50MB', 'error');
+            return;
+        }
+        
+        // 允许上传有空值的文件，不再进行空值检查
+        
+        // 显示上传进度
+        const progressDiv = document.getElementById('upload-progress');
+        const progressBar = progressDiv.querySelector('.progress-bar');
+        progressDiv.style.display = 'block';
+        
+        // 模拟上传进度
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.random() * 30;
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(interval);
+                setTimeout(() => {
+                    progressDiv.style.display = 'none';
+                    uploadFile(file);
+                }, 500);
+            }
+            progressBar.style.width = progress + '%';
+        }, 200);
+    }
+
+    // 上传文件到服务器
+    function uploadFile(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        fetch('/api/ml/data-files/upload/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('文件上传成功', 'success');
+                loadFilesList();
+            } else {
+                showToast('上传失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('上传失败：网络错误', 'error');
+        });
+    }
+
+    // 加载文件列表
+    function loadFilesList() {
+        fetch('/api/ml/data-files/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderFilesList(data.files);
+            }
+        })
+        .catch(error => {
+            console.error('加载文件列表失败:', error);
+        });
+    }
+
+    // 渲染文件列表
+    function renderFilesList(files) {
+        const tbody = document.getElementById('files-list-body');
+        tbody.innerHTML = '';
+        
+        if (files.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无文件</td></tr>';
+            return;
+        }
+        
+        files.forEach(file => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <input type="checkbox" class="file-checkbox" value="${file.id}">
+                </td>
+                <td>${file.original_filename}</td>
+                <td>${file.file_size_display}</td>
+                <td>${file.total_rows || '-'}</td>
+                <td>${file.total_columns || '-'}</td>
+                <td>
+                    <span class="badge ${getStatusBadgeClass(file.status)}">${file.get_status_display}</span>
+                </td>
+                <td>${file.created_at}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="previewFile(${file.id})" title="预览">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-info" onclick="analyzeFile(${file.id})" title="分析">
+                            <i class="fas fa-chart-bar"></i>
+                        </button>
+                        <button class="btn btn-outline-success" onclick="downloadFile(${file.id})" title="下载">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="deleteFile(${file.id})" title="删除">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // 获取状态徽章类
+    function getStatusBadgeClass(status) {
+        const statusMap = {
+            'uploading': 'bg-secondary',
+            'processing': 'bg-warning',
+            'ready': 'bg-success',
+            'error': 'bg-danger'
+        };
+        return statusMap[status] || 'bg-secondary';
+    }
+
+    // 预览文件
+    function previewFile(fileId) {
+        fetch(`/api/ml/data-files/${fileId}/preview/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showDataPreview(data.preview);
+                document.getElementById('data-preview-card').style.display = 'block';
+            } else {
+                showToast('预览失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('预览失败：网络错误', 'error');
+        });
+    }
+
+    // 分析文件
+    function analyzeFile(fileId) {
+        selectedFile = fileId;
+        
+        fetch(`/api/ml/data-files/${fileId}/process/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showQualityAnalysis(data.analysis);
+                document.getElementById('quality-analysis-card').style.display = 'block';
+                document.getElementById('data-split-card').style.display = 'block';
+            } else {
+                showToast('分析失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('分析失败：网络错误', 'error');
+        });
+    }
+
+    // 显示分析结果：仅渲染列类型与统计
+    function showQualityAnalysis(analysis) {
+        renderColumnStats(analysis.columns || []);
+        document.getElementById('quality-analysis-card').style.display = 'block';
+        document.getElementById('data-split-card').style.display = 'block';
+        window.__totalRows = analysis.total_rows || 0;
+    }
+
+    // 渲染列类型与统计表
+    function renderColumnStats(columns) {
+        const tbody = document.getElementById('column-stats-body');
+        tbody.innerHTML = '';
+        window.__columnDetectedMap = {}; // 列 -> 检测类型
+        window.__columnSelectedMap = {}; // 列 -> 选择类型
+
+        columns.forEach(col => {
+            const name = col.name;
+            const detected = col.detected_type === 'Numeric' ? 'Numeric' : 'Enum';
+            window.__columnDetectedMap[name] = detected;
+            window.__columnSelectedMap[name] = detected;
+
+            const isEnum = detected !== 'Numeric';
+            const displayNum = v => (v === null || v === undefined ? '--' : v);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><code>${name}</code></td>
+                <td>
+                    <select class="form-select form-select-sm" data-col="${name}" onchange="onColumnTypeChange(event)">
+                        <option value="Enum" ${isEnum ? 'selected' : ''}>Enum</option>
+                        <option value="Numeric" ${!isEnum ? 'selected' : ''}>Numeric</option>
+                    </select>
+                    <div class="form-text text-danger small d-none" id="mismatch-${cssEscape(name)}">与检测类型不一致：${detected}</div>
+                </td>
+                <td>${displayNum(col.missing_count)}</td>
+                <td>${displayNum(col.outlier_count)}</td>
+                <td>${isEnum ? '--' : displayNum(col.min)}</td>
+                <td>${isEnum ? '--' : displayNum(col.max)}</td>
+                <td>${isEnum ? '--' : displayNum(col.mean)}</td>
+                <td>${isEnum ? '--' : displayNum(col.std)}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-warning" title="处理缺失值" onclick="handleMissingForColumn('${jsEscape(name)}')" ${col.missing_count === 0 ? 'disabled' : ''}>
+                            缺失处理
+                        </button>
+                        <button class="btn btn-outline-danger" title="处理异常值" onclick="handleOutlierForColumn('${jsEscape(name)}')" ${isEnum || col.outlier_count === 0 ? 'disabled' : ''}>
+                            异常处理
+                        </button>
+                    </div>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+        updateApplyButtonState();
+    }
+
+    function cssEscape(s) {
+        return s.replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+    function jsEscape(s) {
+        return s.replace(/['"\\]/g, '\\$&');
+    }
+
+    function onColumnTypeChange(e) {
+        const select = e.target;
+        const name = select.getAttribute('data-col');
+        const val = select.value;
+        window.__columnSelectedMap[name] = val;
+        const detected = window.__columnDetectedMap[name];
+        const hint = document.getElementById(`mismatch-${cssEscape(name)}`);
+        if (val !== detected) {
+            hint && hint.classList.remove('d-none');
+        } else {
+            hint && hint.classList.add('d-none');
+        }
+        updateApplyButtonState();
+    }
+
+    function updateApplyButtonState() {
+        const btn = document.getElementById('apply-column-types-btn');
+        if (!window.__columnDetectedMap || !window.__columnSelectedMap) { btn.disabled = true; return; }
+        for (const k in window.__columnDetectedMap) {
+            if ((window.__columnSelectedMap[k] || '') !== (window.__columnDetectedMap[k] || '')) {
+                btn.disabled = true;
+                return;
+            }
+        }
+        btn.disabled = false;
+    }
+
+    function applyColumnTypes() {
+        // 仅做前端校验与放行到下一步（分割、建模）。
+        showToast('列类型已确认，可以进入下一步。', 'success');
+    }
+
+    // 处理弹窗交互
+    let __processContext = { type: 'missing', col: null };
+    function handleMissingForColumn(colName) {
+        __processContext = { type: 'missing', col: colName };
+        openProcessModal(colName, '缺失值');
+    }
+    function handleOutlierForColumn(colName) {
+        __processContext = { type: 'outlier', col: colName };
+        openProcessModal(colName, '异常值');
+    }
+    function openProcessModal(colName, typeText) {
+        document.getElementById('process-col-name').value = colName;
+        document.getElementById('process-type').value = typeText;
+        const modal = new bootstrap.Modal(document.getElementById('processModal'));
+        modal.show();
+    }
+    function confirmProcess() {
+        const colName = document.getElementById('process-col-name').value;
+        const strategy = document.getElementById('process-strategy').value;
+        if (!colName || !strategy) return;
+        const isMissing = __processContext.type === 'missing';
+        const url = isMissing ? '/api/ml/data-processing/missing-values/' : '/api/ml/data-processing/outliers/';
+        const mapped = mapStrategy(strategy);
+        const body = isMissing ? { file_id: selectedFile, missing_value_strategy: mapped, columns: [colName] }
+                               : { file_id: selectedFile, outlier_strategy: mapped, columns: [colName] };
+        fetch(url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify(body)
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                showToast('处理完成', 'success');
+                analyzeFile(selectedFile);
+                const modalEl = document.getElementById('processModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal && modal.hide();
+            } else {
+                showToast('处理失败：' + d.message, 'error');
+            }
+        }).catch(() => showToast('处理失败：网络错误', 'error'));
+    }
+    function mapStrategy(s) {
+        if (s === 'remove') return __processContext.type === 'missing' ? 'drop' : 'remove';
+        if (s === 'mean') return 'mean';
+        if (s === 'median') return 'median';
+        return s;
+    }
+
+    // 显示数据预览
+    function showDataPreview(preview) {
+        const table = document.getElementById('data-preview-table');
+        table.innerHTML = '';
+        
+        if (preview.headers && preview.data) {
+            // 表头
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            preview.headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+            
+            // 数据行
+            const tbody = document.createElement('tbody');
+            preview.data.slice(0, 10).forEach(row => { // 只显示前10行
+                const tr = document.createElement('tr');
+                row.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+        }
+    }
+
+    // 设置数据分割输入
+    function setupDataSplitSliders() {
+        const trainInput = document.getElementById('train-ratio');
+        const testInput = document.getElementById('test-ratio');
+        const totalRowsDisplay = document.getElementById('total-rows-display');
+        if (typeof window.__totalRows === 'number') {
+            totalRowsDisplay.value = window.__totalRows;
+        }
+        const onChange = function() {
+            let v = parseFloat(trainInput.value || '0.8');
+            if (isNaN(v)) v = 0.8;
+            v = Math.min(0.99, Math.max(0.5, v));
+            trainInput.value = v.toFixed(2);
+            testInput.value = (1 - v).toFixed(2);
+        };
+        trainInput.addEventListener('input', onChange);
+        trainInput.addEventListener('change', onChange);
+        onChange();
+    }
+
+    // 更新其他滑块
+    function updateOtherSliders() {
+        const trainRatio = parseFloat(document.getElementById('train-ratio').value);
+        const testRatio = parseFloat(document.getElementById('test-ratio').value);
+        const validationRatio = 0.0;
+        
+        const total = trainRatio + testRatio + validationRatio;
+        
+        if (total > 1) {
+            // 如果总和超过1，调整其他滑块
+            const excess = total - 1;
+            if (validationRatio > 0) {
+                document.getElementById('validation-ratio').value = Math.max(0, validationRatio - excess);
+                document.getElementById('validation-ratio-value').textContent = Math.round(document.getElementById('validation-ratio').value * 100) + '%';
+            } else if (testRatio > 0.1) {
+                document.getElementById('test-ratio').value = Math.max(0.1, testRatio - excess);
+                document.getElementById('test-ratio-value').textContent = Math.round(document.getElementById('test-ratio').value * 100) + '%';
+            }
+        }
+    }
+
+    // 处理数据
+    function processData() {
+        if (!selectedFile) {
+            showToast('请先选择要处理的文件', 'warning');
+            return;
+        }
+        
+        const missingStrategy = document.getElementById('missing-value-strategy').value;
+        const outlierStrategy = document.getElementById('outlier-strategy').value;
+        
+        const data = {
+            file_id: selectedFile,
+            missing_value_strategy: missingStrategy,
+            outlier_strategy: outlierStrategy
+        };
+        
+        fetch('/api/ml/data-processing/missing-values/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('数据处理完成', 'success');
+                analyzeFile(selectedFile); // 重新分析
+            } else {
+                showToast('处理失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('处理失败：网络错误', 'error');
+        });
+    }
+
+    // 分割数据
+    function splitData() {
+        if (!selectedFile) {
+            showToast('请先选择要分割的文件', 'warning');
+            return;
+        }
+        
+        // 若仍存在缺失值，则阻止分割
+        try {
+            const rows = document.querySelectorAll('#column-stats-body tr');
+            let missingTotal = 0;
+            rows.forEach(tr => {
+                const tds = tr.querySelectorAll('td');
+                if (tds && tds.length > 3) {
+                    const missingText = (tds[2].textContent || '').trim();
+                    const val = parseInt(missingText, 10);
+                    if (!isNaN(val)) missingTotal += val;
+                }
+            });
+            if (missingTotal > 0) {
+                showToast('存在缺失值，请处理后再进行分割', 'error');
+                return;
+            }
+        } catch (e) {}
+
+        const trainRatio = parseFloat(document.getElementById('train-ratio').value);
+        const testRatio = parseFloat(document.getElementById('test-ratio').value);
+        const validationRatio = 0.0;
+        
+        // 禁用训练集比例输入框
+        document.getElementById('train-ratio').disabled = true;
+        
+        // 仅前端预览，不进行后台保存，避免生成默认命名文件
+        previewSplit();
+        showToast('已根据比例预览，请在命名后点击保存', 'success');
+    }
+
+    // 预览分割
+    function previewSplit() {
+        const trainRatio = parseFloat(document.getElementById('train-ratio').value);
+        const testRatio = parseFloat(document.getElementById('test-ratio').value);
+        const totalRows = window.__totalRows || 0;
+        document.getElementById('train-count').textContent = Math.round(totalRows * trainRatio);
+        document.getElementById('test-count').textContent = Math.round(totalRows * testRatio);
+        
+        // 自动填充默认文件名占位
+        const baseName = 'dataset';
+        const trainDefault = `${baseName}_train_${Math.round(trainRatio*100)}.csv`;
+        const testDefault = `${baseName}_test_${Math.round(testRatio*100)}.csv`;
+        const trainInput = document.getElementById('train-filename');
+        const testInput = document.getElementById('test-filename');
+        if (trainInput && !trainInput.value) trainInput.value = trainDefault;
+        if (testInput && !testInput.value) testInput.value = testDefault;
+        
+        document.getElementById('split-preview').style.display = 'block';
+    }
+    
+    // 保存分割数据
+    function saveSplit() {
+        if (!selectedFile) {
+            showToast('请先选择要分割的文件', 'warning');
+            return;
+        }
+        
+        const trainRatio = parseFloat(document.getElementById('train-ratio').value);
+        const testRatio = parseFloat(document.getElementById('test-ratio').value);
+        const validationRatio = 0.0;
+        const trainFilename = document.getElementById('train-filename').value;
+        const testFilename = document.getElementById('test-filename').value;
+        
+        const data = {
+            file_id: selectedFile,
+            train_ratio: trainRatio,
+            test_ratio: testRatio,
+            validation_ratio: validationRatio,
+            train_filename: trainFilename,
+            test_filename: testFilename
+        };
+        
+        fetch('/api/ml/data-processing/split/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('数据保存成功', 'success');
+                // 恢复输入框状态
+                document.getElementById('train-ratio').disabled = false;
+                // 刷新页面
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast('保存失败：' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('保存失败：网络错误', 'error');
+        });
+    }
+
+    // 删除文件
+    function deleteFile(fileId) {
+        if (confirm('确定要删除这个文件吗？')) {
+            fetch(`/api/ml/data-files/${fileId}/delete/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('文件已删除', 'success');
+                    loadFilesList();
+                } else {
+                    showToast('删除失败：' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('删除失败：网络错误', 'error');
+            });
+        }
+    }
+
+    // 删除选中的文件
+    function deleteSelectedFiles() {
+        const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+        if (checkboxes.length === 0) {
+            showToast('请选择要删除的文件', 'warning');
+            return;
+        }
+        
+        if (confirm(`确定要删除选中的 ${checkboxes.length} 个文件吗？`)) {
+            const promises = Array.from(checkboxes).map(checkbox => 
+                fetch(`/api/ml/data-files/${checkbox.value}/delete/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                })
+            );
+            
+            Promise.all(promises)
+            .then(() => {
+                showToast('文件已删除', 'success');
+                loadFilesList();
+            })
+            .catch(error => {
+                showToast('删除失败：网络错误', 'error');
+            });
+        }
+    }
+
+    // 刷新数据
+    function refreshData() {
+        loadFilesList();
+        showToast('数据已刷新', 'success');
+    }
+
+    // 获取CSRF令牌
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

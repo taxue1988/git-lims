@@ -1,0 +1,1020 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}实验任务管理 - 自动实验管理系统{% endblock %}
+
+{% block sidebar_menu %}
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_dashboard' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-tachometer-alt fa-lg me-3 text-primary"></i>
+        <span class="text-white">仪表板</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_experiment_tasks' %}" class="nav-link active bg-primary rounded shadow">
+        <i class="fas fa-vials fa-lg me-3"></i>
+        <span class="text-white fw-bold">实验任务</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_material_requirements' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-boxes fa-lg me-3 text-warning"></i>
+        <span class="text-white">物料需求</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_user_management' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-users fa-lg me-3 text-success"></i>
+        <span class="text-white">用户管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_equipment_management' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-flask fa-lg me-3 text-info"></i>
+        <span class="text-white">设备管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-chart-bar fa-lg me-3 text-warning"></i>
+        <span class="text-white">数据统计</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-cog fa-lg me-3 text-secondary"></i>
+        <span class="text-white">系统设置</span>
+    </a>
+</li>
+{% endblock %}
+
+{% block main_content %}
+<h1 class="h3 mb-4 text-gray-800">任务管理仪表板</h1>
+
+<!-- 主要内容区域：左侧用户统计 + 右侧任务管理 -->
+<div class="row">
+    <!-- 左侧：用户任务统计 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">用户任务统计</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>总任务</th>
+                                <th>草稿</th>
+                                <th>待审核</th>
+                                <th>已通过</th>
+                                <th>已排程</th>
+                                <th>进行中</th>
+                                <th>已完成</th>
+                                <th>已驳回</th>
+                                <th>已取消</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user_stat in user_stats %}
+                            <tr>
+                                <td class="fw-bold">{{ user_stat.created_by__username }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="">
+                                        {{ user_stat.total }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="草稿">
+                                        {{ user_stat.draft|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="待审核">
+                                        {{ user_stat.pending }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="已通过">
+                                        {{ user_stat.approved|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-warning user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="已排程">
+                                        {{ user_stat.scheduled|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-warning user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="进行中">
+                                        {{ user_stat.in_progress }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-success user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="已完成">
+                                        {{ user_stat.completed }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="已驳回">
+                                        {{ user_stat.rejected|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-dark user-filter-btn" 
+                                            data-username="{{ user_stat.created_by__username }}" 
+                                            data-status="已取消">
+                                        {{ user_stat.cancelled|default:0 }}
+                                    </button>
+                                </td>
+                                
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：任务管理 -->
+    <div class="col-lg-8 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        任务管理 
+                        <span id="current-filter-info" class="text-muted small ms-2"></span>
+                    </h6>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="batch-approve-btn">
+                            <i class="fas fa-check me-1"></i>批量审核
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="batch-reject-btn">
+                            <i class="fas fa-times me-1"></i>批量驳回
+                        </button>
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="batch-cancel-btn">
+                            <i class="fas fa-ban me-1"></i>批量取消
+                        </button>
+                        <button type="button" class="btn btn-outline-info btn-sm" id="export-btn">
+                            <i class="fas fa-download me-1"></i>导出数据
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 筛选和搜索 -->
+                <div class="row mb-3">
+                                         <div class="col-md-4">
+                         <select class="form-select" id="status-filter">
+                             <option value="">所有状态</option>
+                             <option value="pending">待审核</option>
+                             <option value="approved">已通过</option>
+                             <option value="scheduled">已排程</option>
+                             <option value="in_progress">进行中</option>
+                             <option value="completed">已完成</option>
+                             <option value="rejected">已驳回</option>
+                             <option value="cancelled">已取消</option>
+                         </select>
+                     </div>
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="search-input" placeholder="搜索任务名称...">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-primary w-100" id="search-btn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 任务列表表格 -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px;">
+                                    <input type="checkbox" id="select-all">
+                                </th>
+                                <th style="width:80px;">ID</th>
+                                <th>实验名称</th>
+                                <th>提交人</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th style="width:120px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasks-table-body">
+                            <!-- 任务数据将通过JavaScript动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                <nav id="pagination-nav" style="display: none;">
+                    <ul class="pagination" id="pagination-ul">
+                        <!-- 分页将通过JavaScript动态生成 -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block modals %}
+<!-- 批量操作确认模态框 -->
+<div class="modal fade" id="batch-operation-modal" tabindex="-1" aria-labelledby="batch-operation-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="batch-operation-title">批量操作确认</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <p>您即将对 <span id="selected-count" class="fw-bold text-primary">0</span> 个任务执行 <span id="operation-type" class="fw-bold text-warning">操作</span></p>
+                </div>
+                <div class="mb-3">
+                    <label for="admin-remark" class="form-label">管理员备注（可选）</label>
+                    <textarea class="form-control" id="admin-remark" rows="3" placeholder="请输入备注信息..."></textarea>
+                </div>
+                <div class="mb-3" id="reject-reason-group" style="display: none;">
+                    <label for="reject-reason" class="form-label">驳回原因 <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="reject-reason" rows="3" placeholder="请输入驳回原因..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirm-batch-operation">确认执行</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 单个任务操作模态框 -->
+<div class="modal fade" id="single-operation-modal" tabindex="-1" aria-labelledby="single-operation-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="single-operation-title">任务操作</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <p>任务ID: <span id="single-task-id" class="fw-bold"></span></p>
+                    <p>任务名称: <span id="single-task-name" class="fw-bold"></span></p>
+                    <p>当前状态: <span id="single-task-status" class="fw-bold"></span></p>
+                </div>
+                <div class="mb-3">
+                    <label for="single-new-status" class="form-label">新状态</label>
+                    <select class="form-select" id="single-new-status">
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已驳回</option>
+                        <option value="scheduled">已排程</option>
+                        <option value="in_progress">进行中</option>
+                        <option value="completed">已完成</option>
+                        <option value="cancelled">已取消</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="single-admin-remark" class="form-label">管理员备注（可选）</label>
+                    <textarea class="form-control" id="single-admin-remark" rows="3" placeholder="请输入备注信息..."></textarea>
+                </div>
+                <div class="mb-3" id="single-reject-reason-group" style="display: none;">
+                    <label for="single-reject-reason" class="form-label">驳回原因 <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="single-reject-reason" rows="3" placeholder="请输入驳回原因..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirm-single-operation">确认执行</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作结果提示模态框 -->
+<div class="modal fade" id="operation-result-modal" tabindex="-1" aria-labelledby="operation-result-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="operation-result-title">操作结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="operation-result-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 查看任务 Modal -->
+<div class="modal fade" id="viewTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">查看任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="task-detail"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 全局变量
+    let currentUsername = '';
+    let currentStatus = '';
+    let currentPage = 1;
+    let currentBatchOperation = null;
+    let currentSingleTask = null;
+
+    // 页面加载完成后初始化
+    $(document).ready(function() {
+        console.log('页面加载完成，开始初始化...');
+        
+        // 加载所有任务
+        loadTasks();
+        
+        // 绑定用户筛选按钮事件
+        $(document).on('click', '.user-filter-btn', function() {
+            console.log('用户筛选按钮被点击');
+            const username = $(this).data('username');
+            const status = $(this).data('status');
+            
+            console.log('筛选条件:', { username, status });
+            
+            // 更新当前筛选条件
+            currentUsername = username;
+            currentStatus = status;
+            currentPage = 1;
+            
+            // 更新筛选信息显示
+            updateFilterInfo();
+            
+            // 加载筛选后的任务
+            loadTasks();
+            
+            // 更新按钮状态
+            $('.user-filter-btn').removeClass('active');
+            $(this).addClass('active');
+        });
+        
+        // 绑定状态筛选事件
+        $('#status-filter').on('change', function() {
+            currentStatus = $(this).val();
+            currentPage = 1;
+            updateFilterInfo();
+            loadTasks();
+        });
+        
+        // 绑定搜索事件
+        $('#search-btn').on('click', function() {
+            currentPage = 1;
+            loadTasks();
+        });
+        
+        // 绑定回车搜索
+        $('#search-input').on('keypress', function(e) {
+            if (e.which === 13) {
+                currentPage = 1;
+                loadTasks();
+            }
+        });
+        
+        // 全选/取消全选
+        $('#select-all').on('change', function() {
+            const checkboxes = $('.task-checkbox');
+            checkboxes.prop('checked', this.checked);
+        });
+        
+        // 批量审核按钮
+        $('#batch-approve-btn').on('click', function() {
+            const selectedTasks = $('.task-checkbox:checked').map(function() {
+                return $(this).val();
+            }).get();
+            
+            if (selectedTasks.length === 0) {
+                showAlert('请选择要审核的任务', 'warning');
+                return;
+            }
+            
+            showBatchOperationModal('审核通过', 'approved', selectedTasks);
+        });
+        
+        // 批量驳回按钮
+        $('#batch-reject-btn').on('click', function() {
+            const selectedTasks = $('.task-checkbox:checked').map(function() {
+                return $(this).val();
+            }).get();
+            
+            if (selectedTasks.length === 0) {
+                showAlert('请选择要驳回的任务', 'warning');
+                return;
+            }
+            
+            showBatchOperationModal('批量驳回', 'rejected', selectedTasks);
+        });
+
+        // 批量取消按钮
+        $('#batch-cancel-btn').on('click', function() {
+            const selectedTasks = $('.task-checkbox:checked').map(function() { return $(this).val(); }).get();
+            if (selectedTasks.length === 0) {
+                showAlert('请选择要取消的任务', 'warning');
+                return;
+            }
+            showBatchOperationModal('批量取消', 'cancelled', selectedTasks);
+        });
+        
+        // 确认批量操作
+        $('#confirm-batch-operation').on('click', function() {
+            if (currentBatchOperation) {
+                executeBatchOperation();
+            }
+        });
+        
+        // 确认单个操作
+        $('#confirm-single-operation').on('click', function() {
+            if (currentSingleTask) {
+                executeSingleOperation();
+            }
+        });
+        
+        // 监听状态选择变化
+        $('#single-new-status').on('change', function() {
+            const newStatus = $(this).val();
+            if (newStatus === 'rejected') {
+                $('#single-reject-reason-group').show();
+            } else {
+                $('#single-reject-reason-group').hide();
+            }
+        });
+    });
+
+    // 显示批量操作模态框
+    function showBatchOperationModal(operationType, newStatus, taskIds) {
+        currentBatchOperation = {
+            type: operationType,
+            status: newStatus,
+            taskIds: taskIds
+        };
+        
+        $('#operation-type').text(operationType);
+        $('#selected-count').text(taskIds.length);
+        
+        // 如果是驳回操作，显示驳回原因输入框
+        if (newStatus === 'rejected') {
+            $('#reject-reason-group').show();
+        } else {
+            $('#reject-reason-group').hide();
+        }
+        
+        // 清空输入框
+        $('#admin-remark').val('');
+        $('#reject-reason').val('');
+        
+        const modal = new bootstrap.Modal(document.getElementById('batch-operation-modal'));
+        modal.show();
+    }
+
+    // 执行批量操作
+    function executeBatchOperation() {
+        if (!currentBatchOperation) return;
+        
+        const { status, taskIds } = currentBatchOperation;
+        const adminRemark = $('#admin-remark').val();
+        const rejectReason = $('#reject-reason').val();
+        
+        // 如果是驳回操作，必须填写驳回原因
+        if (status === 'rejected' && !rejectReason.trim()) {
+            showAlert('驳回操作必须填写驳回原因', 'danger');
+            return;
+        }
+        
+        // 显示加载状态
+        $('#confirm-batch-operation').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 执行中...');
+        
+        // 发送AJAX请求
+        $.ajax({
+            url: '/api/batch-update-tasks/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': getCSRFToken()
+            },
+            data: JSON.stringify({
+                task_ids: taskIds,
+                status: status,
+                admin_remark: adminRemark,
+                reason: rejectReason
+            }),
+            success: function(response) {
+                console.log('批量操作响应:', response);
+                if (response.ok) {
+                    showOperationResult('success', `成功${currentBatchOperation.type} ${response.updated_count} 个任务`);
+                    // 关闭模态框
+                    bootstrap.Modal.getInstance(document.getElementById('batch-operation-modal')).hide();
+                    // 重新加载任务列表
+                    loadTasks();
+                } else {
+                    showOperationResult('danger', `操作失败: ${response.message}`);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('批量操作错误:', {xhr, status, error});
+                let errorMsg = '网络错误';
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    errorMsg = response.message || errorMsg;
+                } catch (e) {
+                    console.error('解析错误响应失败:', e);
+                }
+                showOperationResult('danger', `操作失败: ${errorMsg}`);
+            },
+            complete: function() {
+                $('#confirm-batch-operation').prop('disabled', false).html('确认执行');
+            }
+        });
+    }
+
+    // 显示单个任务操作模态框
+    function showSingleOperationModal(taskId, taskName, currentStatus) {
+        currentSingleTask = {
+            id: taskId,
+            name: taskName,
+            currentStatus: currentStatus
+        };
+        
+        $('#single-task-id').text(taskId);
+        $('#single-task-name').text(taskName);
+        $('#single-task-status').text(currentStatus);
+        $('#single-new-status').val('已通过'); // 默认选择已通过
+        $('#single-admin-remark').val('');
+        $('#single-reject-reason').val('');
+        $('#single-reject-reason-group').hide();
+        
+        const modal = new bootstrap.Modal(document.getElementById('single-operation-modal'));
+        modal.show();
+    }
+
+    // 执行单个任务操作
+    function executeSingleOperation() {
+        if (!currentSingleTask) return;
+        
+        const taskId = currentSingleTask.id;
+        const newStatus = $('#single-new-status').val();
+        const adminRemark = $('#single-admin-remark').val();
+        const rejectReason = $('#single-reject-reason').val();
+        
+        // 如果是驳回操作，必须填写驳回原因
+        if (newStatus === 'rejected' && !rejectReason.trim()) {
+            showAlert('驳回操作必须填写驳回原因', 'danger');
+            return;
+        }
+        
+        // 显示加载状态
+        $('#confirm-single-operation').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 执行中...');
+        
+        // 发送AJAX请求
+        $.ajax({
+            url: `/api/task/${taskId}/update/`,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': getCSRFToken()
+            },
+            data: JSON.stringify({
+                status: newStatus,
+                admin_remark: adminRemark,
+                reason: rejectReason
+            }),
+            success: function(response) {
+                console.log('单个操作响应:', response);
+                if (response.ok) {
+                    showOperationResult('success', `任务状态已更新为 ${newStatus}`);
+                    // 关闭模态框
+                    bootstrap.Modal.getInstance(document.getElementById('single-operation-modal')).hide();
+                    // 重新加载任务列表
+                    loadTasks();
+                } else {
+                    showOperationResult('danger', `操作失败: ${response.message}`);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('单个操作错误:', {xhr, status, error});
+                let errorMsg = '网络错误';
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    errorMsg = response.message || errorMsg;
+                } catch (e) {
+                    console.error('解析错误响应失败:', e);
+                }
+                showOperationResult('danger', `操作失败: ${errorMsg}`);
+            },
+            complete: function() {
+                $('#confirm-single-operation').prop('disabled', false).html('确认执行');
+            }
+        });
+    }
+
+    // 单个取消
+    function cancelTask(taskId) {
+        if (!confirm('确认取消该任务？')) return;
+        $('#confirm-single-operation').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 执行中...');
+        $.ajax({
+            url: `/api/task/${taskId}/update/`,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            data: JSON.stringify({ status: 'cancelled', reason: '管理员取消任务' }),
+            success: function(response) {
+                if (response.ok) {
+                    showOperationResult('success', '任务已取消');
+                    loadTasks();
+                } else {
+                    showOperationResult('danger', `操作失败: ${response.message}`);
+                }
+            },
+            error: function(xhr) {
+                let msg = '网络错误';
+                try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e){}
+                showOperationResult('danger', `操作失败: ${msg}`);
+            },
+            complete: function() {
+                $('#confirm-single-operation').prop('disabled', false).html('确认执行');
+            }
+        });
+    }
+
+    // 加载任务数据
+    function loadTasks() {
+        console.log('开始加载任务数据...');
+        const searchTerm = $('#search-input').val();
+        
+        // 构建查询参数
+        const params = new URLSearchParams({
+            page: currentPage
+        });
+        
+        if (currentUsername) {
+            params.append('username', currentUsername);
+        }
+        
+        if (currentStatus) {
+            params.append('status', currentStatus);
+        }
+        
+        if (searchTerm) {
+            params.append('search', searchTerm);
+        }
+        
+        console.log('请求参数:', params.toString());
+        
+        // 显示加载状态
+        $('#tasks-table-body').html('<tr><td colspan="7" class="text-center">加载中...</td></tr>');
+        
+        // 发送AJAX请求
+        $.ajax({
+            url: '/api/filter-tasks/',
+            method: 'GET',
+            data: params.toString(),
+            dataType: 'json',
+            success: function(response) {
+                console.log('API响应:', response);
+                if (response.ok) {
+                    renderTasks(response.tasks);
+                    renderPagination(response);
+                } else {
+                    $('#tasks-table-body').html('<tr><td colspan="7" class="text-center text-danger">加载失败: ' + response.message + '</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX错误:', error);
+                $('#tasks-table-body').html('<tr><td colspan="7" class="text-center text-danger">网络错误: ' + error + '</td></tr>');
+            }
+        });
+    }
+
+    // 渲染任务列表
+    function renderTasks(tasks) {
+        console.log('渲染任务列表:', tasks);
+        if (tasks.length === 0) {
+            $('#tasks-table-body').html('<tr><td colspan="7" class="text-center">暂无任务</td></tr>');
+            return;
+        }
+        
+        let html = '';
+        tasks.forEach(function(task) {
+            const statusClass = getStatusClass(task.status);
+            html += `
+                <tr>
+                    <td>
+                        <input type="checkbox" class="task-checkbox" value="${task.id}">
+                    </td>
+                    <td>${task.id}</td>
+                    <td title="${task.remark}">${task.name}</td>
+                    <td>${task.created_by}</td>
+                    <td>
+                        <span class="badge ${statusClass}">${task.status}</span>
+                    </td>
+                    <td>${task.created_at}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="viewTask('${task.id}')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm" onclick="approveTask('${task.id}')">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="rejectTask('${task.id}')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-warning btn-sm" onclick="showSingleOperationModal('${task.id}', '${task.name}', '${task.status}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            ${['已通过','已排程','进行中'].includes(task.status) ? `
+                                <button type="button" class="btn btn-outline-dark btn-sm" onclick="cancelTask('${task.id}')" title="取消任务">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        $('#tasks-table-body').html(html);
+    }
+
+    // 渲染分页
+    function renderPagination(data) {
+        if (data.total_pages <= 1) {
+            $('#pagination-nav').hide();
+            return;
+        }
+        
+        let html = '';
+        
+        // 上一页
+        if (data.has_previous) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${data.current_page - 1})">&laquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&laquo;</span></li>`;
+        }
+        
+        // 页码
+        for (let i = 1; i <= data.total_pages; i++) {
+            if (i === data.current_page) {
+                html += `<li class="page-item active"><span class="page-link">${i}</span></li>`;
+            } else {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${i})">${i}</a></li>`;
+            }
+        }
+        
+        // 下一页
+        if (data.has_next) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${data.current_page + 1})">&raquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&raquo;</span></li>`;
+        }
+        
+        $('#pagination-ul').html(html);
+        $('#pagination-nav').show();
+    }
+
+    // 跳转到指定页面
+    function goToPage(page) {
+        currentPage = page;
+        loadTasks();
+    }
+
+    // 更新筛选信息显示
+    function updateFilterInfo() {
+        let info = '';
+        if (currentUsername) {
+            info += `用户: ${currentUsername}`;
+        }
+        if (currentStatus) {
+            if (info) info += ' | ';
+            info += `状态: ${currentStatus}`;
+        }
+        if (!info) {
+            info = '所有任务';
+        }
+        $('#current-filter-info').text(info);
+    }
+
+    // 获取状态对应的CSS类
+    function getStatusClass(status) {
+        // 使用新的状态管理器
+        const englishStatus = TaskStatusManager.chineseToEnglish(status);
+        return TaskStatusManager.getStatusClass(englishStatus);
+    }
+
+    // 任务操作函数
+    function generateTaskSummaryHtml(task) {
+        const stations = task.stations || {};
+        const solid = stations.solidLiquid || {};
+        const glove = stations.glovebox || {};
+        const react = stations.reaction || {};
+        const gcms = stations.gcms || {};
+        const evap = stations.evaporation || {};
+        const tlc = stations.tlc || {};
+
+        const reagentRows = (solid.enabled && Array.isArray(solid.reagents) && solid.reagents.length)
+            ? solid.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+            : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+        const gloveboxReagentRows = (glove.enabled && Array.isArray(glove.reagents) && glove.reagents.length)
+            ? glove.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+            : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+        const gp = glove.params || {};
+        const gloveboxReactionHtml = glove.enabled ? `
+            <ul class="list-group mb-3">
+                <li class="list-group-item">反应温度：${gp.temperature ?? '-'} °C</li>
+                <li class="list-group-item">搅拌速度：${gp.stirringSpeed ?? '-'} rpm</li>
+                <li class="list-group-item">反应时长：${gp.duration ?? '-'} min</li>
+                <li class="list-group-item">采样间隔：${gp.samplingInterval ?? '-'} min</li>
+                <li class="list-group-item">采样体积：${gp.samplingVolume ?? '-'} μL</li>
+                <li class="list-group-item">淬灭剂：${gp.quenchingAgent ?? '-'}</li>
+                <li class="list-group-item">淬灭剂体积：${gp.quenchingAgentVolume ?? '-'} μL</li>
+                <li class="list-group-item">采样分析方式：${gp.samplingAnalysis ?? '-'}</li>
+            </ul>
+        ` : '';
+
+        const rp = react.params || {};
+        const reactionHtml = react.enabled ? `
+            <ul class="list-group mb-3">
+                <li class="list-group-item">反应温度：${rp.temperature ?? '-'} °C</li>
+                <li class="list-group-item">搅拌速度：${rp.stirringSpeed ?? '-'} rpm</li>
+                <li class="list-group-item">反应时长：${rp.duration ?? '-'} min</li>
+                <li class="list-group-item">采样间隔：${rp.samplingInterval ?? '-'} min</li>
+                <li class="list-group-item">采样体积：${rp.samplingVolume ?? '-'} μL</li>
+                <li class="list-group-item">淬灭剂：${rp.quenchingAgent ?? '-'}</li>
+                <li class="list-group-item">淬灭剂体积：${rp.quenchingAgentVolume ?? '-'} μL</li>
+                <li class="list-group-item">采样分析方式：${rp.samplingAnalysis ?? '-'}</li>
+            </ul>
+        ` : '';
+
+        const gcp = gcms.params || {};
+        const gcmsHtml = gcms.enabled ? `<div class="mb-3">序列：${gcp.sequence || '-'}</div>` : '';
+
+        const ep = evap.params || {};
+        const evaporationHtml = evap.enabled ? `
+            <div class="mb-3">
+                <strong>旋蒸模式：</strong>${(ep.mode === 'manual') ? '手动模式' : '自动模式'}
+                ${(ep.mode === 'manual') ? `
+                    <ul class="list-group mt-2">
+                        <li class="list-group-item">旋转速度：${ep.rotationSpeed ?? '-'} rpm</li>
+                        <li class="list-group-item">浴热温度：${ep.bathTemperature ?? '-'} °C</li>
+                        <li class="list-group-item">真空压力：${ep.vacuumPressure ?? '-'} mbar</li>
+                        <li class="list-group-item">冷凝温度：${ep.condenserTemperature ?? '-'} °C</li>
+                    </ul>
+                ` : ''}
+            </div>
+        ` : '';
+
+        const tp = tlc.params || {};
+        const uv = tp.uvWavelengths || {};
+        const tlcHtml = tlc.enabled ? `
+            <div class="mb-3">
+                <strong>展开剂体系：</strong>${tp.developerSystem || '-'}
+                ${(tp.developerSystem === 'custom') ?
+                    `<br><strong>自定义展开剂：</strong>${tp.customSolvent1 || '-'} / ${tp.customSolvent2 || '-'} ${tp.customSolvent3 ? '/ ' + tp.customSolvent3 : ''}` : ''}
+                <br><strong>展开剂比例：</strong>${tp.developerRatio || '-'}
+                ${(tp.developerRatio === 'custom') ?
+                    `<br><strong>自定义比例：</strong>${tp.customRatio1 || '-'} : ${tp.customRatio2 || '-'} ${tp.customRatio3 ? ' : ' + tp.customRatio3 : ''}` : ''}
+                <br><strong>灯光波长：</strong>${uv.uv254 ? '254nm' : ''}${(uv.uv254 && uv.uv365) ? ', ' : ''}${uv.uv365 ? '365nm' : ''}
+                <br><strong>TLC板类型：</strong>${tp.plateType || '-'}
+                <br><strong>板尺寸：</strong>${tp.plateSize || '-'}
+                <br><strong>展开时间：</strong>${tp.developingTime || '-'} 分钟
+                <br><strong>展开缸类型：</strong>${tp.chamberType || '-'}
+                <br><strong>展开温度：</strong>${tp.temperature || '-'} °C
+                <br><strong>样品浓度：</strong>${tp.sampleConcentration || '-'} mg/mL
+                <br><strong>点样体积：</strong>${tp.spotVolume || '-'} μL
+                <br><strong>预期Rf值：</strong>${tp.expectedRfMin || '-'} - ${tp.expectedRfMax || '-'}
+                <br><strong>检测方法：</strong>${tp.detectionMethod || '-'}
+            </div>
+        ` : '';
+
+        const createdAt = task.created_at || task.date || '';
+        const summaryHtml = `
+            <div class="mb-3"><strong>实验名称：</strong>${task.name || '-'}</div>
+            <div class="mb-3"><strong>实验备注：</strong>${(task.remark || '').trim() || '-'}</div>
+            <div class="mb-3"><strong>提交时间：</strong>${createdAt}</div>
+            <div class="mb-3"><strong>状态：</strong>${task.status || '-'}</div>
+            <div class="mb-3"><strong>固液配料工站：</strong>${solid.enabled ? '已启用' : '未启用'}</div>
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered table-sm">
+                    <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                    <tbody>${reagentRows}</tbody>
+                </table>
+            </div>
+            <div class="mb-3"><strong>手套箱配料与反应工站：</strong>${glove.enabled ? '已启用' : '未启用'}</div>
+            ${gloveboxReactionHtml}
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered table-sm">
+                    <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                    <tbody>${gloveboxReagentRows}</tbody>
+                </table>
+            </div>
+            <div class="mb-3"><strong>反应工站：</strong>${react.enabled ? '已启用' : '未启用'}</div>
+            ${reactionHtml}
+            <div class="mb-3"><strong>GCMS工站：</strong>${gcms.enabled ? '已启用' : '未启用'}</div>
+            ${gcmsHtml}
+            <div class="mb-3"><strong>旋蒸工站：</strong>${evap.enabled ? '已启用' : '未启用'}</div>
+            ${evaporationHtml}
+            <div class="mb-3"><strong>TLC分析工站：</strong>${tlc.enabled ? '已启用' : '未启用'}</div>
+            ${tlcHtml}
+        `;
+        return summaryHtml;
+    }
+
+    function viewTask(taskId) {
+        console.log('查看任务:', taskId);
+        // 优先尝试管理员通用详情接口（无 detail 后缀）
+        $.get(`/api/task/${taskId}/`)
+            .done(function(response) {
+                if (response && response.ok) {
+                    const html = generateTaskSummaryHtml(response.task || {});
+                    $('#task-detail').html(html);
+                    const modal = new bootstrap.Modal(document.getElementById('viewTaskModal'));
+                    modal.show();
+                } else {
+                    // 兜底尝试用户端详情接口（无 detail 后缀）
+                    $.get(`/api/user/task/${taskId}/`).done(function(resp2){
+                        if (resp2 && resp2.ok) {
+                            const html2 = generateTaskSummaryHtml(resp2.task || {});
+                            $('#task-detail').html(html2);
+                            const modal2 = new bootstrap.Modal(document.getElementById('viewTaskModal'));
+                            modal2.show();
+                        } else {
+                            showAlert('获取任务详情失败: ' + (response && response.message ? response.message : '未知错误'), 'danger');
+                        }
+                    }).fail(function(){
+                        showAlert('获取任务详情失败: 网络错误或接口不存在', 'danger');
+                    });
+                }
+            })
+            .fail(function() {
+                // 直接失败时也尝试用户端接口
+                $.get(`/api/user/task/${taskId}/`).done(function(resp2){
+                    if (resp2 && resp2.ok) {
+                        const html2 = generateTaskSummaryHtml(resp2.task || {});
+                        $('#task-detail').html(html2);
+                        const modal2 = new bootstrap.Modal(document.getElementById('viewTaskModal'));
+                        modal2.show();
+                    } else {
+                        showAlert('获取任务详情失败: 网络错误', 'danger');
+                    }
+                }).fail(function(){
+                    showAlert('获取任务详情失败: 网络错误或接口不存在', 'danger');
+                });
+            });
+    }
+
+    function approveTask(taskId) {
+        if (confirm('确定要审核通过这个任务吗？')) {
+            showSingleOperationModal(taskId, '任务', '待审核');
+        }
+    }
+
+    function rejectTask(taskId) {
+        if (confirm('确定要驳回这个任务吗？')) {
+            showSingleOperationModal(taskId, '任务', '待审核');
+            setTimeout(() => {
+                $('#single-new-status').val('rejected').trigger('change');
+            }, 100);
+        }
+    }
+</script>
+{% endblock %}

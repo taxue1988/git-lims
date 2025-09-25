@@ -1,0 +1,742 @@
+{% extends 'preparator_base.html' %}
+
+{% block title %}备料员-待备料任务{% endblock %}
+
+{% block extra_css %}
+<style>
+    .user-filter-btn {
+        transition: all 0.3s ease;
+        border-radius: 0.375rem;
+        font-weight: 500;
+    }
+
+    .user-filter-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    .user-filter-btn.active {
+        transform: scale(1.05);
+        box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.2);
+    }
+</style>
+{% endblock %}
+
+{% block main_content %}
+
+<!-- CSRF Token -->
+{% csrf_token %}
+
+<!-- 标题 -->
+<h1 class="h3 mb-4 text-gray-800">筛选待备料任务</h1>
+
+<!-- 主要内容区域：用户统计 + 任务管理 -->
+<div class="row">
+    <!-- 用户任务统计 -->
+    <div class="col-lg-12 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">用户任务统计</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>总任务</th>
+                                <th>草稿</th>
+                                <th>待审核</th>
+                                <th>已通过</th>
+                                <th>已排程</th>
+                                <th>进行中</th>
+                                <th>已完成</th>
+                                <th>已驳回</th>
+                                <th>已取消</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user_stat in user_stats %}
+                            <tr>
+                                <td class="fw-bold">{{ user_stat.created_by__username }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="">
+                                        {{ user_stat.total }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="草稿">
+                                        {{ user_stat.draft|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="待审核">
+                                        {{ user_stat.pending }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="已通过">
+                                        {{ user_stat.approved|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-warning user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="已排程">
+                                        {{ user_stat.scheduled|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-warning user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="进行中">
+                                        {{ user_stat.in_progress }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-success user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="已完成">
+                                        {{ user_stat.completed }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="已驳回">
+                                        {{ user_stat.rejected|default:0 }}
+                                    </button>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-dark user-filter-btn"
+                                        data-username="{{ user_stat.created_by__username }}" data-status="已取消">
+                                        {{ user_stat.cancelled|default:0 }}
+                                    </button>
+                                </td>
+
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务管理 -->
+    <div class="col-lg-12 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        任务管理
+                        <span id="current-filter-info" class="text-muted small ms-2"></span>
+                    </h6>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="batch-approve-btn">
+                            <i class="fas fa-check me-1"></i>批量备料
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 任务列表表格 -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px;">
+                                    <input type="checkbox" id="select-all">
+                                </th>
+                                <th style="width:80px;">ID</th>
+                                <th>实验名称</th>
+                                <th>提交人</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasks-table-body">
+                            <!-- 任务数据将通过JavaScript动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 查看任务 Modal -->
+<div class="modal fade" id="viewTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">查看任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+        <div class="modal-body">
+            <div id="task-detail"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script>
+    $(document).ready(function () {
+        // 全局变量
+        let currentUsername = '';
+        let currentStatus = '';
+
+        // 加载所有任务
+        loadTasks();
+
+        // 绑定用户筛选按钮事件
+        $(document).on('click', '.user-filter-btn', function () {
+            console.log('用户筛选按钮被点击');
+            const username = $(this).data('username');
+            const status = $(this).data('status');
+
+            // 更新当前筛选条件
+            currentUsername = username;
+            currentStatus = status;
+
+            // 更新筛选信息显示
+            updateFilterInfo();
+
+            // 加载筛选后的任务
+            loadTasks();
+
+            // 更新按钮状态
+            $('.user-filter-btn').removeClass('active');
+            $(this).addClass('active');
+        });
+
+        //加载任务列表
+        function loadTasks() {
+            const params = {
+                username: currentUsername,
+                status: currentStatus
+            };
+
+            $.ajax({
+                url: '/api/preparator/filter-tasks/',
+                method: 'GET',
+                data: params,
+                success: function (response) {
+                    if (response.ok) {
+                        renderTasks(response.tasks);
+                    } else {
+                        alert('加载任务失败: ' + response.message);
+                    }
+                },
+                error: function () {
+                    alert('加载任务失败，请稍后重试');
+                }
+            });
+        }
+
+        //渲染任务列表
+        function renderTasks(tasks) {
+            const tbody = $('#tasks-table-body');
+            tbody.empty();
+
+            if (tasks.length === 0) {
+                tbody.append(`
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">
+                        暂无任务数据
+                    </td>
+                </tr>
+            `);
+                return;
+            }
+
+            tasks.forEach(function (task) {
+                const row = `
+                <tr>
+                    <td>
+                        <input type="checkbox" class="task-checkbox" value="${task.id}">
+                    </td>
+                    <td>${task.id}</td>
+                    <td>${task.name}</td>
+                    <td>${task.created_by}</td>
+                    <td>${task.status}</td>
+                    <td>${task.created_at}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewTask('${task.id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+                tbody.append(row);
+            });
+        }
+
+        //更新筛选信息显示
+        function updateFilterInfo() {
+            let info = '';
+            if (currentUsername) {
+                info += `用户: ${currentUsername}`;
+            }
+            if (currentStatus) {
+                if (info) info += ' | ';
+                info += `状态: ${currentStatus}`;
+            }
+            if (!info) {
+                info = '显示所有任务';
+            }
+
+            $('#current-filter-info').text(info);
+        }
+
+        // 全选/取消全选功能
+        $(document).on('change', '#select-all', function() {
+            const isChecked = $(this).is(':checked');
+            $('.task-checkbox').prop('checked', isChecked);
+        });
+
+        // 单个复选框变化时更新全选状态
+        $(document).on('change', '.task-checkbox', function() {
+            const totalCheckboxes = $('.task-checkbox').length;
+            const checkedCheckboxes = $('.task-checkbox:checked').length;
+            
+            if (checkedCheckboxes === 0) {
+                $('#select-all').prop('indeterminate', false).prop('checked', false);
+            } else if (checkedCheckboxes === totalCheckboxes) {
+                $('#select-all').prop('indeterminate', false).prop('checked', true);
+            } else {
+                $('#select-all').prop('indeterminate', true);
+            }
+        });
+
+        // 获取CSRF token的函数
+        function getCSRFToken() {
+            // 首先尝试从页面中的csrf token获取
+            let token = $('[name=csrfmiddlewaretoken]').val();
+            if (token) {
+                return token;
+            }
+            
+            // 如果页面中没有，则从cookie获取
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, 'csrftoken'.length + 1) === ('csrftoken' + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring('csrftoken'.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // 批量备料按钮事件
+        $('#batch-approve-btn').on('click', function() {
+            const selectedTasks = $('.task-checkbox:checked').map(function() {
+                return $(this).val();
+            }).get();
+            
+            if (selectedTasks.length === 0) {
+                alert('请选择至少一个任务');
+                return;
+            }
+            
+            // 调用批量备料API
+            $.ajax({
+                url: '/api/preparator/batch-prepare/',
+                method: 'POST',
+                data: JSON.stringify({
+                    task_ids: selectedTasks
+                }),
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // 显示备料清单
+                        showPreparationList(response.preparation_list);
+                    } else {
+                        alert('生成备料清单失败: ' + response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX Error:', xhr.responseText);
+                    alert('网络错误，请稍后重试: ' + error);
+                }
+            });
+        });
+        
+        // 物料类型中英文映射
+        const materialTypeMap = {
+            'test_tube_15': '15mL试管',
+            'laiyu_powder': '铼羽粉筒',
+            'jingtai_powder': '晶泰粉筒',
+            'reagent_bottle_150': '150mL试剂瓶',
+            'tip_1': '1mL枪头',
+            'tip_5': '5mL枪头',
+            'tip_10': '10mL枪头',
+            'sample_filter': '采样滤头',
+            'filtration_filter': '过滤滤头',
+            'mixture_tube': '混合瓶',
+            'sample_tube': '采样瓶',
+            'sample_cylinder': '进样柱',
+            'chromatographic_cylinder': '色谱柱'
+        };
+        
+        // 转移仓类型中英文映射
+        const containerTypeMap = {
+            'test_tube_15': '试管转移仓',
+            'laiyu_powder': '铼羽粉筒转移仓',
+            'jingtai_powder': '晶泰粉筒转移仓',
+            'reagent_bottle_150': '试剂瓶转移仓',
+            'tip_1': '1mL枪头转移仓',
+            'tip_5': '5mL枪头转移仓',
+            'tip_10': '10mL枪头转移仓',
+            'sample_filter': '采样滤头转移仓',
+            'filtration_filter': '过滤滤头转移仓',
+            'mixture_tube': '混合瓶转移仓',
+            'sample_tube': '采样瓶转移仓',
+            'sample_cylinder': '进样柱转移仓',
+            'chromatographic_cylinder': '色谱柱转移仓'
+        };
+        
+        // 显示备料清单模态框
+        function showPreparationList(preparationList) {
+            // 工站名称映射
+            const stationNameMap = {
+                'solidLiquid': '固液配料工站',
+                'reaction': '反应工站',
+                'glovebox': '手套箱工站',
+                'evaporation': '旋蒸工站',
+                'filtration': '过滤分液工站',
+                'column': '过柱工站',
+                'tlc': '点板工站',
+                'gcms': 'GCMS工站',
+                'hplc': 'HPLC工站'
+            };
+            
+            // 生成工站物料需求HTML
+            function generateStationMaterialsHtml(stationMaterials) {
+                if (!stationMaterials || Object.keys(stationMaterials).length === 0) {
+                    return '<p class="text-muted">暂无工站物料需求</p>';
+                }
+                
+                // 定义工站显示顺序
+                const stationOrder = [
+                    'solidLiquid', 'reaction', 'glovebox', 'filtration', 
+                    'evaporation', 'column', 'tlc', 'gcms', 'hplc'
+                ];
+                
+                // 检查工站是否有物料
+                function hasMaterials(stationData) {
+                    if (!stationData) return false;
+                    
+                    // 检查数组类型物料
+                    const arrayMaterials = ['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'];
+                    for (const materialType of arrayMaterials) {
+                        if (stationData[materialType] && stationData[materialType].length > 0) {
+                            return true;
+                        }
+                    }
+                    
+                    // 检查数字类型物料
+                    const numberMaterials = ['tip_1', 'tip_5', 'tip_10', 'sample_tube', 'mixture_tube', 
+                                           'sample_filter', 'sample_cylinder', 'filtration_filter', 'chromatographic_cylinder'];
+                    for (const materialType of numberMaterials) {
+                        if (stationData[materialType] && stationData[materialType] > 0) {
+                            return true;
+                        }
+                    }
+                    
+                    return false;
+                }
+                
+                // 按顺序过滤有物料的工站
+                const stationsWithMaterials = stationOrder.filter(stationKey => {
+                    return stationMaterials[stationKey] && hasMaterials(stationMaterials[stationKey]);
+                });
+                
+                if (stationsWithMaterials.length === 0) {
+                    return '<p class="text-muted">暂无工站物料需求</p>';
+                }
+                
+                return stationsWithMaterials.map(stationKey => {
+                    const stationData = stationMaterials[stationKey];
+                    const stationName = stationNameMap[stationKey] || stationKey;
+                    
+                    // 生成数组类型物料表格（需要具体名称的物料）
+                    const arrayMaterials = ['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'];
+                    const arrayMaterialsHtml = arrayMaterials.map(materialType => {
+                        const items = stationData[materialType] || [];
+                        if (items.length === 0) return '';
+                        
+                        const rows = items.map((item, index) => `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${materialTypeMap[materialType] || materialType}</td>
+                                <td>${item.reagent_name || '-'}</td>
+                                <td>${item.amount || 0}</td>
+                                <td>${item.unit || '-'}</td>
+                            </tr>
+                        `).join('');
+                        
+                        return `
+                            <div class="mb-3">
+                                <h6>${materialTypeMap[materialType] || materialType} (${items.length}个)</h6>
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr><th>#</th><th>物料类型</th><th>试剂名称</th><th>用量</th><th>单位</th></tr>
+                                    </thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>
+                        `;
+                    }).filter(html => html).join('');
+                    
+                    // 生成数字类型物料表格（耗材）
+                    const numberMaterials = ['tip_1', 'tip_5', 'tip_10', 'sample_tube', 'mixture_tube', 
+                                           'sample_filter', 'sample_cylinder', 'filtration_filter', 'chromatographic_cylinder'];
+                    const numberMaterialsData = numberMaterials.filter(materialType => 
+                        stationData[materialType] && stationData[materialType] > 0
+                    );
+                    
+                    const numberMaterialsHtml = numberMaterialsData.length > 0 ? `
+                        <div class="mb-3">
+                            <h6>耗材物料</h6>
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr><th>物料类型</th><th>需要数量</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${numberMaterialsData.map(materialType => `
+                                        <tr>
+                                            <td>${materialTypeMap[materialType] || materialType}</td>
+                                            <td>${stationData[materialType]}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '';
+                    
+                    return `
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h6 class="mb-0">${stationName}</h6>
+                            </div>
+                            <div class="card-body">
+                                ${arrayMaterialsHtml}
+                                ${numberMaterialsHtml}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            const modalHtml = `
+                <div class="modal fade" id="preparationListModal" tabindex="-1">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">备料清单 - 按工站统计</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                ${generateStationMaterialsHtml(preparationList.station_materials)}
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                                <button type="button" class="btn btn-primary" id="startPreparationBtn">开始备料</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            $('body').append(modalHtml);
+            const modal = new bootstrap.Modal(document.getElementById('preparationListModal'));
+            modal.show();
+            
+            // 开始备料按钮事件
+            $('#startPreparationBtn').on('click', function() {
+                // 跳转到fill_container页面，并传递备料清单ID
+                window.location.href = `/preparator/fill_container/?preparation_id=${preparationList.id}`;
+            });
+        }
+    
+        // 生成与用户/管理员一致的任务摘要HTML
+        function generateTaskSummaryHtml(task) {
+            const stations = task.stations || {};
+            const solid = stations.solidLiquid || {};
+            const glove = stations.glovebox || {};
+            const react = stations.reaction || {};
+            const gcms = stations.gcms || {};
+            const evap = stations.evaporation || {};
+            const tlc = stations.tlc || {};
+
+            const reagentRows = (solid.enabled && Array.isArray(solid.reagents) && solid.reagents.length)
+                ? solid.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+                : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+            const gloveboxReagentRows = (glove.enabled && Array.isArray(glove.reagents) && glove.reagents.length)
+                ? glove.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+                : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+            const gp = glove.params || {};
+            const gloveboxReactionHtml = glove.enabled ? `
+                <ul class="list-group mb-3">
+                    <li class="list-group-item">反应温度：${gp.temperature ?? '-'} °C</li>
+                    <li class="list-group-item">搅拌速度：${gp.stirringSpeed ?? '-'} rpm</li>
+                    <li class="list-group-item">反应时长：${gp.duration ?? '-'} min</li>
+                    <li class="list-group-item">采样间隔：${gp.samplingInterval ?? '-'} min</li>
+                    <li class="list-group-item">采样体积：${gp.samplingVolume ?? '-'} μL</li>
+                    <li class="list-group-item">淬灭剂：${gp.quenchingAgent ?? '-'}</li>
+                    <li class="list-group-item">淬灭剂体积：${gp.quenchingAgentVolume ?? '-'} μL</li>
+                    <li class="list-group-item">采样分析方式：${gp.samplingAnalysis ?? '-'}</li>
+                </ul>
+            ` : '';
+
+            const rp = react.params || {};
+            const reactionHtml = react.enabled ? `
+                <ul class="list-group mb-3">
+                    <li class="list-group-item">反应温度：${rp.temperature ?? '-'} °C</li>
+                    <li class="list-group-item">搅拌速度：${rp.stirringSpeed ?? '-'} rpm</li>
+                    <li class="list-group-item">反应时长：${rp.duration ?? '-'} min</li>
+                    <li class="list-group-item">采样间隔：${rp.samplingInterval ?? '-'} min</li>
+                    <li class="list-group-item">采样体积：${rp.samplingVolume ?? '-'} μL</li>
+                    <li class="list-group-item">淬灭剂：${rp.quenchingAgent ?? '-'}</li>
+                    <li class="list-group-item">淬灭剂体积：${rp.quenchingAgentVolume ?? '-'} μL</li>
+                    <li class="list-group-item">采样分析方式：${rp.samplingAnalysis ?? '-'}</li>
+                </ul>
+            ` : '';
+
+            const gcp = gcms.params || {};
+            const gcmsHtml = gcms.enabled ? `<div class="mb-3">序列：${gcp.sequence || '-'}</div>` : '';
+
+            const ep = evap.params || {};
+            const evaporationHtml = evap.enabled ? `
+                <div class="mb-3">
+                    <strong>旋蒸模式：</strong>${(ep.mode === 'manual') ? '手动模式' : '自动模式'}
+                    ${(ep.mode === 'manual') ? `
+                        <ul class="list-group mt-2">
+                            <li class="list-group-item">旋转速度：${ep.rotationSpeed ?? '-'} rpm</li>
+                            <li class="list-group-item">浴热温度：${ep.bathTemperature ?? '-'} °C</li>
+                            <li class="list-group-item">真空压力：${ep.vacuumPressure ?? '-'} mbar</li>
+                            <li class="list-group-item">冷凝温度：${ep.condenserTemperature ?? '-'} °C</li>
+                        </ul>
+                    ` : ''}
+                </div>
+            ` : '';
+
+            const tp = tlc.params || {};
+            const uv = tp.uvWavelengths || {};
+            const tlcHtml = tlc.enabled ? `
+                <div class="mb-3">
+                    <strong>展开剂体系：</strong>${tp.developerSystem || '-'}
+                    ${(tp.developerSystem === 'custom') ?
+                        `<br><strong>自定义展开剂：</strong>${tp.customSolvent1 || '-'} / ${tp.customSolvent2 || '-'} ${tp.customSolvent3 ? '/ ' + tp.customSolvent3 : ''}` : ''}
+                    <br><strong>展开剂比例：</strong>${tp.developerRatio || '-'}
+                    ${(tp.developerRatio === 'custom') ?
+                        `<br><strong>自定义比例：</strong>${tp.customRatio1 || '-'} : ${tp.customRatio2 || '-'} ${tp.customRatio3 ? ' : ' + tp.customRatio3 : ''}` : ''}
+                    <br><strong>灯光波长：</strong>${uv.uv254 ? '254nm' : ''}${(uv.uv254 && uv.uv365) ? ', ' : ''}${uv.uv365 ? '365nm' : ''}
+                    <br><strong>TLC板类型：</strong>${tp.plateType || '-'}
+                    <br><strong>板尺寸：</strong>${tp.plateSize || '-'}
+                    <br><strong>展开时间：</strong>${tp.developingTime || '-'} 分钟
+                    <br><strong>展开缸类型：</strong>${tp.chamberType || '-'}
+                    <br><strong>展开温度：</strong>${tp.temperature || '-'} °C
+                    <br><strong>样品浓度：</strong>${tp.sampleConcentration || '-'} mg/mL
+                    <br><strong>点样体积：</strong>${tp.spotVolume || '-'} μL
+                    <br><strong>预期Rf值：</strong>${tp.expectedRfMin || '-'} - ${tp.expectedRfMax || '-'}
+                    <br><strong>检测方法：</strong>${tp.detectionMethod || '-'}
+                </div>
+            ` : '';
+
+            const createdAt = task.created_at || task.date || '';
+            const summaryHtml = `
+                <div class="mb-3"><strong>实验名称：</strong>${task.name || '-'}</div>
+                <div class="mb-3"><strong>实验备注：</strong>${(task.remark || '').trim() || '-'}</div>
+                <div class="mb-3"><strong>提交时间：</strong>${createdAt}</div>
+                <div class="mb-3"><strong>状态：</strong>${task.status || '-'}</div>
+                <div class="mb-3"><strong>固液配料工站：</strong>${solid.enabled ? '已启用' : '未启用'}</div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                        <tbody>${reagentRows}</tbody>
+                    </table>
+                </div>
+                <div class="mb-3"><strong>手套箱配料与反应工站：</strong>${glove.enabled ? '已启用' : '未启用'}</div>
+                ${gloveboxReactionHtml}
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                        <tbody>${gloveboxReagentRows}</tbody>
+                    </table>
+                </div>
+                <div class="mb-3"><strong>反应工站：</strong>${react.enabled ? '已启用' : '未启用'}</div>
+                ${reactionHtml}
+                <div class="mb-3"><strong>GCMS工站：</strong>${gcms.enabled ? '已启用' : '未启用'}</div>
+                ${gcmsHtml}
+                <div class="mb-3"><strong>旋蒸工站：</strong>${evap.enabled ? '已启用' : '未启用'}</div>
+                ${evaporationHtml}
+                <div class="mb-3"><strong>TLC分析工站：</strong>${tlc.enabled ? '已启用' : '未启用'}</div>
+                ${tlcHtml}
+            `;
+            return summaryHtml;
+        }
+
+        window.viewTask = function(taskId) {
+            // 优先备料员专用详情
+            $.get(`/api/preparator/task/${taskId}/`).done(function(res){
+                if (res && res.ok) {
+                    const html = generateTaskSummaryHtml(res.task || {});
+                    $('#task-detail').html(html);
+                    const modal = new bootstrap.Modal(document.getElementById('viewTaskModal'));
+                    modal.show();
+                } else {
+                    // 兜底管理员详情
+                    $.get(`/api/task/${taskId}/`).done(function(res2){
+                        if (res2 && res2.ok) {
+                            const html2 = generateTaskSummaryHtml(res2.task || {});
+                            $('#task-detail').html(html2);
+                            const modal2 = new bootstrap.Modal(document.getElementById('viewTaskModal'));
+                            modal2.show();
+                        } else {
+                            alert('获取任务详情失败：' + (res && res.message ? res.message : '未知错误'));
+                        }
+                    }).fail(function(){
+                        alert('获取任务详情失败：网络错误');
+                    });
+                }
+            }).fail(function(){
+                // 网络失败也尝试管理员接口
+                $.get(`/api/task/${taskId}/`).done(function(res2){
+                    if (res2 && res2.ok) {
+                        const html2 = generateTaskSummaryHtml(res2.task || {});
+                        $('#task-detail').html(html2);
+                        const modal2 = new bootstrap.Modal(document.getElementById('viewTaskModal'));
+                        modal2.show();
+                    } else {
+                        alert('获取任务详情失败：网络错误');
+                    }
+                }).fail(function(){
+                    alert('获取任务详情失败：网络错误或接口不存在');
+                });
+                });
+        }
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,1972 @@
+{% extends 'preparator_base.html' %}
+
+{% block title %}备料员-填充转移仓{% endblock %}
+
+{% block extra_css %}
+<style>
+    .preparation-panel {
+        height: 80vh;
+        overflow-y: auto;
+    }
+
+    .container-item,
+    .material-item {
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .container-item:hover,
+    .material-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .container-item.selected,
+    .material-item.selected {
+        border-color: #007bff;
+        background-color: #e3f2fd;
+    }
+
+    .slot-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+        gap: 5px;
+        padding: 10px;
+    }
+
+    .slot {
+        width: 60px;
+        height: 60px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .slot.occupied {
+        background-color: #28a745;
+        color: white;
+    }
+
+    .slot.available {
+        background-color: #f8f9fa;
+    }
+
+    .slot.selected {
+        border-color: #007bff;
+        background-color: #e3f2fd;
+    }
+
+    /* Checkbox样式 */
+    .form-check-input {
+        margin: 0;
+        cursor: pointer;
+        border-width: 2.5px !important;
+        border-color: #343a40 !important;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .row-checkbox {
+        transform: scale(1.1);
+    }
+
+    /* 选中行的样式 */
+    tr:has(.row-checkbox:checked) {
+        background-color: #f8f9fa;
+        border-left: 3px solid #007bff;
+    }
+
+</style>
+{% endblock %}
+
+{% block main_content %}
+<!-- CSRF Token -->
+{% csrf_token %}
+
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">填充转移仓</h1>
+
+    <!-- 第一行：备料任务列表 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">备料任务</h6>
+                    <button class="btn btn-sm btn-outline-primary" id="refreshPreparationLists">
+                        <i class="fas fa-sync-alt"></i> 刷新
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="preparation-lists">
+                        <div class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                            <p>加载中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 备料清单-->
+    <div class="row mb-12">
+        <!-- 备料清单详情 -->
+        <div class="col-md-12">
+            <div class="card preparation-panel">
+                <div class="card-header">
+                    <h6 class="mb-0">备料清单</h6>
+                <div class="d-flex justify-content-end">
+                    <button type="button" class="btn btn-success btn-sm" id="FillToPreparationStation">
+                        <i class="fas fa-plus"></i> 放入备料区
+                    </button>
+                </div>
+                </div>
+                <form id="prepForm">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>
+                                    </th>
+                                    <th>工站</th>
+                                    <th>物料类型</th>
+                                    <th>物料数量</th>
+                                    <th>物料名称</th>
+                                    <th>装填物料名称/数量</th>
+                                    <th>装填转移仓名称</th>
+                                    <th>装填槽位</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="prepFormBody">
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted">暂无数据</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- 转移仓详情模态框 -->
+<div class="modal fade" id="containerDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">转移仓详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <div class="mb-2"><strong>名称：</strong><span data-field="name"></span></div>
+                        <div class="mb-2"><strong>状态：</strong><span data-field="state"></span></div>
+                        <div class="mb-2"><strong>类型：</strong><span data-field="spec"></span></div>
+                        <div class="mb-2"><strong>当前工站：</strong><span data-field="station"></span></div>
+                        <div class="mb-2"><strong>目标工站：</strong><span data-field="target_station"></span></div>
+                        <div class="mb-2"><strong>创建时间：</strong><span data-field="created"></span></div>
+                        <div class="mb-2"><strong>更新时间：</strong><span data-field="updated"></span></div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <img data-field="qr" alt="QR"
+                            style="width:160px;height:160px;border:1px solid #eee;border-radius:6px;" />
+                        <div class="small text-muted mt-1">扫码标识：名称</div>
+                    </div>
+                </div>
+                <hr />
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>槽位</th>
+                                <th>占用</th>
+                                <th>物料类型</th>
+                                <th>物料名称</th>
+                                <th>附加信息</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail-slots-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 物料详情模态框 -->
+<div class="modal fade" id="materialDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">物料详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="material-detail-content">
+                    <!-- 动态内容将通过JavaScript填充 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 选择备料区位置模态框 -->
+<div class="modal fade" id="selectPrepPositionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">选择备料区位置</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="prepPositionList">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin mb-2"></i>
+                        <div>加载可用位置...</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmSelectPrepPosition" disabled>确认放入</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        let selectedContainer = null;
+        let selectedMaterial = null;
+        let selectedSlot = null;
+        let preparationList = null;
+        let __positionSelect = { containerId: null, containerName: '', positions: [], selectedId: null };
+
+        // 物料类型中英文映射
+        const materialTypeMap = {
+            'test_tube_15': '15mL试管',
+            'laiyu_powder': '铼羽粉筒',
+            'jingtai_powder': '晶泰粉筒',
+            'reagent_bottle_150': '150mL试剂瓶',
+            'tip_1': '1mL枪头',
+            'tip_5': '5mL枪头',
+            'tip_10': '10mL枪头',
+            'sample_filter': '采样滤头',
+            'filtration_filter': '过滤滤头',
+            'mixture_tube': '混合瓶',
+            'sample_tube': '采样瓶',
+            'sample_cylinder': '进样柱',
+            'chromatographic_cylinder': '色谱柱'
+        };
+
+        // 物料类型配置 - 统一管理所有物料类型的属性
+        const materialTypeConfig = {
+            'test_tube_15': {
+                isArray: true,
+                hasReagent: true,
+                displayName: '15mL试管',
+                quantityPerItem: 1,  // 每个物料项的数量
+                quantityDisplay: 'perItem'  // 数量显示方式：perItem=每个项目显示1，total=显示总数
+            },
+            'laiyu_powder': {
+                isArray: true,
+                hasReagent: true,
+                displayName: '铼羽粉筒',
+                quantityPerItem: 1,
+                quantityDisplay: 'perItem'
+            },
+            'jingtai_powder': {
+                isArray: true,
+                hasReagent: true,
+                displayName: '晶泰粉筒',
+                quantityPerItem: 1,
+                quantityDisplay: 'perItem'
+            },
+            'reagent_bottle_150': {
+                isArray: true,
+                hasReagent: true,
+                displayName: '150mL试剂瓶',
+                quantityPerItem: 1,
+                quantityDisplay: 'perItem'
+            },
+            'tip_1': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '1mL枪头',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'tip_5': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '5mL枪头',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'tip_10': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '10mL枪头',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'sample_tube': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '采样瓶',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'mixture_tube': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '混合瓶',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'sample_filter': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '采样滤头',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'sample_cylinder': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '进样柱',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'filtration_filter': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '过滤滤头',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            },
+            'chromatographic_cylinder': {
+                isArray: false,
+                hasReagent: false,
+                displayName: '色谱柱',
+                quantityPerItem: 1,
+                quantityDisplay: 'total'
+            }
+        };
+
+        // 获取所有物料类型列表
+        const getAllMaterialTypes = () => Object.keys(materialTypeConfig);
+
+        // 查看物料信息函数 - 定义为全局函数
+        window.viewMaterialInfo = function (materialType) {
+            const config = materialTypeConfig[materialType];
+            if (!config) return;
+
+            alert(`物料类型：${config.displayName}\n是否数组类型：${config.isArray ? '是' : '否'}\n是否有试剂信息：${config.hasReagent ? '是' : '否'}`);
+        };
+
+        // 转移仓类型中英文映射
+        const containerTypeMap = {
+            'test_tube_15': '试管转移仓',
+            'laiyu_powder': '铼羽粉筒转移仓',
+            'jingtai_powder': '晶泰粉筒转移仓',
+            'reagent_bottle_150': '试剂瓶转移仓',
+            'tip_1': '1mL枪头转移仓',
+            'tip_5': '5mL枪头转移仓',
+            'tip_10': '10mL枪头转移仓',
+            'sample_filter': '采样滤头转移仓',
+            'filtration_filter': '过滤滤头转移仓',
+            'mixture_tube': '混合瓶转移仓',
+            'sample_tube': '采样瓶转移仓',
+            'sample_cylinder': '进样柱转移仓',
+            'chromatographic_cylinder': '色谱柱转移仓'
+        };
+
+        // 获取CSRF token的函数
+        function getCSRFToken() {
+            // 首先尝试从页面中的csrf token获取
+            let token = $('[name=csrfmiddlewaretoken]').val();
+            if (token) {
+                return token;
+            }
+
+            // 如果页面中没有，则从cookie获取
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, 'csrftoken'.length + 1) === ('csrftoken' + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring('csrftoken'.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // 初始化页面
+        initPage();
+
+        function initPage() {
+            // 从URL参数获取备料清单ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const preparationId = urlParams.get('preparation_id');
+
+            // 加载备料任务列表
+            loadPreparationLists();
+
+            if (preparationId) {
+                loadPreparationList(preparationId);
+            }
+
+            // 绑定事件
+            bindEvents();
+        }
+
+        function loadPreparationLists() {
+            // 从后端获取备料任务列表
+            $.ajax({
+                url: '/api/preparation-lists/',
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                success: function (response) {
+                    if (response.success) {
+                        renderPreparationLists(response.preparation_lists);
+                    } else {
+                        $('#preparation-lists').html(`
+                        <div class="text-center text-muted">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                            <p>加载失败: ${response.message}</p>
+                        </div>
+                    `);
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('AJAX Error:', xhr.responseText);
+                    $('#preparation-lists').html(`
+                    <div class="text-center text-muted">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                        <p>网络错误，请稍后重试</p>
+                    </div>
+                `);
+                }
+            });
+        }
+
+        function renderPreparationLists(preparationLists) {
+            if (!preparationLists || preparationLists.length === 0) {
+                $('#preparation-lists').html(`
+                <div class="text-center text-muted">
+                    <i class="fas fa-clipboard-list fa-2x mb-3"></i>
+                    <p>暂无备料任务</p>
+                    <small>请从任务页面生成备料清单</small>
+                </div>
+            `);
+                return;
+            }
+
+            const html = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>备料任务ID</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${preparationLists.map(prep => `
+                            <tr data-preparation-id="${prep.id}">
+                                <td>
+                                    <strong>${prep.id}</strong>
+                                    <br>
+                                    <small class="text-muted">${prep.task_count}个任务</small>
+                                </td>
+                                <td>
+                                    <span class="badge ${getStatusBadgeClass(prep.status)}">${prep.status}</span>
+                                </td>
+                                <td>
+                                    <small>${prep.created_at}</small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary btn-sm view-preparation" data-preparation-id="${prep.id}" title="查看详情">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm delete-preparation" data-preparation-id="${prep.id}" title="删除任务">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+            $('#preparation-lists').html(html);
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'pending': return 'bg-warning text-dark';
+                case 'in_progress': return 'bg-info text-white';
+                case 'completed': return 'bg-success text-white';
+                case 'cancelled': return 'bg-danger text-white';
+                default: return 'bg-secondary text-white';
+            }
+        }
+
+        function loadPreparationList(preparationId) {
+            // 从后端获取备料清单详情
+            $.ajax({
+                url: `/api/preparation-list/${preparationId}/`,
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                success: function (response) {
+                    if (response.success) {
+                        preparationList = response.preparation_list;
+                        renderPreparationList();
+                    } else {
+                        alert('获取备料清单失败: ' + response.message);
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('AJAX Error:', xhr.responseText);
+                    alert('网络错误，请稍后重试: ' + error);
+                }
+            });
+        }
+
+        function renderPreparationList() {
+            if (!preparationList) return;
+            console.log(preparationList);
+            
+            // 获取绑定关系数据
+            const materialFillBindings = preparationList.material_fill_bindings || {};
+
+            // 表单表格渲染：按工站与物料类型生成行
+            const stationNameMap = {
+                manual: '人工备料',
+                solidLiquid: '固液配料',
+                reaction: '反应',
+                glovebox: '手套箱固液配料与反应',
+                filtration: '过滤分液',
+                evaporation: '旋蒸',
+                column: '过柱',
+                tlc: '点板',
+                gcms: 'GCMS',
+                hplc: 'HPLC'
+            };
+
+            // 定义工站显示顺序
+            const stationOrder = [
+                'solidLiquid', 'reaction', 'glovebox', 'filtration',
+                'evaporation', 'column', 'tlc', 'gcms', 'hplc'
+            ];
+
+            const requiresName = {
+                test_tube_15: true,
+                laiyu_powder: true,
+                jingtai_powder: true,
+                reagent_bottle_150: true,
+                tip_1: false,
+                tip_5: false,
+                tip_10: false,
+                sample_filter: false,
+                filtration_filter: false,
+                mixture_tube: false,
+                sample_tube: false,
+                sample_cylinder: false,
+                chromatographic_cylinder: false
+            };
+
+            const rows = [];
+            const stationMaterials = preparationList.station_materials || {};
+            const hasStationMaterials = Object.keys(stationMaterials).length > 0;
+
+            if (hasStationMaterials) {
+                // 按指定顺序处理工站
+                stationOrder.forEach(stationKey => {
+                    const stationData = stationMaterials[stationKey];
+                    if (!stationData) return;
+
+                    const stationName = stationNameMap[stationKey] || stationKey;
+
+                    // 统一的物料处理逻辑
+                    const allMaterialTypes = getAllMaterialTypes();
+
+                    allMaterialTypes.forEach(materialType => {
+                        const config = materialTypeConfig[materialType];
+                        const materialData = stationData[materialType];
+
+                        if (!materialData) return;
+
+                        if (config.isArray) {
+                            // 处理数组类型物料
+                            const items = materialData || [];
+                            if (items.length > 0) {
+                                items.forEach((item, index) => {
+                                    const reagentName = item.reagent_name || '';
+                                    const amount = item.amount || 0;
+                                    const unit = item.unit || '';
+
+                                    // 生成物料名称显示内容
+                                    let materialNameCell = '';
+                                    if (materialType === 'test_tube_15') {
+                                        // 15mL试管：试剂名称为空时，物料名称列显示空
+                                        materialNameCell = reagentName || '';
+                                    } else {
+                                        // 其他物料：显示试剂名称和用量
+                                        materialNameCell = reagentName ? reagentName + (amount ? ` (${amount}${unit})` : '') : '';
+                                    }
+
+                                    // 计算显示数量
+                                    const displayQuantity = config.quantityDisplay === 'perItem' ? config.quantityPerItem : 1;
+                                    
+                                    // 检查是否有绑定关系
+                                    const bindingKey = `${stationKey}_${materialType}_${index}`;
+                                    const binding = materialFillBindings[stationKey] && 
+                                                  materialFillBindings[stationKey][materialType] && 
+                                                  materialFillBindings[stationKey][materialType][index.toString()];
+                                    
+                                    // 根据绑定关系生成装填信息
+                                    const filledMaterialName = binding ? binding.material_name : '';
+                                    const containerName = binding ? binding.container_name : '';
+                                    const slotPosition = binding ? binding.slot_position : '';
+                                    const isFilled = !!binding;
+
+                                    rows.push(`
+                                         <tr data-station-key="${stationKey}" data-material-type="${materialType}" data-material-index="${index}" data-container-name="${containerName}">
+                                             <td>
+                                                 <input type="checkbox" class="form-check-input row-checkbox" data-container-name="${containerName}">
+                                             </td>
+                                             <td>${stationName}</td>
+                                             <td>${config.displayName}</td>
+                                             <td>${displayQuantity}</td>
+                                             <td>${materialNameCell}</td>
+                                             <td>
+                                         <div class="input-group input-group-sm">
+                                             <input type="text" class="form-control form-control-sm" name="filled_material_name" 
+                                                    placeholder="请输入装填物料名称/数量" value="${filledMaterialName}" ${isFilled ? 'readonly' : ''}>
+                                             <button type="button" class="btn btn-outline-secondary view-material-btn" 
+                                                     title="查看物料信息" data-input-name="filled_material_name">
+                                                 <i class="fas fa-eye"></i>
+                                             </button>
+                                         </div>
+                                     </td>
+                                     <td>
+                                         <div class="input-group input-group-sm">
+                                             <input type="text" class="form-control form-control-sm" name="container_name" 
+                                                    placeholder="请输入转移仓名称" value="${containerName}" ${isFilled ? 'readonly' : ''}>
+                                             <button type="button" class="btn btn-outline-secondary view-container-btn" 
+                                                     title="查看转移仓信息" data-input-name="container_name">
+                                                 <i class="fas fa-eye"></i>
+                                             </button>
+                                         </div>
+                                     </td>
+                                     ${['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'].includes(materialType)
+                                            ? `<td>
+                                                <input type="text" class="form-control form-control-sm" name="slot_position" 
+                                                       placeholder="请输入槽位" value="${slotPosition}" ${isFilled ? 'readonly' : ''}>
+                                            </td>`
+                                            : `<td></td>`
+                                        }
+                                     <td>
+                                         <button type="button" class="btn btn-sm btn-outline-success fill-btn" title="装填" ${isFilled ? 'style="display:none"' : ''}>
+                                             <i class="fas fa-box"></i>
+                                         </button>
+                                         <button type="button" class="btn btn-sm btn-outline-danger unbind-btn" title="取出" ${!isFilled ? 'style="display:none"' : ''}>
+                                        <i class="fas fa-box-open"></i>
+                                    </button>
+                                     </td>
+                                         </tr>
+                                     `);
+                                });
+                            }
+                        } else {
+                            // 处理数字类型物料（耗材）
+                            const count = parseInt(materialData) || 0;
+                            if (count > 0) {
+                                // 计算显示数量
+                                const displayQuantity = config.quantityDisplay === 'total' ? count : config.quantityPerItem;
+                                
+                                // 检查是否有绑定关系（耗材类型物料索引为0）
+                                const binding = materialFillBindings[stationKey] && 
+                                              materialFillBindings[stationKey][materialType] && 
+                                              materialFillBindings[stationKey][materialType]['0'];
+                                
+                                // 根据绑定关系生成装填信息
+                                const filledMaterialName = binding ? binding.material_name : '';
+                                const containerName = binding ? binding.container_name : '';
+                                const slotPosition = binding ? binding.slot_position : '';
+                                const isFilled = !!binding;
+
+                                rows.push(`
+                                    <tr data-station-key="${stationKey}" data-material-type="${materialType}" data-material-index="0" data-container-name="${containerName}">
+                                         <td>
+                                             <input type="checkbox" class="form-check-input row-checkbox" data-container-name="${containerName}">
+                                         </td>
+                                         <td>${stationName}</td>
+                                         <td>${config.displayName}</td>
+                                         <td>${displayQuantity}</td>
+                                         <td></td>
+                                         <td>
+                                             <div class="input-group input-group-sm">
+                                                 <input type="text" class="form-control form-control-sm" name="filled_material_name" 
+                                                        placeholder="请输入装填物料名称/数量" value="${filledMaterialName}" ${isFilled ? 'readonly' : ''}>
+                                                 <button type="button" class="btn btn-outline-secondary view-material-btn" 
+                                                         title="查看物料信息" data-input-name="filled_material_name">
+                                                     <i class="fas fa-eye"></i>
+                                                 </button>
+                                             </div>
+                                         </td>
+                                         <td>
+                                             <div class="input-group input-group-sm">
+                                                 <input type="text" class="form-control form-control-sm" name="container_name" 
+                                                        placeholder="请输入转移仓名称" value="${containerName}" ${isFilled ? 'readonly' : ''}>
+                                                 <button type="button" class="btn btn-outline-secondary view-container-btn" 
+                                                         title="查看转移仓信息" data-input-name="container_name">
+                                                     <i class="fas fa-eye"></i>
+                                                 </button>
+                                             </div>
+                                         </td>
+                                         ${['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'].includes(materialType)
+                                        ? `<td>
+                                                <input type="text" class="form-control form-control-sm" name="slot_position" 
+                                                       placeholder="请输入槽位" value="${slotPosition}" ${isFilled ? 'readonly' : ''}>
+                                            </td>`
+                                        : `<td></td>`
+                                    }
+                                         <td>
+                                            <button type="button" class="btn btn-sm btn-outline-success fill-btn" title="装填" ${isFilled ? 'style="display:none"' : ''}>
+                                             <i class="fas fa-box"></i>
+                                         </button>
+                                             <button type="button" class="btn btn-sm btn-outline-danger unbind-btn" title="取出" ${!isFilled ? 'style="display:none"' : ''}>
+                                                 <i class="fas fa-box-open"></i>
+                                             </button>
+                                         </td>
+                                     </tr>
+                                 `);
+                            }
+                        }
+                    });
+                });
+            }
+
+            const $tbody = $('#prepFormBody');
+            if ($tbody.length) {
+                $tbody.html(rows.join('') || '<tr><td colspan="9" class="text-center text-muted">暂无数据</td></tr>');
+                // 渲染后立即按备料区占用状态同步隐藏checkbox
+                syncCheckboxByOccupied();
+            }
+        }
+
+        function deletePreparationList(preparationId) {
+            // 删除备料任务
+            $.ajax({
+                url: `/api/preparation-list/${preparationId}/delete/`,
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCSRFToken()
+                },
+                success: function (response) {
+                    if (response.success) {
+                        alert('备料任务删除成功');
+                        // 重新加载备料任务列表
+                        loadPreparationLists();
+                        // 清空备料清单详情
+                        preparationList = null;
+                        $('#preparation-list-detail').html(`
+                        <div class="text-center text-muted">
+                            <i class="fas fa-clipboard-list fa-3x mb-3"></i>
+                            <p>请选择备料任务查看清单</p>
+                        </div>
+                    `);
+                    } else {
+                        alert('删除失败: ' + response.message);
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error('AJAX Error:', xhr.responseText);
+                    alert('网络错误，请稍后重试: ' + error);
+                }
+            });
+        }
+
+        function bindEvents() {
+            // 刷新备料任务列表按钮事件
+            $(document).on('click', '#refreshPreparationLists', function () {
+                loadPreparationLists();
+            });
+
+            // 查看备料清单详情按钮事件
+            $(document).on('click', '.view-preparation', function () {
+                const preparationId = $(this).data('preparation-id');
+                loadPreparationList(preparationId);
+            });
+
+            // 删除备料任务按钮事件
+            $(document).on('click', '.delete-preparation', function () {
+                const preparationId = $(this).data('preparation-id');
+                if (confirm(`确定要删除备料任务 ${preparationId} 吗？`)) {
+                    deletePreparationList(preparationId);
+                }
+            });
+
+            // 查看转移仓信息按钮
+            $(document).on('click', '#view-container-info-btn', function () {
+                viewContainerInfoByName();
+            });
+
+            // 在名称输入框按回车触发查看
+            $(document).on('keydown', '#container-name', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    viewContainerInfoByName();
+                }
+            });
+
+            // 查看物料信息按钮
+            $(document).on('click', '#view-material-info-btn', function () {
+                viewMaterialInfoByName();
+            });
+
+            // 物料名称输入框回车
+            $(document).on('keydown', '#material-name', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    viewMaterialInfoByName();
+                }
+            });
+
+            // 表格内查看物料信息按钮（通过输入框值）
+            $(document).on('click', '.view-material-btn', function () {
+                const inputGroup = $(this).closest('.input-group');
+                const input = inputGroup.find('input[name="filled_material_name"]');
+                const name = (input.val() || '').trim();
+                if (!name) {
+                    alert('请输入物料名称');
+                    return;
+                }
+                $.ajax({
+                    url: '/api/materials/by-name/',
+                    method: 'GET',
+                    data: { name },
+                    success: function (resp) {
+                        if (resp && resp.ok && resp.material) {
+                            populateMaterialDetailModal(resp.material);
+                            const modalEl = document.getElementById('materialDetailModal');
+                            const modal = new bootstrap.Modal(modalEl);
+                            modal.show();
+                        } else {
+                            alert(resp && resp.message ? resp.message : '未获取到物料详情');
+                        }
+                    },
+                    error: function () {
+                        alert('查询物料失败，请稍后重试');
+                    }
+                });
+            });
+
+            // 表格内查看转移仓信息按钮（通过输入框值）
+            $(document).on('click', '.view-container-btn', function () {
+                const inputGroup = $(this).closest('.input-group');
+                const input = inputGroup.find('input[name="container_name"]');
+                const name = (input.val() || '').trim();
+                if (!name) {
+                    alert('请输入转移仓名称');
+                    return;
+                }
+
+                // 优先使用名称->ID索引
+                const index = window.__containerIndexByName || {};
+                const containerId = index[name];
+
+                if (!containerId) {
+                    // 兜底：调用只读名称接口尝试匹配
+                    $.ajax({
+                        url: '/api/containers/names/',
+                        method: 'GET',
+                        success: function (resp) {
+                            const list = (resp && resp.containers) || [];
+                            const found = list.find(i => i && i.name === name);
+                            if (found) {
+                                fetchAndShowContainer(found.id);
+                            } else {
+                                alert('未找到该名称的转移仓');
+                            }
+                        },
+                        error: function () {
+                            alert('查询转移仓名称失败，请稍后重试');
+                        }
+                    });
+                    return;
+                }
+
+                fetchAndShowContainer(containerId);
+            });
+
+            // 装填按钮点击事件
+            $(document).on('click', '.fill-btn', function () {
+                const row = $(this).closest('tr');
+                const materialNameInput = row.find('input[name="filled_material_name"]');
+                const containerNameInput = row.find('input[name="container_name"]');
+                const slotInput = row.find('input[name="slot_position"]');
+
+                const materialName = (materialNameInput.val() || '').trim();
+                const containerName = (containerNameInput.val() || '').trim();
+                const slotPosition = (slotInput.val() || '').trim();
+
+                if (!materialName) {
+                    alert('请输入物料名称');
+                    return;
+                }
+                if (!containerName) {
+                    alert('请输入转移仓名称');
+                    return;
+                }
+
+                // 获取绑定关系参数
+                const stationKey = row.data('station-key');
+                const materialType = row.data('material-type');
+                const materialIndex = row.data('material-index');
+
+                // 判断是否为需要槽位的物料类型
+                const needsSlot = ['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'].includes(materialType);
+                
+                if (needsSlot && !slotPosition) {
+                    alert('请输入槽位');
+                    return;
+                }
+
+                // 执行装填绑定
+                performFill(materialName, containerName, slotPosition, row, stationKey, materialType, materialIndex);
+            });
+
+            // 解绑按钮点击事件
+            $(document).on('click', '.unbind-btn', function () {
+                const row = $(this).closest('tr');
+                const materialNameInput = row.find('input[name="filled_material_name"]');
+                const containerNameInput = row.find('input[name="container_name"]');
+                const slotInput = row.find('input[name="slot_position"]');
+
+                const materialName = (materialNameInput.val() || '').trim();
+                const containerName = (containerNameInput.val() || '').trim();
+                const slotPosition = (slotInput.val() || '').trim();
+
+                if (!materialName || !containerName) {
+                    alert('无法获取绑定信息');
+                    return;
+                }
+
+                // 获取绑定关系参数
+                const stationKey = row.data('station-key');
+                const materialType = row.data('material-type');
+                const materialIndex = row.data('material-index');
+
+                // 判断是否为需要槽位的物料类型
+                const needsSlot = ['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'].includes(materialType);
+                
+                let confirmMessage;
+                if (needsSlot) {
+                    if (!slotPosition) {
+                        alert('无法获取槽位信息');
+                        return;
+                    }
+                    confirmMessage = `确定要解绑物料 "${materialName}" 与转移仓 "${containerName}" 的槽位 ${slotPosition} 吗？`;
+                } else {
+                    confirmMessage = `确定要清空转移仓 "${containerName}" 中的物料 "${materialName}" 吗？`;
+                }
+
+                if (confirm(confirmMessage)) {
+                    performUnbind(materialName, containerName, slotPosition, row, stationKey, materialType, materialIndex);
+                }
+            });
+
+
+            // 放入备料区：允许勾选多行，但必须同一转移仓名
+            $(document).on('click', '#FillToPreparationStation', async function () {
+                const $checked = $('#prepFormBody .row-checkbox:checked');
+                if ($checked.length === 0) { alert('请先勾选要放入备料区的项目'); return; }
+                const selectedNames = Array.from(new Set($checked.map(function(){
+                    const $r = $(this).closest('tr');
+                    return ($r.find('input[name="container_name"]').val() || '').trim();
+                }).get().filter(n => n)));
+                if (selectedNames.length === 0) { alert('请选择已填写转移仓名称的行'); return; }
+                if (selectedNames.length > 1) { alert('一次只能放入同一个转移仓（名称必须相同）'); return; }
+                const containerName = selectedNames[0];
+                try {
+                    const containerId = await getContainerIdByName(containerName);
+                    if (!containerId) throw new Error('未找到该转移仓');
+                    const detailResp = await $.get(`/api/containers/${containerId}/`);
+                    if (!(detailResp && detailResp.ok && detailResp.container)) throw new Error('获取转移仓详情失败');
+                    const allowedKind = detailResp.container.allowed_material_kind;
+                    const freeResp = await $.get('/api/preparation-station/free-positions/', { material_kind: allowedKind });
+                    if (!freeResp.success) { alert(freeResp.message || '获取可用位置失败'); return; }
+                    const positions = freeResp.positions || [];
+                    if (positions.length === 0) { alert('备料区无可用空位'); return; }
+
+                    // 展示位置选择模态框
+                    __positionSelect = { containerId, containerName, positions, selectedId: null };
+                    renderPrepPositionList(positions);
+                    $('#confirmSelectPrepPosition').prop('disabled', true);
+                    new bootstrap.Modal(document.getElementById('selectPrepPositionModal')).show();
+                } catch (e) { console.error(e); alert(e.message || '放入备料区失败'); }
+            });
+
+            // 行checkbox事件 - 仅允许选择一个转移仓名（同名联动，多行可选）
+            $(document).on('change', '.row-checkbox', function () {
+                const isChecked = $(this).is(':checked');
+                const containerName = $(this).data('container-name');
+                if (isChecked) {
+                    if (containerName && containerName.trim() !== '') {
+                        // 取消其他不同名称勾选，仅保留相同名称
+                        $('.row-checkbox').each(function(){
+                            const n2 = $(this).data('container-name');
+                            if (n2 !== containerName) { $(this).prop('checked', false); }
+                        });
+                        $(`.row-checkbox[data-container-name="${containerName}"]`).prop('checked', true);
+                    } else {
+                        // 名称为空，按单选处理
+                        $('.row-checkbox').not(this).prop('checked', false);
+                    }
+                }
+            });
+
+            // 转移仓名称输入框变化时更新checkbox的data-container-name属性
+            $(document).on('input', 'input[name="container_name"]', function () {
+                const row = $(this).closest('tr');
+                const containerName = $(this).val().trim();
+                row.attr('data-container-name', containerName);
+                row.find('.row-checkbox').attr('data-container-name', containerName);
+            });
+        }
+
+        // 轮询备料区状态：从备料区移除后恢复checkbox显示
+        setInterval(() => {
+            $.get('/api/preparation-station/occupied-containers/').then(resp => {
+                if (!(resp && resp.success)) return;
+                const occupied = new Set(resp.containers || []);
+                $('#prepFormBody tr').each(function () {
+                    const $row = $(this);
+                    const name = ($row.find('input[name="container_name"]').val() || '').trim();
+                    if (name && !occupied.has(name)) {
+                        $row.find('.row-checkbox').show();
+                    }
+                });
+            });
+        }, 4000);
+
+        // 首次渲染后同步：已在备料区的转移仓对应行，隐藏checkbox
+        function syncCheckboxByOccupied() {
+            $.get('/api/preparation-station/occupied-containers/').then(resp => {
+                if (!(resp && resp.success)) return;
+                const occupied = new Set(resp.containers || []);
+                $('#prepFormBody tr').each(function () {
+                    const $row = $(this);
+                    const name = ($row.find('input[name="container_name"]').val() || '').trim();
+                    if (name && occupied.has(name)) {
+                        $row.find('.row-checkbox').prop('checked', false).hide();
+                    }
+                });
+            });
+        }
+
+        // 渲染位置列表
+        function renderPrepPositionList(list) {
+            const $root = $('#prepPositionList');
+            if (!list || list.length === 0) {
+                $root.html('<div class="text-muted">无可用位置</div>');
+                return;
+            }
+            const html = `
+                <div class="list-group">
+                    ${list.map(p => `
+                        <button type=\"button\" class=\"list-group-item list-group-item-action prep-pos-item\" data-id=\"${p.id}\">
+                            <div class=\"d-flex justify-content-between align-items-center\">
+                                <span>${p.position_name}</span>
+                                <small class=\"text-muted\">适用物料：${p.expected_material_kind_display || p.expected_material_kind || ''}</small>
+                            </div>
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+            $root.html(html);
+        }
+
+        // 选择位置
+        $(document).on('click', '.prep-pos-item', function(){
+            $('.prep-pos-item').removeClass('active');
+            $(this).addClass('active');
+            __positionSelect.selectedId = $(this).data('id');
+            $('#confirmSelectPrepPosition').prop('disabled', !__positionSelect.selectedId);
+        });
+
+        // 确认选择并放入
+        $(document).on('click', '#confirmSelectPrepPosition', async function(){
+            if (!__positionSelect.selectedId) return;
+            try {
+                await $.ajax({
+                    url: '/api/preparation-station/place-container/',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                    data: JSON.stringify({ position_id: __positionSelect.selectedId, container_id: __positionSelect.containerId })
+                });
+                const name = __positionSelect.containerName;
+                $('#prepFormBody tr').each(function(){
+                    const $row = $(this);
+                    const rowName = ($row.find('input[name="container_name"]').val() || '').trim();
+                    if (rowName === name) {
+                        $row.find('.row-checkbox').prop('checked', false).hide();
+                    }
+                });
+                const modalEl = document.getElementById('selectPrepPositionModal');
+                bootstrap.Modal.getInstance(modalEl).hide();
+                alert('已放入备料区');
+            } catch (e) {
+                console.error(e);
+                alert('放入失败，请重试');
+            }
+        });
+
+
+        // 通过名称查看转移仓信息并弹出模态窗
+        function viewContainerInfoByName() {
+            const name = ($('#container-name').val() || '').trim();
+            if (!name) {
+                alert('请输入转移仓名称');
+                return;
+            }
+
+            // 优先使用名称->ID索引
+            const index = window.__containerIndexByName || {};
+            const containerId = index[name];
+
+            if (!containerId) {
+                // 兜底：调用只读名称接口尝试匹配
+                $.ajax({
+                    url: '/api/containers/names/',
+                    method: 'GET',
+                    success: function (resp) {
+                        const list = (resp && resp.containers) || [];
+                        const found = list.find(i => i && i.name === name);
+                        if (found) {
+                            fetchAndShowContainer(found.id);
+                        } else {
+                            alert('未找到该名称的转移仓');
+                        }
+                    },
+                    error: function () {
+                        alert('查询转移仓名称失败，请稍后重试');
+                    }
+                });
+                return;
+            }
+
+            fetchAndShowContainer(containerId);
+        }
+
+        function fetchAndShowContainer(containerId) {
+            $.ajax({
+                url: `/api/containers/${containerId}/`,
+                method: 'GET',
+                success: function (response) {
+                    if (response && response.ok && response.container) {
+                        populateContainerDetailModal(response.container);
+                        const modalEl = document.getElementById('containerDetailModal');
+                        const modal = new bootstrap.Modal(modalEl);
+                        modal.show();
+                    } else {
+                        alert('未获取到转移仓详情');
+                    }
+                },
+                error: function () {
+                    alert('获取转移仓详情失败，请稍后重试');
+                }
+            });
+        }
+
+        function populateContainerDetailModal(container) {
+            const root = $('#containerDetailModal');
+            root.find('[data-field="name"]').text(container.name || '');
+            root.find('[data-field="state"]').text(container.state || '');
+            root.find('[data-field="spec"]').text(container.spec_name || '');
+            root.find('[data-field="station"]').text(container.station || '');
+            root.find('[data-field="target_station"]').text(container.target_station || '');
+            root.find('[data-field="created"]').text(container.created_at || '');
+            root.find('[data-field="updated"]').text(container.updated_at || '');
+            const $qrImg = root.find('img[data-field="qr"]');
+            if (container.qr_url) {
+                $qrImg.attr('src', container.qr_url);
+            } else if (container.qr_text) {
+                const qrApi = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(container.qr_text);
+                $qrImg.attr('src', qrApi);
+            } else {
+                $qrImg.attr('src', '');
+            }
+
+            const tbody = root.find('#detail-slots-body');
+            const slots = container.slots || [];
+            const rows = slots.map(s => `
+                <tr>
+                    <td>${(s.index ?? 0) + 1}</td>
+                    <td>${s.occupied ? '是' : '否'}</td>
+                    <td>${s.material_kind || ''}</td>
+                    <td>${s.material_name || ''}</td>
+                    <td>${s.extra || ''}</td>
+                </tr>
+            `).join('');
+            tbody.html(rows || '<tr><td colspan="5" class="text-center text-muted">无槽位数据</td></tr>');
+        }
+
+        // 通过名称查看物料信息并弹出模态窗
+        function viewMaterialInfoByName() {
+            const name = ($('#material-name').val() || '').trim();
+            if (!name) {
+                alert('请输入物料名称');
+                return;
+            }
+            $.ajax({
+                url: '/api/materials/by-name/',
+                method: 'GET',
+                data: { name },
+                success: function (resp) {
+                    if (resp && resp.ok && resp.material) {
+                        populateMaterialDetailModal(resp.material);
+                        const modalEl = document.getElementById('materialDetailModal');
+                        const modal = new bootstrap.Modal(modalEl);
+                        modal.show();
+                    } else {
+                        alert(resp && resp.message ? resp.message : '未获取到物料详情');
+                    }
+                },
+                error: function () {
+                    alert('查询物料失败，请稍后重试');
+                }
+            });
+        }
+
+        // 根据转移仓ID获取转移仓名称
+        function getContainerNameById(containerId) {
+            return new Promise((resolve, reject) => {
+                if (!containerId) {
+                    resolve('空闲');
+                    return;
+                }
+                fetch('/api/containers/names/', { credentials: 'same-origin' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data && data.ok) {
+                            const container = data.containers.find(c => c.id === containerId);
+                            resolve(container ? container.name : '未知转移仓');
+                        } else {
+                            resolve('获取失败');
+                        }
+                    })
+                    .catch(() => resolve('获取失败'));
+            });
+        }
+
+        function populateMaterialDetailModal(material) {
+            let qrSrc = '';
+            if (material.qr_url) {
+                qrSrc = material.qr_url;
+            } else if (material.qr_text) {
+                qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(material.qr_text);
+            }
+
+            let extraRows = '';
+            if (material.kind === 'test_tube_15' || material.kind === '15mL试管') {
+                extraRows += `<div class="mb-2"><strong>任务ID：</strong><span>${material.task_id ?? ''}</span></div>`;
+            } else if (material.kind === 'laiyu_powder' || material.kind === '铼羽粉筒' || material.kind === 'jingtai_powder' || material.kind === '晶泰粉筒') {
+                extraRows += `<div class="mb-2"><strong>固体试剂名称：</strong><span>${material.material_name || ''}</span></div>`;
+                extraRows += `<div class="mb-2"><strong>剩余质量(mg)：</strong><span>${material.mass_mg || ''}</span></div>`;
+            } else if (material.kind === 'reagent_bottle_150' || material.kind === '150mL试剂瓶') {
+                extraRows += `<div class="mb-2"><strong>液体试剂名称：</strong><span>${material.reagent_name || ''}</span></div>`;
+                extraRows += `<div class="mb-2"><strong>体积(mL)：</strong><span>${material.volume_ml || ''}</span></div>`;
+            }
+
+            // 异步获取转移仓名称
+            getContainerNameById(material.current_container_id).then(containerName => {
+                const html = `
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <div class="mb-2"><strong>名称：</strong><span>${material.name || ''}</span></div>
+                            <div class="mb-2"><strong>状态：</strong><span>${material.state || ''}</span></div>
+                            <div class="mb-2"><strong>类型：</strong><span>${material.kind || ''}</span></div>
+                            <div class="mb-2"><strong>当前转移仓名称：</strong><span>${containerName}</span></div>
+                            ${extraRows}
+                            <div class="mb-2"><strong>创建时间：</strong><span>${material.created_at || ''}</span></div>
+                            <div class="mb-2"><strong>更新时间：</strong><span>${material.updated_at || ''}</span></div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <img alt="QR" src="${qrSrc}" style="width:160px;height:160px;border:1px solid #eee;border-radius:6px;" />
+                            <div class="small text-muted mt-1">扫码标识：名称</div>
+                        </div>
+                    </div>
+                `;
+                $('#material-detail-content').html(html);
+            });
+        }
+
+        // 执行装填绑定
+        function performFill(materialName, containerName, slotPosition, row, stationKey, materialType, materialIndex) {
+            let materialInfo, containerId;
+
+            // 判断是否为需要槽位的物料类型
+            const needsSlot = ['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'].includes(materialType);
+
+            if (needsSlot) {
+                // 需要槽位的物料：需要查找物料信息
+                Promise.all([
+                    getMaterialIdByName(materialName),
+                    getContainerIdByName(containerName)
+                ])
+                    .then(([materialData, cid]) => {
+                        materialInfo = materialData;
+                        containerId = cid;
+
+                        if (!materialInfo || !materialInfo.id) {
+                            throw new Error('未找到该物料');
+                        }
+                        if (!containerId) {
+                            throw new Error('未找到该转移仓');
+                        }
+
+                        // 更新物料的当前转移仓ID为转移仓名称
+                        return updateMaterialCurrentContainer(materialInfo.id, materialInfo.kind, containerName);
+                    })
+                    .then(() => {
+                        // 更新转移仓对应槽位显示物料名称
+                        return updateContainerSlot(containerId, slotPosition, materialName, stationKey, materialType, materialIndex);
+                    })
+                    .then(() => {
+                        // 更新UI显示
+                        updateRowAfterFill(row, materialName, containerName, slotPosition);
+                        alert('装填成功！');
+                    })
+                    .catch(error => {
+                        alert('装填失败：' + error.message);
+                    });
+            } else {
+                // 数量管理的物料：不需要查找物料信息，直接装填
+                getContainerIdByName(containerName)
+                    .then(cid => {
+                        containerId = cid;
+                        if (!containerId) {
+                            throw new Error('未找到该转移仓');
+                        }
+
+                        // 直接装填数量管理的物料
+                        return fillQuantityMaterial(containerId, materialName, null, stationKey, materialType, materialIndex);
+                    })
+                    .then(() => {
+                        // 更新UI显示
+                        updateRowAfterFill(row, materialName, containerName, slotPosition);
+                        alert('装填成功！');
+                    })
+                    .catch(error => {
+                        alert('装填失败：' + error.message);
+                    });
+            }
+        }
+
+        // 装填数量管理的物料
+        function fillQuantityMaterial(containerId, materialName, materialInfo, stationKey, materialType, materialIndex) {
+            return new Promise((resolve, reject) => {
+                let quantity = 1;
+                let displayName = materialName;
+                
+                // 检查输入是否为纯数字（数量）
+                if (/^\d+$/.test(materialName)) {
+                    quantity = parseInt(materialName);
+                    // 根据物料类型生成显示名称
+                    const config = materialTypeConfig[materialType];
+                    if (config) {
+                        displayName = `${config.displayName} x${quantity}`;
+                    } else {
+                        displayName = `${materialType} x${quantity}`;
+                    }
+                } else {
+                    // 从物料名称中提取数量，格式如 "1mL枪头 x10" 或 "采样瓶 x5"
+                    const quantityMatch = materialName.match(/x(\d+)$/);
+                    if (quantityMatch) {
+                        quantity = parseInt(quantityMatch[1]);
+                        displayName = materialName;
+                    } else {
+                        // 如果没有数量标识，默认为1
+                        quantity = 1;
+                        displayName = materialName;
+                    }
+                }
+                
+                if (quantity <= 0) {
+                    reject(new Error('数量必须大于0'));
+                    return;
+                }
+
+                // 获取转移仓信息以确定可用槽位
+                $.ajax({
+                    url: `/api/containers/${containerId}/`,
+                    method: 'GET',
+                    success: function (response) {
+                        if (response && response.ok && response.container) {
+                            const container = response.container;
+                            const slots = container.slots || [];
+                            
+                            // 找到连续的可用槽位
+                            const availableSlots = [];
+                            let consecutiveCount = 0;
+                            let startIndex = -1;
+                            
+                            for (let i = 0; i < slots.length; i++) {
+                                if (!slots[i].occupied) {
+                                    if (consecutiveCount === 0) {
+                                        startIndex = i;
+                                    }
+                                    consecutiveCount++;
+                                    
+                                    if (consecutiveCount >= quantity) {
+                                        // 找到足够的连续槽位
+                                        for (let j = 0; j < quantity; j++) {
+                                            availableSlots.push(startIndex + j);
+                                        }
+                                        break;
+                                    }
+                                } else {
+                                    // 重置连续计数
+                                    consecutiveCount = 0;
+                                    startIndex = -1;
+                                }
+                            }
+                            
+                            // 如果没有找到连续槽位，尝试找任意可用槽位
+                            if (availableSlots.length === 0) {
+                                for (let i = 0; i < slots.length && availableSlots.length < quantity; i++) {
+                                    if (!slots[i].occupied) {
+                                        availableSlots.push(i);
+                                    }
+                                }
+                            }
+                            
+                            if (availableSlots.length < quantity) {
+                                reject(new Error(`转移仓可用槽位不足，需要${quantity}个槽位，但只有${availableSlots.length}个可用槽位`));
+                                return;
+                            }
+                            
+                            // 依次装填每个槽位
+                            const fillPromises = availableSlots.map((slotIndex, index) => {
+                                return updateContainerSlot(containerId, slotIndex, `${displayName} (${index + 1}/${quantity})`, stationKey, materialType, materialIndex);
+                            });
+                            
+                            Promise.all(fillPromises)
+                                .then(() => {
+                                    // 保存装填信息到行数据
+                                    const row = $(`tr[data-station-key="${stationKey}"][data-material-type="${materialType}"][data-material-index="${materialIndex}"]`);
+                                    row.data('filled-slots', availableSlots);
+                                    row.data('filled-quantity', quantity);
+                                    resolve();
+                                })
+                                .catch(reject);
+                        } else {
+                            reject(new Error('获取转移仓信息失败'));
+                        }
+                    },
+                    error: function () {
+                        reject(new Error('获取转移仓信息失败'));
+                    }
+                });
+            });
+        }
+
+        // 执行解绑操作
+        function performUnbind(materialName, containerName, slotPosition, row, stationKey, materialType, materialIndex) {
+            let materialInfo, containerId;
+
+            // 判断是否为需要槽位的物料类型
+            const needsSlot = ['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'].includes(materialType);
+
+            // 对于需要槽位的物料，验证槽位参数
+            if (needsSlot && (!slotPosition || slotPosition.trim() === '')) {
+                alert('槽位不能为空');
+                return;
+            }
+
+            if (needsSlot) {
+                // 需要槽位的物料：需要查找物料信息
+                Promise.all([
+                    getMaterialIdByName(materialName),
+                    getContainerIdByName(containerName)
+                ])
+                    .then(([materialData, cid]) => {
+                        materialInfo = materialData;
+                        containerId = cid;
+
+                        if (!materialInfo || !materialInfo.id) {
+                            throw new Error('未找到该物料');
+                        }
+                        if (!containerId) {
+                            throw new Error('未找到该转移仓');
+                        }
+
+                        console.log('解绑参数:', {
+                            materialName: materialName,
+                            containerName: containerName,
+                            slotPosition: slotPosition,
+                            materialId: materialInfo.id,
+                            materialKind: materialInfo.kind,
+                            containerId: containerId,
+                            stationKey: stationKey,
+                            materialType: materialType,
+                            materialIndex: materialIndex
+                        });
+
+                        // 清空指定槽位
+                        return updateContainerSlot(containerId, slotPosition, null, stationKey, materialType, materialIndex);
+                    })
+                    .then(() => {
+                        // 清空物料的当前转移仓ID
+                        return updateMaterialCurrentContainer(materialInfo.id, materialInfo.kind, null);
+                    })
+                    .then(() => {
+                        // 更新UI显示
+                        updateRowAfterUnbind(row);
+                        alert('解绑成功！');
+                    })
+                    .catch(error => {
+                        console.error('解绑失败:', error);
+                        alert('解绑失败：' + error.message);
+                    });
+            } else {
+                // 数量管理的物料：不需要查找物料信息，直接清空
+                getContainerIdByName(containerName)
+                    .then(cid => {
+                        containerId = cid;
+                        if (!containerId) {
+                            throw new Error('未找到该转移仓');
+                        }
+
+                        console.log('解绑数量管理物料参数:', {
+                            materialName: materialName,
+                            containerName: containerName,
+                            containerId: containerId,
+                            stationKey: stationKey,
+                            materialType: materialType,
+                            materialIndex: materialIndex
+                        });
+
+                        // 清空所有相关槽位
+                        return unbindQuantityMaterial(containerId, row, stationKey, materialType, materialIndex);
+                    })
+                    .then(() => {
+                        // 更新UI显示
+                        updateRowAfterUnbind(row);
+                        alert('解绑成功！');
+                    })
+                    .catch(error => {
+                        console.error('解绑失败:', error);
+                        alert('解绑失败：' + error.message);
+                    });
+            }
+        }
+
+        // 解绑数量管理的物料
+        function unbindQuantityMaterial(containerId, row, stationKey, materialType, materialIndex) {
+            return new Promise((resolve, reject) => {
+                // 获取之前装填的槽位信息
+                const filledSlots = row.data('filled-slots') || [];
+                
+                if (filledSlots.length === 0) {
+                    // 如果没有保存的槽位信息，尝试从转移仓中查找相关槽位
+                    $.ajax({
+                        url: `/api/containers/${containerId}/`,
+                        method: 'GET',
+                        success: function (response) {
+                            if (response && response.ok && response.container) {
+                                const container = response.container;
+                                const slots = container.slots || [];
+                                
+                                // 查找包含当前物料类型的槽位
+                                const slotsToClear = [];
+                                slots.forEach((slot, index) => {
+                                    if (slot.occupied && slot.material_kind === materialType) {
+                                        slotsToClear.push(index);
+                                    }
+                                });
+                                
+                                // 清空找到的槽位
+                                const clearPromises = slotsToClear.map(slotIndex => {
+                                    return updateContainerSlot(containerId, slotIndex, null, stationKey, materialType, materialIndex);
+                                });
+                                
+                                Promise.all(clearPromises)
+                                    .then(() => resolve())
+                                    .catch(reject);
+                            } else {
+                                reject(new Error('获取转移仓信息失败'));
+                            }
+                        },
+                        error: function () {
+                            reject(new Error('获取转移仓信息失败'));
+                        }
+                    });
+                } else {
+                    // 使用保存的槽位信息清空
+                    const clearPromises = filledSlots.map(slotIndex => {
+                        return updateContainerSlot(containerId, slotIndex, null, stationKey, materialType, materialIndex);
+                    });
+                    
+                    Promise.all(clearPromises)
+                        .then(() => resolve())
+                        .catch(reject);
+                }
+            });
+        }
+
+        // 根据名称获取物料ID和类型
+        function getMaterialIdByName(name) {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: '/api/materials/by-name/',
+                    method: 'GET',
+                    data: { name },
+                    success: function (resp) {
+                        if (resp && resp.ok && resp.material) {
+                            resolve({
+                                id: resp.material.id,
+                                kind: resp.material.kind
+                            });
+                        } else {
+                            resolve(null);
+                        }
+                    },
+                    error: function () {
+                        reject(new Error('获取物料信息失败'));
+                    }
+                });
+            });
+        }
+
+        // 根据名称获取转移仓ID
+        function getContainerIdByName(name) {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: '/api/containers/names/',
+                    method: 'GET',
+                    success: function (resp) {
+                        const list = (resp && resp.containers) || [];
+                        const found = list.find(i => i && i.name === name);
+                        resolve(found ? found.id : null);
+                    },
+                    error: function () {
+                        reject(new Error('获取转移仓信息失败'));
+                    }
+                });
+            });
+        }
+
+        // 更新物料的当前转移仓名称
+        function updateMaterialCurrentContainer(materialId, materialKind, containerName) {
+            return new Promise((resolve, reject) => {
+                const payload = {
+                    current_container_name: containerName || null
+                };
+
+                console.log('更新物料转移仓名称请求:', {
+                    url: `/api/materials/${materialKind}/${materialId}/update/`,
+                    payload: payload
+                });
+
+                $.ajax({
+                    url: `/api/materials/${materialKind}/${materialId}/update/`,
+                    method: 'POST',
+                    data: JSON.stringify(payload),
+                    contentType: 'application/json',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    success: function (resp) {
+                        if (resp && resp.ok) {
+                            resolve();
+                        } else {
+                            console.error('更新物料响应错误:', resp);
+                            reject(new Error(resp.message || '更新物料信息失败'));
+                        }
+                    },
+                    error: function (xhr) {
+                        console.error('更新物料请求失败:', xhr.responseText);
+                        if (xhr.status === 403) {
+                            reject(new Error('权限不足，请确保已登录并具有相应权限'));
+                        } else if (xhr.status === 400) {
+                            try {
+                                const resp = JSON.parse(xhr.responseText);
+                                reject(new Error(resp.message || '请求参数错误'));
+                            } catch (e) {
+                                reject(new Error('请求格式错误'));
+                            }
+                        } else {
+                            reject(new Error('更新物料信息失败'));
+                        }
+                    }
+                });
+            });
+        }
+
+        // 更新转移仓槽位
+        function updateContainerSlot(containerId, slotPosition, materialName, stationKey, materialType, materialIndex) {
+            return new Promise((resolve, reject) => {
+                const url = `/api/containers/${containerId}/fill-slot/`;
+
+                if (materialName === null || materialName === undefined) {
+                    // 清空槽位 - 直接清空
+                    console.log('清空槽位请求:', {
+                        url: url,
+                        slot_index: slotPosition,
+                        material_id: null,
+                        material_kind: null,
+                        preparation_id: preparationList ? preparationList.id : null,
+                        station_key: stationKey,
+                        material_type: materialType,
+                        material_index: materialIndex
+                    });
+
+                    $.ajax({
+                        url: url,
+                        method: 'POST',
+                        contentType: 'application/json',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        data: JSON.stringify({
+                            slot_index: slotPosition,
+                            material_id: null,
+                            material_kind: null,
+                            preparation_id: preparationList ? preparationList.id : null,
+                            station_key: stationKey,
+                            material_type: materialType,
+                            material_index: materialIndex,
+                            target_station_key: stationKey  // 传递工站信息用于目标工站校验
+                        }),
+                        success: function (resp) {
+                            if (resp && resp.success) {
+                                resolve();
+                            } else {
+                                console.error('API响应错误:', resp);
+                                reject(new Error(resp.message || '清空槽位失败'));
+                            }
+                        },
+                        error: function (xhr) {
+                            console.error('清空槽位请求失败:', xhr.responseText);
+                            if (xhr.status === 403) {
+                                reject(new Error('权限不足，请确保已登录并具有相应权限'));
+                            } else if (xhr.status === 400) {
+                                try {
+                                    const resp = JSON.parse(xhr.responseText);
+                                    reject(new Error(resp.message || '请求参数错误'));
+                                } catch (e) {
+                                    reject(new Error('请求格式错误'));
+                                }
+                            } else {
+                                reject(new Error('清空槽位失败'));
+                            }
+                        }
+                    });
+                } else if (materialName) {
+                    // 装填槽位
+                    // 判断是否为需要槽位的物料类型
+                    const needsSlot = ['test_tube_15', 'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'].includes(materialType);
+                    
+                    if (needsSlot) {
+                        // 需要槽位的物料：查找物料信息
+                        getMaterialIdByName(materialName)
+                            .then(materialData => {
+                                if (!materialData || !materialData.id) {
+                                    reject(new Error('找不到对应的物料'));
+                                    return;
+                                }
+
+                                const materialId = materialData.id;
+                                const materialKind = materialData.kind;
+
+                                $.ajax({
+                                    url: url,
+                                    method: 'POST',
+                                    contentType: 'application/json',
+                                    headers: {
+                                        'X-CSRFToken': '{{ csrf_token }}'
+                                    },
+                                    data: JSON.stringify({
+                                        slot_index: slotPosition,
+                                        material_id: materialId,
+                                        material_kind: materialKind,
+                                        preparation_id: preparationList ? preparationList.id : null,
+                                        station_key: stationKey,
+                                        material_type: materialType,
+                                        material_index: materialIndex,
+                                        target_station_key: stationKey  // 传递工站信息用于目标工站校验
+                                    }),
+                                    success: function (resp) {
+                                        if (resp && resp.success) {
+                                            resolve();
+                                        } else {
+                                            reject(new Error(resp.message || '装填槽位失败'));
+                                        }
+                                    },
+                                    error: function (xhr) {
+                                        if (xhr.status === 403) {
+                                            reject(new Error('权限不足，请确保已登录并具有相应权限'));
+                                        } else {
+                                            reject(new Error('装填槽位失败'));
+                                        }
+                                    }
+                                });
+                            })
+                            .catch(reject);
+                    } else {
+                        // 数量管理的物料：直接装填，不需要查找物料信息
+                        console.log('装填数量管理物料槽位请求:', {
+                            url: url,
+                            slot_index: slotPosition,
+                            material_name: materialName,
+                            material_type: materialType,
+                            preparation_id: preparationList ? preparationList.id : null,
+                            station_key: stationKey,
+                            material_index: materialIndex
+                        });
+
+                        $.ajax({
+                            url: url,
+                            method: 'POST',
+                            contentType: 'application/json',
+                            headers: {
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            data: JSON.stringify({
+                                slot_index: slotPosition,
+                                material_id: null,  // 数量管理物料不需要物料ID
+                                material_kind: materialType,  // 使用物料类型作为kind
+                                material_name: materialName,  // 传递物料名称用于显示
+                                preparation_id: preparationList ? preparationList.id : null,
+                                station_key: stationKey,
+                                material_type: materialType,
+                                material_index: materialIndex,
+                                target_station_key: stationKey  // 传递工站信息用于目标工站校验
+                            }),
+                            success: function (resp) {
+                                if (resp && resp.success) {
+                                    resolve();
+                                } else {
+                                    reject(new Error(resp.message || '装填槽位失败'));
+                                }
+                            },
+                            error: function (xhr) {
+                                console.error('装填数量管理物料槽位请求失败:', xhr.responseText);
+                                if (xhr.status === 403) {
+                                    reject(new Error('权限不足，请确保已登录并具有相应权限'));
+                                } else if (xhr.status === 400) {
+                                    try {
+                                        const resp = JSON.parse(xhr.responseText);
+                                        reject(new Error(resp.message || '请求参数错误'));
+                                    } catch (e) {
+                                        reject(new Error('请求格式错误'));
+                                    }
+                                } else {
+                                    reject(new Error('装填槽位失败'));
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    reject(new Error('无效的物料名称'));
+                }
+            });
+        }
+
+        // 装填成功后更新行显示
+        function updateRowAfterFill(row, materialName, containerName, slotPosition) {
+            // 保存绑定信息到行数据
+            row.data('material-name', materialName);
+            row.data('container-name', containerName);
+            row.data('slot-position', slotPosition);
+
+            // 更新行的data-container-name属性
+            row.attr('data-container-name', containerName);
+            row.find('.row-checkbox').attr('data-container-name', containerName);
+
+            // 隐藏装填按钮，显示解绑按钮
+            row.find('.fill-btn').hide();
+            row.find('.unbind-btn').show();
+
+            // 更新输入框值并设为只读
+            row.find('input[name="filled_material_name"]').val(materialName).prop('readonly', true);
+            row.find('input[name="container_name"]').val(containerName).prop('readonly', true);
+            
+            // 对于需要槽位的物料，更新槽位输入框
+            const slotInput = row.find('input[name="slot_position"]');
+            if (slotInput.length > 0) {
+                slotInput.val(slotPosition).prop('readonly', true);
+            }
+        }
+
+        // 解绑后更新行显示
+        function updateRowAfterUnbind(row) {
+            // 清空行数据
+            row.removeData('material-name');
+            row.removeData('container-name');
+            row.removeData('slot-position');
+            row.removeData('filled-slots');
+            row.removeData('filled-quantity');
+
+            // 清空行的data-container-name属性
+            row.attr('data-container-name', '');
+            row.find('.row-checkbox').attr('data-container-name', '');
+
+            // 显示装填按钮，隐藏解绑按钮
+            row.find('.fill-btn').show();
+            row.find('.unbind-btn').hide();
+
+            // 恢复输入框可编辑并清空
+            row.find('input[name="filled_material_name"]').val('').prop('readonly', false);
+            row.find('input[name="container_name"]').val('').prop('readonly', false);
+            
+            // 对于需要槽位的物料，清空槽位输入框
+            const slotInput = row.find('input[name="slot_position"]');
+            if (slotInput.length > 0) {
+                slotInput.val('').prop('readonly', false);
+            }
+        }
+
+    });
+</script>
+{% endblock %}

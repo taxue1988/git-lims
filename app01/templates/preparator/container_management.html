@@ -1,0 +1,607 @@
+{% extends 'preparator_base.html' %}
+
+{% block title %}备料员-填充转移仓{% endblock %}
+
+
+{% block main_content %}
+
+<!-- 转移仓管理页面 -->
+<section id="container-management">
+    <div class="container-fluid">
+        <h1 class="h3 mb-4 text-gray-800">转移仓管理</h1>
+
+        <!-- 转移仓统计（13种类型） -->
+        <div class="col-lg-12 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">转移仓统计</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>总转移仓</th>
+                                    <th>15mL试管</th>
+                                    <th>铼羽粉筒</th>
+                                    <th>晶泰粉筒</th>
+                                    <th>150mL试剂瓶</th>
+                                    <th>1mL枪头</th>
+                                    <th>5mL枪头</th>
+                                    <th>10mL枪头</th>
+                                    <th>采样滤头</th>
+                                    <th>过滤滤头</th>
+                                    <th>混合瓶</th>
+                                    <th>采样瓶</th>
+                                    <th>进样柱</th>
+                                    <th>色谱柱</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td id="stat_total" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_test_tube_15" data-code="container_test_tube_15" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_laiyu_powder" data-code="container_laiyu_powder" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_jingtai_powder" data-code="container_jingtai_powder" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_reagent_bottle_150" data-code="container_reagent_bottle_150" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_tip_1" data-code="container_tip_1" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_tip_5" data-code="container_tip_5" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_tip_10" data-code="container_tip_10" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_sample_filter" data-code="container_sample_filter" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_filtration_filter" data-code="container_filtration_filter" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_mixture_tube" data-code="container_mixture_tube" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_sample_tube" data-code="container_sample_tube" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_sample_cylinder" data-code="container_sample_cylinder" class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_chromatographic_cylinder" data-code="container_chromatographic_cylinder" class="stat-code" style="cursor: pointer;">0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- 搜索和新增转移仓 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">转移仓操作</h6>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <a id="add-experiment-btn" class="btn btn-success" href="javascript:void(0)">
+                        <i class="fas fa-plus me-1"></i>新增转移仓
+                    </a>
+                    <button id="refresh-container-btn" class="btn btn-outline-secondary">
+                        <i class="fas fa-rotate"></i> 刷新列表
+                    </button>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-nowrap">
+                    <input type="text" id="search-experiment-name" class="form-control" placeholder="按转移仓名称搜索"
+                        style="min-width: 220px;">
+                    <button id="search-experiment-btn" class="btn btn-primary" style="min-width: 110px;">
+                        <i class="fas fa-search me-1"></i>搜索
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 转移仓列表 -->
+    <div class="card shadow mb-4 experiment-table">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">转移仓列表</h6>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="batch-approve-btn">
+                    <i class="fas fa-check me-1"></i>批量导出名称
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:40px;">
+                                <input type="checkbox" id="select-all-containers">
+                            </th>
+                            <th>转移仓名称</th>
+                            <th>类型</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="container-list-body">
+                        <!-- 转移仓数据将通过JavaScript动态加载 -->
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+    </div>
+</section>
+
+<!-- 新增转移仓 Modal -->
+<div class="modal fade" id="createContainerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新增转移仓</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">转移仓名称</label>
+                    <input type="text" class="form-control" id="containerNameInput" placeholder="自动生成（无需填写）" disabled>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">类型规范</label>
+                    <select id="containerSpecSelect" class="form-select">
+                        <option value="">加载中...</option>
+                    </select>
+                    <div class="form-text" id="specHint"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">创建数量</label>
+                    <input type="number" class="form-control" id="createCountInput" value="1" min="1" max="100">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">当前工站（可选）</label>
+                    <input type="number" class="form-control" id="stationIdInput" placeholder="输入工站ID（可留空）">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">目标工站（可选）</label>
+                    <input type="number" class="form-control" id="stationIdInput" placeholder="输入工站ID（可留空）">
+                </div>
+                <div class="text-danger small" id="createError" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmCreateBtn">创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 查看转移仓详情 Modal -->
+<div class="modal fade" id="containerDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">转移仓详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <div class="mb-2"><strong>名称：</strong><span data-field="name"></span></div>
+                        <div class="mb-2"><strong>状态：</strong><span data-field="state"></span></div>
+                        <div class="mb-2"><strong>类型：</strong><span data-field="spec"></span></div>
+                        <div class="mb-2"><strong>当前工站：</strong><span data-field="station"></span></div>
+                        <div class="mb-2"><strong>目标工站：</strong><span data-field="target_station"></span></div>
+                        <div class="mb-2"><strong>创建时间：</strong><span data-field="created"></span></div>
+                        <div class="mb-2"><strong>更新时间：</strong><span data-field="updated"></span></div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <img data-field="qr" alt="QR" style="width:160px;height:160px;border:1px solid #eee;border-radius:6px;" />
+                        <div class="small text-muted mt-1">扫码标识：名称</div>
+                    </div>
+                </div>
+                <hr/>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>槽位</th>
+                                <th>占用</th>
+                                <th>物料类型</th>
+                                <th>物料名称</th>
+                                <th>附加信息</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail-slots-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+ </div>
+
+<script>
+    (function () {
+        /**
+         * 获取指定名称的 Cookie 值
+         * @param {string} name Cookie 名称
+         * @returns {string|undefined} 匹配到的 Cookie 值，未找到返回 undefined
+         */
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        const addBtn = document.getElementById('add-experiment-btn');
+        const specSelect = document.getElementById('containerSpecSelect');
+        const specHint = document.getElementById('specHint');
+        const nameInput = document.getElementById('containerNameInput');
+        const stationInput = document.getElementById('stationIdInput');
+        const countInput = document.getElementById('createCountInput');
+        const createError = document.getElementById('createError');
+        const confirmBtn = document.getElementById('confirmCreateBtn');
+        const tableBody = document.getElementById('container-list-body');
+
+        let specsCache = [];
+        /**
+         * 渲染转移仓列表到表格
+         * @param {Array<{id:number,name:string,spec_name:string,capacity:number,state:string,created_at:string}>} items 转移仓数据列表
+         * @returns {void}
+         */
+        function renderContainers(items) {
+            tableBody.innerHTML = '';
+            (items || []).forEach(function (it) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                <td><input type="checkbox" class="row-check" data-id="${it.id}"></td>
+                <td>${it.name}</td>
+                <td>${it.spec_name}（${it.capacity}）</td>
+                <td>${it.state}</td>
+                <td>${it.created_at}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary me-1" title="查看" data-action="view" data-id="${it.id}">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning me-1" title="清空" data-action="clear" data-id="${it.id}">
+                        <i class="fas fa-broom"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" title="删除" data-action="delete" data-id="${it.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+                tableBody.appendChild(tr);
+            });
+            // 绑定操作按钮
+            tableBody.querySelectorAll('button[data-action]').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    const id = this.getAttribute('data-id');
+                    const action = this.getAttribute('data-action');
+                    if(action === 'view'){
+                        openDetailModal(id);
+                    } else if(action === 'clear'){
+                        doClear(id);
+                    } else if(action === 'delete'){
+                        doDelete(id);
+                    }
+                });
+            });
+        }
+
+        /**
+         * 从后端加载转移仓列表
+         * @param {Object} [params] 过滤参数，如 {name?:string, spec_code?:string}
+         * @returns {void}
+         */
+        function loadContainers(params) {
+            const usp = new URLSearchParams(params || {});
+            const url = '/api/containers/' + (usp.toString() ? ('?' + usp.toString()) : '');
+            fetch(url, { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.ok) {
+                        renderContainers(data.containers || []);
+                    }
+                })
+                .catch(() => { });
+        }
+
+        /**
+         * 加载容器规格下拉数据，并填充到下拉框
+         * @returns {void}
+         */
+        function loadSpecs() {
+            specSelect.innerHTML = '<option value="">加载中...</option>';
+            fetch('/api/containers/specs/', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.ok) {
+                        specsCache = data.specs || [];
+                        specSelect.innerHTML = '<option value="">请选择类型规范</option>' + specsCache.map(function (s) {
+                            return `<option value="${s.id}">${s.name}（容量${s.capacity}，允许：${s.allowed_material_kind}）</option>`
+                        }).join('');
+                    } else {
+                        specSelect.innerHTML = '<option value="">加载失败</option>';
+                    }
+                })
+                .catch(() => { specSelect.innerHTML = '<option value="">加载失败</option>'; });
+        }
+
+        specSelect && specSelect.addEventListener('change', function () {
+            const id = this.value;
+            const found = specsCache.find(function (s) { return String(s.id) === String(id); });
+            specHint.textContent = found ? `容量：${found.capacity}，允许物料：${found.allowed_material_kind}` : '';
+        });
+
+        addBtn && addBtn.addEventListener('click', function () {
+            createError.style.display = 'none';
+            nameInput.value = '';
+            stationInput.value = '';
+            countInput.value = '1';
+            specSelect.innerHTML = '<option value="">加载中...</option>';
+            loadSpecs();
+            const modalEl = document.getElementById('createContainerModal');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+            confirmBtn.onclick = function () {
+                const specId = specSelect.value;
+                const stationId = (stationInput.value || '').trim();
+                const count = Number(countInput.value || '1');
+                if (!specId) {
+                    createError.textContent = '请选择类型规范';
+                    createError.style.display = 'block';
+                    return;
+                }
+                if (!Number.isFinite(count) || count < 1) {
+                    createError.textContent = '数量需为正整数';
+                    createError.style.display = 'block';
+                    return;
+                }
+                createError.style.display = 'none';
+                fetch('/api/containers/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken || ''
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        spec_id: Number(specId),
+                        station_id: stationId ? Number(stationId) : null,
+                        count: count
+                    })
+                }).then(r => r.json()).then(data => {
+                    if (data && data.ok) {
+                        modal.hide();
+                        loadContainers();
+                        refreshStats();
+                    } else {
+                        createError.textContent = (data && data.message) || '创建失败';
+                        createError.style.display = 'block';
+                    }
+                }).catch(err => {
+                    createError.textContent = '网络错误';
+                    createError.style.display = 'block';
+                });
+            };
+        });
+
+        // 搜索按钮绑定过滤
+        const searchBtn = document.getElementById('search-experiment-btn');
+        const nameInputEl = document.getElementById('search-experiment-name');
+        searchBtn && searchBtn.addEventListener('click', function(){
+            loadContainers({
+                name: (nameInputEl && nameInputEl.value) || ''
+            });
+            refreshStats();
+        });
+
+        // 统计
+        /**
+         * 刷新统计数据（总数与各规格数量），并渲染到统计表格
+         * @returns {void}
+         */
+        function refreshStats(){
+            fetch('/api/containers/stats/', {credentials: 'same-origin'})
+                .then(r=>r.json()).then(data=>{
+                    if(!(data && data.ok)) return;
+                    const totalEl = document.getElementById('stat_total');
+                    if(totalEl) totalEl.textContent = data.total || 0;
+                    const map = data.by_code || {};
+                    const keys = [
+                        'container_test_tube_15',
+                        'container_laiyu_powder',
+                        'container_jingtai_powder',
+                        'container_reagent_bottle_150',
+                        'container_tip_1',
+                        'container_tip_5',
+                        'container_tip_10',
+                        'container_sample_filter',
+                        'container_filtration_filter',
+                        'container_mixture_tube',
+                        'container_sample_tube',
+                        'container_sample_cylinder',
+                        'container_chromatographic_cylinder',
+                    ];
+                    keys.forEach(function(code){
+                        const el = document.getElementById('stat_' + code);
+                        if(el) el.textContent = map[code] || 0;
+                    });
+                }).catch(()=>{});
+        }
+
+        // 选择全选
+        const selectAll = document.getElementById('select-all-containers');
+        selectAll && selectAll.addEventListener('change', function(){
+            const rows = tableBody.querySelectorAll('input.row-check');
+            rows.forEach(cb => { cb.checked = selectAll.checked; });
+        });
+
+        // 初次加载列表 & 统计
+        loadContainers();
+        refreshStats();
+
+        // 详情模态框及渲染
+        /**
+         * 打开转移仓详情模态框并渲染详情信息与槽位表格
+         * @param {number|string} containerId 转移仓 ID
+         * @returns {void}
+         */
+        function openDetailModal(containerId){
+            fetch('/api/containers/' + containerId + '/', {credentials: 'same-origin'})
+                .then(r=>r.json()).then(data=>{
+                    if(!(data && data.ok)) return;
+                    const c = data.container;
+                    const modalEl = document.getElementById('containerDetailModal');
+                    if(!modalEl) return;
+                    // 填充基本信息
+                    modalEl.querySelector('[data-field="name"]').textContent = c.name || '';
+                    modalEl.querySelector('[data-field="state"]').textContent = c.state || '';
+                    modalEl.querySelector('[data-field="spec"]').textContent = `${c.spec_name}（${c.spec_code}，容量${c.capacity}）`;
+                    modalEl.querySelector('[data-field="station"]').textContent = c.current_station || '';
+                    modalEl.querySelector('[data-field="target_station"]').textContent = c.target_station || '';
+                    modalEl.querySelector('[data-field="created"]').textContent = c.created_at || '';
+                    modalEl.querySelector('[data-field="updated"]').textContent = c.updated_at || '';
+                    // 生成二维码（使用简单的第三方API图片，或占位）
+                    const qrImg = modalEl.querySelector('[data-field="qr"]');
+                    if(qrImg){
+                        const qrText = encodeURIComponent(c.qr_text || c.name || '');
+                        qrImg.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + qrText;
+                        qrImg.alt = c.name || '';
+                    }
+                    // 槽位渲染
+                    const slotsBody = modalEl.querySelector('#detail-slots-body');
+                    if(slotsBody){
+                        slotsBody.innerHTML = '';
+                        (c.slots || []).forEach(function(s){
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${s.index}</td>
+                                <td>${s.occupied ? '是' : '否'}</td>
+                                <td>${s.material_type || ''}</td>
+                                <td>${s.material_name || ''}</td>
+                                <td><pre class="mb-0" style="white-space: pre-wrap;">${s.extra ? JSON.stringify(s.extra, null, 2) : ''}</pre></td>
+                            `;
+                            slotsBody.appendChild(tr);
+                        });
+                    }
+
+                    const modal = new bootstrap.Modal(modalEl);
+                    modal.show();
+                });
+        }
+
+        /**
+         * 清空指定转移仓的内部物料和目标工站
+         * 会弹出确认提示，成功后刷新列表与统计
+         * @param {number|string} id 转移仓 ID
+         * @returns {void}
+         */
+        function doClear(id){
+            if(!confirm('确定要清空该转移仓内部物料和目标工站吗？')) return;
+            fetch(`/api/containers/${id}/clear/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrftoken || '' },
+                credentials: 'same-origin'
+            }).then(r=>r.json()).then(data=>{
+                if(!(data && data.ok)){
+                    alert((data && data.message) || '清空失败');
+                    return;
+                }
+                loadContainers();
+                refreshStats();
+            }).catch(()=>{ alert('网络错误'); });
+        }
+
+        /**
+         * 删除指定转移仓
+         * 会弹出不可恢复的确认提示，成功后刷新列表与统计
+         * @param {number|string} id 转移仓 ID
+         * @returns {void}
+         */
+        function doDelete(id){
+            if(!confirm('删除不可恢复，确定要删除该转移仓吗？')) return;
+            fetch(`/api/containers/${id}/delete/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': csrftoken || '' },
+                credentials: 'same-origin'
+            }).then(r=>r.json()).then(data=>{
+                if(!(data && data.ok)){
+                    alert((data && data.message) || '删除失败');
+                    return;
+                }
+                loadContainers();
+                refreshStats();
+            }).catch(()=>{ alert('网络错误'); });
+        }
+
+        // 批量导出名称
+        const batchExportBtn = document.getElementById('batch-approve-btn');
+        /**
+         * 批量导出所选转移仓的名称。
+         * 从已勾选的行收集 ID，向后端请求导出文件并触发浏览器下载。
+         */
+        batchExportBtn && batchExportBtn.addEventListener('click', function(){
+            const selected = Array.from(document.querySelectorAll('input.row-check:checked')).map(cb => Number(cb.getAttribute('data-id'))).filter(Boolean);
+            if(selected.length === 0){
+                alert('请先勾选要导出的转移仓');
+                return;
+            }
+            fetch('/api/containers/export/names/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken || ''
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ ids: selected })
+            }).then(async r => {
+                if(r.ok){
+                    const blob = await r.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    // 从响应头推测文件名不一定可得，这里给默认
+                    a.download = 'containers_export';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    const data = await r.json().catch(()=>({message:'导出失败'}));
+                    alert(data.message || '导出失败');
+                }
+            }).catch(()=>{ alert('网络错误'); });
+        });
+
+        // 统计表点击过滤列表
+        /**
+         * 绑定统计表格点击事件：
+         * - 点击“总转移仓”按名称过滤
+         * - 点击具体规格按名称+规格过滤
+         * @returns {void}
+         */
+        function bindStatClicks(){
+            const nameInputEl = document.getElementById('search-experiment-name');
+            // 全部
+            const totalEl = document.getElementById('stat_total');
+            totalEl && totalEl.addEventListener('click', function(){
+                loadContainers({
+                    name: (nameInputEl && nameInputEl.value) || ''
+                });
+            });
+            // 各类型
+            const codeCells = document.querySelectorAll('.stat-code');
+            codeCells.forEach(function(td){
+                td.addEventListener('click', function(){
+                    const code = td.getAttribute('data-code') || '';
+                    loadContainers({
+                        name: (nameInputEl && nameInputEl.value) || '',
+                        spec_code: code
+                    });
+                });
+            });
+        }
+        bindStatClicks();
+    })();
+</script>
+
+{% endblock %}

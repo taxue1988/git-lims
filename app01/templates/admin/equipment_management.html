@@ -1,0 +1,586 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}设备管理 - 自动实验管理系统{% endblock %}
+
+{% block sidebar_menu %}
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_dashboard' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-tachometer-alt fa-lg me-3 text-primary"></i>
+        <span class="text-white">仪表板</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_experiment_tasks' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-vials fa-lg me-3"></i>
+        <span class="text-white">实验任务</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_material_requirements' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-boxes fa-lg me-3 text-warning"></i>
+        <span class="text-white">物料需求</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_user_management' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-users fa-lg me-3 text-success"></i>
+        <span class="text-white">用户管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_equipment_management' %}" class="nav-link active bg-info rounded shadow">
+        <i class="fas fa-flask fa-lg me-3 text-info"></i>
+        <span class="text-white fw-bold">设备管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-chart-bar fa-lg me-3 text-warning"></i>
+        <span class="text-white">数据统计</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-cog fa-lg me-3 text-secondary"></i>
+        <span class="text-white">系统设置</span>
+    </a>
+</li>
+{% endblock %}
+
+{% block main_content %}
+<h1 class="h3 mb-4 text-gray-800">设备管理仪表板</h1>
+
+<!-- 设备管理主要内容 -->
+<div class="row">
+    <!-- 左侧：设备统计 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-info">设备统计</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6 mb-3">
+                        <div class="border-end">
+                            <h4 class="text-primary">{{ total_equipment }}</h4>
+                            <small class="text-muted">总设备数</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <h4 class="text-success">{{ available_equipment }}</h4>
+                        <small class="text-muted">可用设备</small>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <div class="border-end">
+                            <h4 class="text-warning">{{ in_use_equipment }}</h4>
+                            <small class="text-muted">使用中</small>
+                        </div>
+                    </div>
+                    <div class="col-6 mb-3">
+                        <h4 class="text-danger">{{ maintenance_equipment }}</h4>
+                        <small class="text-muted">维护中</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：设备列表 -->
+    <div class="col-lg-8 mb-4">
+        <div class="card shadow h-100">
+            <div class="card-header py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-info">设备列表</h6>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-info btn-sm" id="add-equipment-btn">
+                            <i class="fas fa-plus me-1"></i>添加设备
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm" id="export-equipment-btn">
+                            <i class="fas fa-download me-1"></i>导出设备
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 搜索和筛选 -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <select class="form-select" id="status-filter">
+                            <option value="">所有状态</option>
+                            <option value="available">可用</option>
+                            <option value="in_use">使用中</option>
+                            <option value="maintenance">维护中</option>
+                            <option value="broken">故障</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="type-filter">
+                            <option value="">所有类型</option>
+                            <option value="reactor">反应器</option>
+                            <option value="analyzer">分析仪</option>
+                            <option value="pump">泵</option>
+                            <option value="sensor">传感器</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" id="search-input" placeholder="搜索设备名称或编号...">
+                    </div>
+                </div>
+
+                <!-- 设备列表表格 -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px;">
+                                    <input type="checkbox" id="select-all-equipment">
+                                </th>
+                                <th>设备编号</th>
+                                <th>设备名称</th>
+                                <th>类型</th>
+                                <th>状态</th>
+                                <th>位置</th>
+                                <th>最后维护</th>
+                                <th style="width:120px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="equipment-table-body">
+                            <!-- 设备数据将通过JavaScript动态加载 -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 分页 -->
+                <nav id="pagination-nav" style="display: none;">
+                    <ul class="pagination" id="pagination-ul">
+                        <!-- 分页将通过JavaScript动态生成 -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- 添加/编辑设备模态框 -->
+<div class="modal fade" id="equipment-modal" tabindex="-1" aria-labelledby="equipment-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="equipment-modal-title">添加设备</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="equipment-form">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="equipment_code" class="form-label">设备编号 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="equipment_code" name="equipment_code" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="equipment_name" class="form-label">设备名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="equipment_name" name="equipment_name" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="equipment_type" class="form-label">设备类型</label>
+                                <select class="form-select" id="equipment_type" name="equipment_type">
+                                    <option value="reactor">反应器</option>
+                                    <option value="analyzer">分析仪</option>
+                                    <option value="pump">泵</option>
+                                    <option value="sensor">传感器</option>
+                                    <option value="other">其他</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="equipment_status" class="form-label">设备状态</label>
+                                <select class="form-select" id="equipment_status" name="equipment_status">
+                                    <option value="available">可用</option>
+                                    <option value="in_use">使用中</option>
+                                    <option value="maintenance">维护中</option>
+                                    <option value="broken">故障</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="location" class="form-label">设备位置</label>
+                                <input type="text" class="form-control" id="location" name="location">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="manufacturer" class="form-label">制造商</label>
+                                <input type="text" class="form-control" id="manufacturer" name="manufacturer">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">设备描述</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="purchase_date" class="form-label">购买日期</label>
+                                <input type="date" class="form-control" id="purchase_date" name="purchase_date">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="last_maintenance" class="form-label">最后维护日期</label>
+                                <input type="date" class="form-control" id="last_maintenance" name="last_maintenance">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-info" id="save-equipment-btn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作结果提示模态框 -->
+<div class="modal fade" id="operation-result-modal" tabindex="-1" aria-labelledby="operation-result-title" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="operation-result-title">操作结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="operation-result-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 全局变量
+    let currentPage = 1;
+    let currentStatus = '';
+    let currentType = '';
+    let currentEquipment = null;
+
+    // 页面加载完成后初始化
+    $(document).ready(function() {
+        console.log('设备管理页面加载完成，开始初始化...');
+        
+        // 加载设备列表
+        loadEquipment();
+        
+        // 绑定筛选事件
+        $('#status-filter').on('change', function() {
+            currentStatus = $(this).val();
+            currentPage = 1;
+            loadEquipment();
+        });
+        
+        $('#type-filter').on('change', function() {
+            currentType = $(this).val();
+            currentPage = 1;
+            loadEquipment();
+        });
+        
+        // 绑定搜索事件
+        $('#search-input').on('keypress', function(e) {
+            if (e.which === 13) {
+                currentPage = 1;
+                loadEquipment();
+            }
+        });
+        
+        // 全选/取消全选
+        $('#select-all-equipment').on('change', function() {
+            const checkboxes = $('.equipment-checkbox');
+            checkboxes.prop('checked', this.checked);
+        });
+        
+        // 添加设备按钮
+        $('#add-equipment-btn').on('click', function() {
+            showEquipmentModal();
+        });
+        
+        // 保存设备按钮
+        $('#save-equipment-btn').on('click', function() {
+            saveEquipment();
+        });
+    });
+
+    // 显示设备模态框
+    function showEquipmentModal(equipment = null) {
+        currentEquipment = equipment;
+        
+        if (equipment) {
+            $('#equipment-modal-title').text('编辑设备');
+            $('#equipment_code').val(equipment.equipment_code);
+            $('#equipment_name').val(equipment.equipment_name);
+            $('#equipment_type').val(equipment.equipment_type);
+            $('#equipment_status').val(equipment.equipment_status);
+            $('#location').val(equipment.location);
+            $('#manufacturer').val(equipment.manufacturer);
+            $('#description').val(equipment.description);
+            $('#purchase_date').val(equipment.purchase_date);
+            $('#last_maintenance').val(equipment.last_maintenance);
+        } else {
+            $('#equipment-modal-title').text('添加设备');
+            $('#equipment-form')[0].reset();
+        }
+        
+        const modal = new bootstrap.Modal(document.getElementById('equipment-modal'));
+        modal.show();
+    }
+
+    // 保存设备
+    function saveEquipment() {
+        const formData = new FormData($('#equipment-form')[0]);
+        const data = Object.fromEntries(formData);
+        
+        // 显示加载状态
+        $('#save-equipment-btn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 保存中...');
+        
+        const url = currentEquipment ? `/api/equipment/${currentEquipment.id}/update/` : '/api/equipment/create/';
+        const method = currentEquipment ? 'PUT' : 'POST';
+        
+        $.ajax({
+            url: url,
+            method: method,
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': getCSRFToken()
+            },
+            data: JSON.stringify(data),
+            success: function(response) {
+                if (response.ok) {
+                    showOperationResult('success', currentEquipment ? '设备更新成功' : '设备添加成功');
+                    bootstrap.Modal.getInstance(document.getElementById('equipment-modal')).hide();
+                    loadEquipment();
+                } else {
+                    showOperationResult('danger', `操作失败: ${response.message}`);
+                }
+            },
+            error: function(xhr, status, error) {
+                let errorMsg = '网络错误';
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    errorMsg = response.message || errorMsg;
+                } catch (e) {
+                    console.error('解析错误响应失败:', e);
+                }
+                showOperationResult('danger', `操作失败: ${errorMsg}`);
+            },
+            complete: function() {
+                $('#save-equipment-btn').prop('disabled', false).html('保存');
+            }
+        });
+    }
+
+    // 加载设备数据
+    function loadEquipment() {
+        const searchTerm = $('#search-input').val();
+        
+        const params = new URLSearchParams({
+            page: currentPage
+        });
+        
+        if (currentStatus) {
+            params.append('status', currentStatus);
+        }
+        
+        if (currentType) {
+            params.append('type', currentType);
+        }
+        
+        if (searchTerm) {
+            params.append('search', searchTerm);
+        }
+        
+        $('#equipment-table-body').html('<tr><td colspan="8" class="text-center">加载中...</td></tr>');
+        
+        $.ajax({
+            url: '/api/equipment/',
+            method: 'GET',
+            data: params.toString(),
+            dataType: 'json',
+            success: function(response) {
+                if (response.ok) {
+                    renderEquipment(response.equipment);
+                    renderPagination(response);
+                } else {
+                    $('#equipment-table-body').html('<tr><td colspan="8" class="text-center text-danger">加载失败: ' + response.message + '</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#equipment-table-body').html('<tr><td colspan="8" class="text-center text-danger">网络错误: ' + error + '</td></tr>');
+            }
+        });
+    }
+
+    // 渲染设备列表
+    function renderEquipment(equipment) {
+        if (equipment.length === 0) {
+            $('#equipment-table-body').html('<tr><td colspan="8" class="text-center">暂无设备</td></tr>');
+            return;
+        }
+        
+        let html = '';
+        equipment.forEach(function(item) {
+            const statusClass = getStatusClass(item.equipment_status);
+            const typeClass = getTypeClass(item.equipment_type);
+            
+            html += `
+                <tr>
+                    <td>
+                        <input type="checkbox" class="equipment-checkbox" value="${item.id}">
+                    </td>
+                    <td>${item.equipment_code}</td>
+                    <td>${item.equipment_name}</td>
+                    <td><span class="badge ${typeClass}">${getTypeName(item.equipment_type)}</span></td>
+                    <td><span class="badge ${statusClass}">${getStatusName(item.equipment_status)}</span></td>
+                    <td>${item.location || '-'}</td>
+                    <td>${item.last_maintenance || '未记录'}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="viewEquipment(${item.id})">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm" onclick="editEquipment(${item.id})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-warning btn-sm" onclick="maintainEquipment(${item.id})">
+                                <i class="fas fa-tools"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteEquipment(${item.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        $('#equipment-table-body').html(html);
+    }
+
+    // 渲染分页
+    function renderPagination(data) {
+        if (data.total_pages <= 1) {
+            $('#pagination-nav').hide();
+            return;
+        }
+        
+        let html = '';
+        
+        if (data.has_previous) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${data.current_page - 1})">&laquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&laquo;</span></li>`;
+        }
+        
+        for (let i = 1; i <= data.total_pages; i++) {
+            if (i === data.current_page) {
+                html += `<li class="page-item active"><span class="page-link">${i}</span></li>`;
+            } else {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${i})">${i}</a></li>`;
+            }
+        }
+        
+        if (data.has_next) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${data.current_page + 1})">&raquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&raquo;</span></li>`;
+        }
+        
+        $('#pagination-ul').html(html);
+        $('#pagination-nav').show();
+    }
+
+    // 跳转到指定页面
+    function goToPage(page) {
+        currentPage = page;
+        loadEquipment();
+    }
+
+    // 获取状态对应的CSS类
+    function getStatusClass(status) {
+        switch (status) {
+            case 'available': return 'bg-success';
+            case 'in_use': return 'bg-warning';
+            case 'maintenance': return 'bg-info';
+            case 'broken': return 'bg-danger';
+            default: return 'bg-secondary';
+        }
+    }
+
+    // 获取状态名称
+    function getStatusName(status) {
+        switch (status) {
+            case 'available': return '可用';
+            case 'in_use': return '使用中';
+            case 'maintenance': return '维护中';
+            case 'broken': return '故障';
+            default: return '未知';
+        }
+    }
+
+    // 获取类型对应的CSS类
+    function getTypeClass(type) {
+        switch (type) {
+            case 'reactor': return 'bg-primary';
+            case 'analyzer': return 'bg-success';
+            case 'pump': return 'bg-warning';
+            case 'sensor': return 'bg-info';
+            default: return 'bg-secondary';
+        }
+    }
+
+    // 获取类型名称
+    function getTypeName(type) {
+        switch (type) {
+            case 'reactor': return '反应器';
+            case 'analyzer': return '分析仪';
+            case 'pump': return '泵';
+            case 'sensor': return '传感器';
+            default: return '其他';
+        }
+    }
+
+    // 设备操作函数
+    function viewEquipment(equipmentId) {
+        showAlert('查看设备详情功能待实现', 'info');
+    }
+
+    function editEquipment(equipmentId) {
+        showAlert('编辑设备功能待实现', 'info');
+    }
+
+    function maintainEquipment(equipmentId) {
+        showAlert('设备维护功能待实现', 'info');
+    }
+
+    function deleteEquipment(equipmentId) {
+        if (confirm('确定要删除此设备吗？此操作不可恢复！')) {
+            showAlert('删除设备功能待实现', 'info');
+        }
+    }
+</script>
+{% endblock %}

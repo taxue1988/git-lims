@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>{% block title %}自动实验管理系统{% endblock %}</title>
+    <script src="https://res.gemcoder.com/js/reload.js"></script>
+    <!-- 使用本地Bootstrap文件 -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'plugins/bootstrap-5.3.0-alpha1-dist/css/bootstrap.css' %}">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <link rel="stylesheet" href="{% static 'css/user-dashboard.css' %}">
+    {% block extra_css %}{% endblock %}
+    <style>
+        /* 自定义滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 自定义样式 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8f9fa;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, #343a40 0%, #212529 100%);
+            color: white;
+            height: 100%;
+            position: fixed;
+            top: 56px; /* 高于顶部导航栏 */
+            left: 0;
+            bottom: 0;
+            width: 250px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 3px 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            margin-top: 56px; /* 高于顶部导航栏 */
+            height: calc(100vh - 56px);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .nav-link {
+            transition: all 0.3s ease;
+            color: #e9ecef;
+            padding: 12px 15px;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left: 3px solid #0d6efd;
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: rgba(13, 110, 253, 0.2);
+            color: white;
+            border-left: 3px solid #0d6efd;
+        }
+
+        .sidebar h4 {
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-weight: 600;
+        }
+
+        /* 为导航图标添加动画效果 */
+        .nav-link i {
+            transition: transform 0.3s ease;
+        }
+
+        .nav-link:hover i {
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <img src="{% static 'img/iccas.jpg' %}" alt="Logo" style="height: 30px; width: auto;" class="me-2">
+                <span class="text-white" style="font-size: 30px !important;">智慧精准合成实验室</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
+                aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle fa-lg me-2"></i>
+                            <span>{{ user.username }}</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center" href="#">
+                                    <i class="fas fa-user me-2 text-primary"></i>
+                                    <span>个人资料</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center" href="#">
+                                    <i class="fas fa-cog me-2 text-warning"></i>
+                                    <span>账号设置</span>
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center" href="{% url 'logout' %}">
+                                    <i class="fas fa-sign-out-alt me-2 text-danger"></i>
+                                    <span>退出登录</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 左侧导航栏 -->
+    <div class="sidebar">
+        <div class="p-4">
+            <nav>
+                <ul class="nav flex-column">
+                    {% block sidebar_menu %}
+                    <!-- 默认导航菜单 -->
+                    <li class="nav-item mb-3">
+                        <a href="#" class="nav-link rounded">
+                            <i class="fas fa-book fa-lg me-3"></i>
+                            <span class="text-white">文献导航</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="#" class="nav-link rounded">
+                            <i class="fas fa-flask fa-lg me-3"></i>
+                            <span class="text-white">逆合成分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="#" class="nav-link rounded">
+                            <i class="fas fa-balance-scale fa-lg me-3"></i>
+                            <span class="text-white">反应优化</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="{% url 'user_task_management' %}" class="nav-link rounded">
+                            <i class="fas fa-vials fa-lg me-3"></i>
+                            <span class="text-white">实验任务</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="{% url 'user_analysis_train' %}" class="nav-link rounded">
+                            <i class="fas fa-chart-line fa-lg me-3 text-success"></i>
+                            <span class="text-white">数据分析</span>
+                        </a>
+                    </li>
+                    {% endblock %}
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="main-content">
+        {% block main_content %}
+        <!-- 主要内容将通过子模板实现 -->
+        {% endblock %}
+    </div>
+
+    <!-- 通用操作确认模态框 -->
+    <div class="modal fade" id="confirm-action-modal" tabindex="-1" aria-labelledby="confirm-action-title" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirm-action-title">请确认</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="confirm-action-message">您确定要执行该操作吗？</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirm-action-ok">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 2000">
+        <div id="global-toast" class="toast align-items-center text-bg-secondary border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="global-toast-body">操作提示</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 基础JavaScript -->
+    <script src="{% static 'plugins/bootstrap-5.3.0-alpha1-dist/js/bootstrap.bundle.js' %}"></script>
+    <script src="{% static 'js/jquery-3.7.1.js' %}"></script>
+    <script src="{% static 'js/user-common.js' %}"></script>
+    <script src="{% static 'js/task-status-config.js' %}"></script>
+    
+    <script>
+        // 通用确认模态
+        function confirmAction(message, onConfirm) {
+            const modalEl = document.getElementById('confirm-action-modal');
+            const msgEl = document.getElementById('confirm-action-message');
+            const okBtn = document.getElementById('confirm-action-ok');
+            msgEl.textContent = message || '请确认操作';
+            const modal = new bootstrap.Modal(modalEl);
+            const handler = function() {
+                try { onConfirm && onConfirm(); } finally {
+                    okBtn.removeEventListener('click', handler);
+                    modal.hide();
+                }
+            };
+            okBtn.addEventListener('click', handler);
+            modal.show();
+        }
+
+        // Toast 辅助
+        function showToast(message, variant) {
+            try {
+                const toastEl = document.getElementById('global-toast');
+                const bodyEl = document.getElementById('global-toast-body');
+                bodyEl.textContent = message || '操作提示';
+                toastEl.className = 'toast align-items-center border-0 text-bg-' + (variant || 'secondary');
+                const t = new bootstrap.Toast(toastEl, { delay: 2000 });
+                t.show();
+            } catch (e) {
+                alert(message);
+            }
+        }
+
+        // 获取CSRF令牌
+        function getCSRFToken() {
+            const name = 'csrftoken';
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,2205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>自动实验管理系统</title>
+    <script src="https://res.gemcoder.com/js/reload.js"></script>
+    <!-- 使用本地Bootstrap文件 -->
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'plugins/bootstrap-5.3.0-alpha1-dist/css/bootstrap.css' %}">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        /* 自定义滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 自定义样式 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8f9fa;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, #343a40 0%, #212529 100%);
+            color: white;
+            height: 100%;
+            position: fixed;
+            top: 56px;
+            /* 高于顶部导航栏 */
+            left: 0;
+            bottom: 0;
+            width: 250px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 3px 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            margin-top: 56px;
+            /* 高于顶部导航栏 */
+            height: calc(100vh - 56px);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .stat-card {
+            border-radius: 0.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+
+        .nav-link {
+            transition: all 0.3s ease;
+            color: #e9ecef;
+            padding: 12px 15px;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left: 3px solid #0d6efd;
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: rgba(13, 110, 253, 0.2);
+            color: white;
+            border-left: 3px solid #0d6efd;
+        }
+
+        .experiment-table {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+
+        .modal-content {
+            border-radius: 0.5rem;
+        }
+
+        .sidebar h4 {
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            font-weight: 600;
+        }
+
+        /* 为导航图标添加动画效果 */
+        .nav-link i {
+            transition: transform 0.3s ease;
+        }
+
+        .nav-link:hover i {
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <img src="{% static 'img/iccas.jpg' %}" alt="Logo" style="height: 30px; width: auto;" class="me-2">
+                <span class="text-white" style="font-size: 30px !important;">智慧精准合成实验室</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false"
+                aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle fa-lg me-2"></i>
+                            <span>{{ user.username }}</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center" href="#">
+                                    <i class="fas fa-user me-2 text-primary"></i>
+                                    <span>个人资料</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center" href="#">
+                                    <i class="fas fa-cog me-2 text-warning"></i>
+                                    <span>账号设置</span>
+                                </a>
+                            </li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li>
+                                <a class="dropdown-item d-flex align-items-center" href="#">
+                                    <i class="fas fa-sign-out-alt me-2 text-danger"></i>
+                                    <span>退出登录</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 左侧导航栏 -->
+    <div class="sidebar">
+        <div class="p-4">
+            <nav>
+                <ul class="nav flex-column">
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link active bg-primary rounded shadow" data-target="experiment-info">
+                            <i class="fas fa-flask fa-lg me-3"></i>
+                            <span class="text-white fw-bold">实验信息</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded"
+                            data-target="solid-liquid">
+                            <i class="fas fa-vials fa-lg me-3"></i>
+                            <span class="text-white fw-bold">固液配料</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="glovebox">
+                            <i class="fas fa-box fa-lg me-3 text-info"></i>
+                            <span class="text-white">手套箱配料与反应</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="reaction">
+                            <i class="fas fa-chart-line fa-lg me-3 text-success"></i>
+                            <span class="text-white">反应</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="filtration">
+                            <i class="fas fa-filter fa-lg me-3 text-warning"></i>
+                            <span class="text-white">抽滤分液</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="evaporation">
+                            <i class="fas fa-tint fa-lg me-3 text-primary"></i>
+                            <span class="text-white">旋蒸</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="column">
+                            <i class="fas fa-layer-group fa-lg me-3 text-secondary"></i>
+                            <span class="text-white">过柱</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="tlc">
+                            <i class="fas fa-chart-bar fa-lg me-3 text-danger"></i>
+                            <span class="text-white">TLC分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="hplc">
+                            <i class="fas fa-chart-area fa-lg me-3 text-success"></i>
+                            <span class="text-white">HPLC分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="gcms">
+                            <i class="fas fa-cogs fa-lg me-3 text-warning"></i>
+                            <span class="text-white">GCMS分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="javascript:void(0);" class="nav-link rounded" data-target="ir-analysis">
+                            <i class="fas fa-wave-square fa-lg me-3 text-info"></i>
+                            <span class="text-white">在线红外分析</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="main-content">
+        <!-- 实验信息页面 -->
+        <section id="experiment-info-content" class="content-section active">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">实验信息</h1>
+
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">基础信息</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="experiment-name-input" class="form-label">实验名称 <span class="text-danger">*</span></label>
+                                <input type="text" id="experiment-name-input" class="form-control" placeholder="请输入实验名称" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="experiment-remark-input" class="form-label">实验备注（选填）</label>
+                                <textarea id="experiment-remark-input" class="form-control" rows="3" placeholder="可填写实验目的、注意事项等"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 固液配料页面 -->
+        <section id="solid-liquid-content" class="content-section" style="display:none;">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">固液配料</h1>
+
+                <!-- 工站启用选项 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="solid-liquid-station-enable"
+                                role="switch">
+                            <label class="form-check-label fw-bold" for="solid-liquid-station-enable">启用固液配料工站</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配料表单 -->
+                <div class="card shadow mb-4" id="reagent-form-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">添加试剂</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="reagent-form">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <label for="reagent-name" class="form-label">试剂名称</label>
+                                    <input type="text" class="form-control" id="reagent-name" placeholder="请输入试剂名称"
+                                        required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="reagent-amount" class="form-label">用量</label>
+                                    <input type="number" class="form-control" id="reagent-amount" placeholder="用量"
+                                        min="0" step="0.01" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="reagent-unit" class="form-label">单位</label>
+                                    <select class="form-select" id="reagent-unit" required>
+                                        <option value="">请选择</option>
+                                        <option value="g">g</option>
+                                        <option value="mg">mg</option>
+                                        <option value="kg">kg</option>
+                                        <option value="ml">ml</option>
+                                        <option value="L">L</option>
+                                        <option value="mol">mol</option>
+                                        <option value="mmol">mmol</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="reagent-type" class="form-label">试剂类型</label>
+                                    <select class="form-select" id="reagent-type" required>
+                                        <option value="">请选择</option>
+                                        <option value="solid">固体</option>
+                                        <option value="liquid">液体</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button type="button" class="btn btn-primary w-100" id="add-reagent-btn">
+                                        <i class="fas fa-plus me-1"></i>添加
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 配料列表 -->
+                <div class="card shadow mb-4" id="reagents-list-card" style="display: none;">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">配料列表</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover" id="reagents-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 5%;">序号</th>
+                                        <th style="width: 25%;">试剂名称</th>
+                                        <th style="width: 15%;">用量</th>
+                                        <th style="width: 10%;">单位</th>
+                                        <th style="width: 15%;">试剂类型</th>
+                                        <th style="width: 20%;">配料顺序</th>
+                                        <th style="width: 10%;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reagents-list">
+                                    <!-- 配料数据将通过JS动态加载 -->
+                                    <tr id="no-reagents-message">
+                                        <td colspan="7" class="text-center">暂无配料信息，请添加试剂</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 手套箱配料与反应页面 -->
+        <section id="glovebox-content" class="content-section" style="display: none;">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">手套箱配料与反应</h1>
+
+                <!-- 工站启用选项 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="glovebox-station-enable" role="switch">
+                            <label class="form-check-label fw-bold" for="glovebox-station-enable">启用手套箱配料与反应工站</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 手套箱配料表单 -->
+                <div class="card shadow mb-4" id="glovebox-reagent-form-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">添加试剂</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="glovebox-reagent-form">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <label for="glovebox-reagent-name" class="form-label">试剂名称</label>
+                                    <input type="text" class="form-control" id="glovebox-reagent-name" placeholder="请输入试剂名称"
+                                        required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="glovebox-reagent-amount" class="form-label">用量</label>
+                                    <input type="number" class="form-control" id="glovebox-reagent-amount" placeholder="用量"
+                                        min="0" step="0.01" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="glovebox-reagent-unit" class="form-label">单位</label>
+                                    <select class="form-select" id="glovebox-reagent-unit" required>
+                                        <option value="">请选择</option>
+                                        <option value="g">g</option>
+                                        <option value="mg">mg</option>
+                                        <option value="kg">kg</option>
+                                        <option value="ml">ml</option>
+                                        <option value="L">L</option>
+                                        <option value="mol">mol</option>
+                                        <option value="mmol">mmol</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="glovebox-reagent-type" class="form-label">试剂类型</label>
+                                    <select class="form-select" id="glovebox-reagent-type" required>
+                                        <option value="">请选择</option>
+                                        <option value="solid">固体</option>
+                                        <option value="liquid">液体</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button type="button" class="btn btn-primary w-100" id="add-glovebox-reagent-btn">
+                                        <i class="fas fa-plus me-1"></i>添加
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 手套箱配料列表 -->
+                <div class="card shadow mb-4" id="glovebox-reagents-list-card" style="display: none;">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">配料列表</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover" id="glovebox-reagents-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 5%;">序号</th>
+                                        <th style="width: 25%;">试剂名称</th>
+                                        <th style="width: 15%;">用量</th>
+                                        <th style="width: 10%;">单位</th>
+                                        <th style="width: 15%;">试剂类型</th>
+                                        <th style="width: 20%;">配料顺序</th>
+                                        <th style="width: 10%;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="glovebox-reagents-list">
+                                    <!-- 配料数据将通过JS动态加载 -->
+                                    <tr id="no-glovebox-reagents-message">
+                                        <td colspan="7" class="text-center">暂无配料信息，请添加试剂</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 手套箱反应参数设置表单 -->
+                <div class="card shadow mb-4" id="glovebox-reaction-form-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">反应参数设置</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="glovebox-reaction-form">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="glovebox-reaction-temperature" class="form-label">反应温度 (°C)</label>
+                                    <input type="number" class="form-control" id="glovebox-reaction-temperature" min="25"
+                                        max="340" placeholder="25-340">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="glovebox-stirring-speed" class="form-label">搅拌速度 (rpm)</label>
+                                    <input type="number" class="form-control" id="glovebox-stirring-speed" min="0" max="1500"
+                                        placeholder="0-1500">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="glovebox-reaction-duration" class="form-label">反应时长 (min)</label>
+                                    <input type="number" class="form-control" id="glovebox-reaction-duration" min="10" max="6000"
+                                        placeholder="10-6000">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="glovebox-sampling-interval" class="form-label">采样间隔 (min)</label>
+                                    <input type="number" class="form-control" id="glovebox-sampling-interval" min="5" max="240"
+                                        placeholder="5-240">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="glovebox-sampling-volume" class="form-label">采样体积 (μL)</label>
+                                    <input type="number" class="form-control" id="glovebox-sampling-volume" min="10" max="200"
+                                        placeholder="10-200">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="glovebox-quenching-agent" class="form-label">淬灭剂</label>
+                                    <input type="text" class="form-control" id="glovebox-quenching-agent" placeholder="请输入淬灭剂名称">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="glovebox-quenching-agent-volume" class="form-label">淬灭剂体积 (μL)</label>
+                                    <input type="number" class="form-control" id="glovebox-quenching-agent-volume" min="100"
+                                        max="1500" placeholder="100-1500">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="glovebox-sampling-analysis" class="form-label">采样分析方式</label>
+                                    <select class="form-select" id="glovebox-sampling-analysis">
+                                        <option value="">请选择分析方式</option>
+                                        <option value="TLC">TLC分析</option>
+                                        <option value="GCMS">GCMS分析</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 反应页面 -->
+        <section id="reaction-content" class="content-section" style="display: none;">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">反应参数设置</h1>
+
+                <!-- 工站启用选项 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="reaction-station-enable" role="switch">
+                            <label class="form-check-label fw-bold" for="reaction-station-enable">启用反应工站</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 反应参数设置表单 -->
+                <div class="card shadow mb-4" id="reaction-form-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">反应参数设置</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="reaction-form">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="reaction-temperature" class="form-label">反应温度 (°C)</label>
+                                    <input type="number" class="form-control" id="reaction-temperature" min="25"
+                                        max="340" placeholder="25-340">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="stirring-speed" class="form-label">搅拌速度 (rpm)</label>
+                                    <input type="number" class="form-control" id="stirring-speed" min="0" max="1500"
+                                        placeholder="0-1500">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="reaction-duration" class="form-label">反应时长 (min)</label>
+                                    <input type="number" class="form-control" id="reaction-duration" min="10" max="6000"
+                                        placeholder="10-6000">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="sampling-interval" class="form-label">采样间隔 (min)</label>
+                                    <input type="number" class="form-control" id="sampling-interval" min="5" max="240"
+                                        placeholder="5-240">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="sampling-volume" class="form-label">采样体积 (μL)</label>
+                                    <input type="number" class="form-control" id="sampling-volume" min="10" max="200"
+                                        placeholder="10-200">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="quenching-agent" class="form-label">淬灭剂</label>
+                                    <input type="text" class="form-control" id="quenching-agent" placeholder="请输入淬灭剂名称">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="quenching-agent-volume" class="form-label">淬灭剂体积 (μL)</label>
+                                    <input type="number" class="form-control" id="quenching-agent-volume" min="100"
+                                        max="1500" placeholder="100-1500">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="reaction-sampling-analysis" class="form-label">采样分析方式</label>
+                                    <select class="form-select" id="reaction-sampling-analysis">
+                                        <option value="">请选择分析方式</option>
+                                        <option value="TLC">TLC分析</option>
+                                        <option value="GCMS">GCMS分析</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 旋蒸页面 -->
+        <section id="evaporation-content" class="content-section" style="display: none;">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">旋蒸参数设置</h1>
+
+                <!-- 工站启用选项 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="evaporation-station-enable" role="switch">
+                            <label class="form-check-label fw-bold" for="evaporation-station-enable">启用旋蒸工站</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 旋蒸模式选择 -->
+                <div class="card shadow mb-4" id="evaporation-mode-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">旋蒸模式选择</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">选择旋蒸模式</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="evaporation-mode" id="evaporation-mode-auto" value="auto" checked>
+                                    <label class="form-check-label" for="evaporation-mode-auto">
+                                        自动模式
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="evaporation-mode" id="evaporation-mode-manual" value="manual">
+                                    <label class="form-check-label" for="evaporation-mode-manual">
+                                        手动模式
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 手动模式参数设置 -->
+                <div class="card shadow mb-4" id="evaporation-manual-params-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">手动模式参数设置</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="evaporation-manual-form">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="evaporation-rotation-speed" class="form-label">旋转速度 (rpm)</label>
+                                    <input type="number" class="form-control" id="evaporation-rotation-speed" min="10" max="280" placeholder="10-280">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="evaporation-bath-temperature" class="form-label">浴热温度 (°C)</label>
+                                    <input type="number" class="form-control" id="evaporation-bath-temperature" min="20" max="210" placeholder="20-210">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="evaporation-vacuum-pressure" class="form-label">真空压力 (mbar)</label>
+                                    <input type="number" class="form-control" id="evaporation-vacuum-pressure" min="1" max="1400" placeholder="1-1400">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="evaporation-condenser-temperature" class="form-label">冷凝温度 (°C)</label>
+                                    <input type="number" class="form-control" id="evaporation-condenser-temperature" min="-10" max="20" placeholder="-10-+20">
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TLC分析页面 -->
+        <section id="tlc-content" class="content-section" style="display: none;">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">TLC分析参数设置</h1>
+
+                <!-- 工站启用选项 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="tlc-station-enable" role="switch">
+                            <label class="form-check-label fw-bold" for="tlc-station-enable">启用TLC分析工站</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TLC展开剂设置 -->
+                <div class="card shadow mb-4" id="tlc-developer-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">展开剂设置</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="tlc-developer-form">
+                            <!-- 展开剂体系选择 -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="developer-system" class="form-label">展开剂体系</label>
+                                    <select class="form-select" id="developer-system" required>
+                                        <option value="">请选择展开剂体系</option>
+                                        <option value="PE-EA">石油醚/乙酸乙酯 (PE/EA)</option>
+                                        <option value="DCM-MeOH">二氯甲烷/甲醇 (DCM/MeOH)</option>
+                                        <option value="DCM-EA">二氯甲烷/乙酸乙酯 (DCM/EA)</option>
+                                        <option value="PE-EA-AcOH">石油醚/乙酸乙酯/乙酸 (PE/EA/AcOH)</option>
+                                        <option value="DCM-MeOH-Et3N">二氯甲烷/甲醇/三乙胺 (DCM/MeOH/Et3N)</option>
+                                        <option value="PE-EA-Et3N">石油醚/乙酸乙酯/三乙胺 (PE/EA/Et3N)</option>
+                                        <option value="custom">自定义展开剂</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="developer-ratio" class="form-label">展开剂比例</label>
+                                    <select class="form-select" id="developer-ratio" required>
+                                        <option value="">请选择比例</option>
+                                        <option value="1:1">1:1</option>
+                                        <option value="2:1">2:1</option>
+                                        <option value="4:1">4:1</option>
+                                        <option value="5:1">5:1</option>
+                                        <option value="10:1">10:1</option>
+                                        <option value="20:1">20:1</option>
+                                        <option value="50:1">50:1</option>
+                                        <option value="100:1">100:1</option>
+                                        <option value="custom">自定义比例</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- 自定义展开剂设置 -->
+                            <div class="row g-3 mb-3" id="custom-developer-section" style="display: none;">
+                                <div class="col-md-4">
+                                    <label for="custom-solvent1" class="form-label">溶剂1</label>
+                                    <input type="text" class="form-control" id="custom-solvent1" placeholder="如：石油醚、二氯甲烷等">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="custom-solvent2" class="form-label">溶剂2</label>
+                                    <input type="text" class="form-control" id="custom-solvent2" placeholder="如：乙酸乙酯、甲醇等">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="custom-solvent3" class="form-label">溶剂3（可选）</label>
+                                    <input type="text" class="form-control" id="custom-solvent3" placeholder="如：乙酸、三乙胺等">
+                                </div>
+                            </div>
+
+                            <!-- 自定义比例设置 -->
+                            <div class="row g-3 mb-3" id="custom-ratio-section" style="display: none;">
+                                <div class="col-md-4">
+                                    <label for="custom-ratio1" class="form-label">比例1</label>
+                                    <input type="number" class="form-control" id="custom-ratio1" min="1" max="100" placeholder="如：10">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="custom-ratio2" class="form-label">比例2</label>
+                                    <input type="number" class="form-control" id="custom-ratio2" min="1" max="100" placeholder="如：1">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="custom-ratio3" class="form-label">比例3（可选）</label>
+                                    <input type="number" class="form-control" id="custom-ratio3" min="0.1" max="10" step="0.1" placeholder="如：0.1">
+                                </div>
+                            </div>
+
+                            <!-- 展开剂极性说明 -->
+                            <div class="alert alert-info" id="developer-info" style="display: none;">
+                                <h6 class="alert-heading">展开剂极性说明</h6>
+                                <div id="developer-info-content"></div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- TLC检测参数设置 -->
+                <div class="card shadow mb-4" id="tlc-detection-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">检测参数设置</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="tlc-detection-form">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">灯光波长选择</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="uv-254" value="254" checked>
+                                        <label class="form-check-label" for="uv-254">
+                                            UV 254nm
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="uv-365" value="365">
+                                        <label class="form-check-label" for="uv-365">
+                                            UV 365nm
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="tlc-plate-type" class="form-label">TLC板类型</label>
+                                    <select class="form-select" id="tlc-plate-type">
+                                        <option value="">请选择TLC板类型</option>
+                                        <option value="silica-gel">硅胶板</option>
+                                        <option value="alumina">氧化铝板</option>
+                                        <option value="cellulose">纤维素板</option>
+                                        <option value="reverse-phase">反相板</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="tlc-plate-size" class="form-label">TLC板尺寸</label>
+                                    <select class="form-select" id="tlc-plate-size">
+                                        <option value="">请选择TLC板尺寸</option>
+                                        <option value="2.5x7.5">2.5 x 7.5 cm</option>
+                                        <option value="5x10">5 x 10 cm</option>
+                                        <option value="10x10">10 x 10 cm</option>
+                                        <option value="20x20">20 x 20 cm</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="tlc-developing-time" class="form-label">展开时间（分钟）</label>
+                                    <input type="number" class="form-control" id="tlc-developing-time" min="5" max="120" placeholder="5-120">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="tlc-chamber-type" class="form-label">展开缸类型</label>
+                                    <select class="form-select" id="tlc-chamber-type">
+                                        <option value="">请选择展开缸类型</option>
+                                        <option value="normal">普通展开缸</option>
+                                        <option value="saturated">饱和展开缸</option>
+                                        <option value="gradient">梯度展开缸</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="tlc-temperature" class="form-label">展开温度（°C）</label>
+                                    <input type="number" class="form-control" id="tlc-temperature" min="15" max="40" placeholder="15-40">
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- TLC样品信息 -->
+                <div class="card shadow mb-4" id="tlc-sample-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">样品信息</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="tlc-sample-form">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="tlc-sample-concentration" class="form-label">样品浓度（mg/mL）</label>
+                                    <input type="number" class="form-control" id="tlc-sample-concentration" min="0.1" max="100" step="0.1" placeholder="0.1-100">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="tlc-spot-volume" class="form-label">点样体积（μL）</label>
+                                    <input type="number" class="form-control" id="tlc-spot-volume" min="0.5" max="10" step="0.1" placeholder="0.5-10">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="tlc-expected-rf" class="form-label">预期Rf值范围</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="tlc-rf-min" min="0" max="1" step="0.1" placeholder="0.1">
+                                        <span class="input-group-text">-</span>
+                                        <input type="number" class="form-control" id="tlc-rf-max" min="0" max="1" step="0.1" placeholder="0.5">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="tlc-detection-method" class="form-label">检测方法</label>
+                                    <select class="form-select" id="tlc-detection-method">
+                                        <option value="">请选择检测方法</option>
+                                        <option value="uv">紫外检测</option>
+                                        <option value="iodine">碘蒸气</option>
+                                        <option value="sulfuric-acid">硫酸显色</option>
+                                        <option value="ninhydrin">茚三酮显色</option>
+                                        <option value="other">其他显色剂</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GCMS分析 -->
+        <section id="gcms-content" class="content-section" style="display:none">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">GCMS分析</h1>
+
+                <!-- 工站启用选项 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gcms-station-enable" role="switch">
+                            <label class="form-check-label fw-bold" for="gcms-station-enable">启用GCMS分析工站</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GCMS序列选择 -->
+                <div class="card shadow mb-4" id="gcms-sequence-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">选择序列</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="sequence-selector" class="form-label">选择预设序列</label>
+                                <select class="form-select" id="sequence-selector">
+                                    <option value="">请选择序列</option>
+                                    <option value="test-20240705">test-20240705.sequence</option>
+                                    <option value="test-20240708">test-20240708.sequence</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 序列详细信息显示区域 -->
+                        <div class="row g-3" id="sequence-details" style="display: none;">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="m-0 font-weight-bold">序列详细信息</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="sequence-details-content">
+                                            <!-- 序列详细信息将在这里显示 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <!-- 保存确认模态框 -->
+    <div class="modal fade" id="submit-confirm-modal" tabindex="-1" aria-labelledby="submit-confirm-title"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="submit-confirm-title">保存确认</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="submit-summary"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirm-submit-btn">确认保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 固定提交按钮 -->
+    <div class="position-fixed" style="right: 24px; bottom: 24px; z-index: 1080;">
+        <a href="{% url 'user_task_management' %}" class="btn btn-outline-secondary btn-lg me-2 shadow">返回</a>
+        <button id="submit-task-btn" class="btn btn-success btn-lg shadow">
+            <i class="fas fa-save me-1"></i>保存任务
+        </button>
+    </div>
+    <script src="{% static 'plugins/bootstrap-5.3.0-alpha1-dist/js/bootstrap.bundle.js' %}"></script>
+    <script src="{% static 'js/jquery-3.7.1.js' %}"></script>
+    <script src="{% static 'js/user-common.js' %}"></script>
+    <script>$(document).ready(function () {
+            // 侧边栏导航切换功能
+            $('.nav-link').on('click', function (e) {
+                e.preventDefault();
+
+                // 移除所有活动状态
+                $('.nav-link').removeClass('active bg-primary');
+                $('.content-section').hide();
+
+                // 为当前点击项添加活动状态
+                $(this).addClass('active bg-primary');
+
+                // 显示对应的内容区域
+                const target = $(this).data('target');
+                $('#' + target + '-content').show();
+            });
+
+            // 固液配料工站启用/禁用
+            $('#solid-liquid-station-enable').on('change', function () {
+                if ($(this).is(':checked')) {
+                    // 只与手套箱工站互斥（因为手套箱工站包含了配料功能）
+                    $('#glovebox-station-enable').prop('checked', false);
+                    // 手动隐藏手套箱相关表单，避免触发change事件
+                    $('#glovebox-reagent-form-card').hide();
+                    $('#glovebox-reagents-list-card').hide();
+                    $('#glovebox-reaction-form-card').hide();
+                    
+                    $('#reagent-form-card').show();
+                    $('#reagents-list-card').show();
+                } else {
+                    $('#reagent-form-card').hide();
+                    $('#reagents-list-card').hide();
+                }
+            });
+
+            // 手套箱配料与反应工站启用/禁用
+            $('#glovebox-station-enable').on('change', function () {
+                if ($(this).is(':checked')) {
+                    // 只与固液配料工站和反应工站互斥
+                    $('#solid-liquid-station-enable').prop('checked', false);
+                    $('#reaction-station-enable').prop('checked', false);
+                    // 手动隐藏相关表单，避免触发change事件
+                    $('#reagent-form-card').hide();
+                    $('#reagents-list-card').hide();
+                    $('#reaction-form-card').hide();
+                    
+                    $('#glovebox-reagent-form-card').show();
+                    $('#glovebox-reagents-list-card').show();
+                    $('#glovebox-reaction-form-card').show();
+                } else {
+                    $('#glovebox-reagent-form-card').hide();
+                    $('#glovebox-reagents-list-card').hide();
+                    $('#glovebox-reaction-form-card').hide();
+                }
+            });
+
+            // 反应工站启用/禁用
+            $('#reaction-station-enable').on('change', function () {
+                if ($(this).is(':checked')) {
+                    // 只与手套箱工站互斥（因为手套箱工站包含了反应功能）
+                    $('#glovebox-station-enable').prop('checked', false);
+                    // 手动隐藏手套箱相关表单，避免触发change事件
+                    $('#glovebox-reagent-form-card').hide();
+                    $('#glovebox-reagents-list-card').hide();
+                    $('#glovebox-reaction-form-card').hide();
+                    
+                    $('#reaction-form-card').show();
+                } else {
+                    $('#reaction-form-card').hide();
+                }
+            });
+
+            // GCMS工站启用/禁用
+            $('#gcms-station-enable').on('change', function () {
+                if ($(this).is(':checked')) {
+                    // GCMS工站可以与其他工站同时使用，不需要互斥
+                    $('#gcms-sequence-card').show();
+                } else {
+                    $('#gcms-sequence-card').hide();
+                }
+            });
+
+            // 旋蒸工站启用/禁用
+            $('#evaporation-station-enable').on('change', function () {
+                if ($(this).is(':checked')) {
+                    // 旋蒸工站可以与其他工站同时使用，不需要互斥
+                    $('#evaporation-mode-card').show();
+                } else {
+                    $('#evaporation-mode-card').hide();
+                    $('#evaporation-manual-params-card').hide();
+                    $('#tlc-developer-card').hide();
+                    $('#tlc-detection-card').hide();
+                    $('#tlc-sample-card').hide();
+                }
+            });
+
+            // 旋蒸模式选择
+            $('input[name="evaporation-mode"]').on('change', function () {
+                const mode = $(this).val();
+                if (mode === 'manual') {
+                    $('#evaporation-manual-params-card').show();
+                } else {
+                    $('#evaporation-manual-params-card').hide();
+                }
+            });
+
+            // TLC工站启用/禁用
+            $('#tlc-station-enable').on('change', function () {
+                if ($(this).is(':checked')) {
+                    // TLC工站可以与其他工站同时使用，不需要互斥
+                    $('#tlc-developer-card').show();
+                    $('#tlc-detection-card').show();
+                    $('#tlc-sample-card').show();
+                } else {
+                    $('#tlc-developer-card').hide();
+                    $('#tlc-detection-card').hide();
+                    $('#tlc-sample-card').hide();
+                }
+            });
+
+            // TLC展开剂体系选择
+            $('#developer-system').on('change', function () {
+                const system = $(this).val();
+                if (system === 'custom') {
+                    $('#custom-developer-section').show();
+                } else {
+                    $('#custom-developer-section').hide();
+                }
+                updateDeveloperInfo(system);
+            });
+
+            // TLC展开剂比例选择
+            $('#developer-ratio').on('change', function () {
+                const ratio = $(this).val();
+                if (ratio === 'custom') {
+                    $('#custom-ratio-section').show();
+                } else {
+                    $('#custom-ratio-section').hide();
+                }
+            });
+
+            // 更新展开剂信息说明
+            function updateDeveloperInfo(system) {
+                const infoDiv = $('#developer-info');
+                const contentDiv = $('#developer-info-content');
+                
+                if (!system || system === 'custom') {
+                    infoDiv.hide();
+                    return;
+                }
+
+                let info = '';
+                switch (system) {
+                    case 'PE-EA':
+                        info = '<strong>石油醚/乙酸乙酯体系</strong><br>' +
+                               '• 万能组合，气味小，毒性相对较低<br>' +
+                               '• 适用于中性或弱极性化合物<br>' +
+                               '• 极性调整范围广，从非极性到中等极性';
+                        break;
+                    case 'DCM-MeOH':
+                        info = '<strong>二氯甲烷/甲醇体系</strong><br>' +
+                               '• 二氯甲烷极性中等，甲醇极性很大<br>' +
+                               '• 加入少量甲醇就能显著增大展开剂极性<br>' +
+                               '• 对一些在PE/EA体系中拖尾的化合物效果较好';
+                        break;
+                    case 'DCM-EA':
+                        info = '<strong>二氯甲烷/乙酸乙酯体系</strong><br>' +
+                               '• 两者极性都大于石油醚<br>' +
+                               '• 适用于中等极性的化合物';
+                        break;
+                    case 'PE-EA-AcOH':
+                        info = '<strong>石油醚/乙酸乙酯/乙酸体系</strong><br>' +
+                               '• 适用于酸性化合物<br>' +
+                               '• 乙酸抑制酸性官能团的电离，减少拖尾<br>' +
+                               '• 使斑点更圆润';
+                        break;
+                    case 'DCM-MeOH-Et3N':
+                        info = '<strong>二氯甲烷/甲醇/三乙胺体系</strong><br>' +
+                               '• 适用于碱性化合物<br>' +
+                               '• 三乙胺中和硅胶的酸性，减少拖尾<br>' +
+                               '• 游离出碱性样品';
+                        break;
+                    case 'PE-EA-Et3N':
+                        info = '<strong>石油醚/乙酸乙酯/三乙胺体系</strong><br>' +
+                               '• 适用于碱性化合物<br>' +
+                               '• 三乙胺中和硅胶的酸性<br>' +
+                               '• 减少碱性样品的拖尾现象';
+                        break;
+                }
+                
+                if (info) {
+                    contentDiv.html(info);
+                    infoDiv.show();
+                } else {
+                    infoDiv.hide();
+                }
+            }
+
+            // 添加试剂功能
+            let reagentCounter = 0;
+            const reagents = [];
+            let pendingTask = null; // 模态确认前暂存任务
+
+            // 手套箱试剂管理
+            let gloveboxReagentCounter = 0;
+            const gloveboxReagents = [];
+
+            $('#add-reagent-btn').on('click', function (e) {
+                e.preventDefault();
+
+                const name = $('#reagent-name').val();
+                const amount = $('#reagent-amount').val();
+                const unit = $('#reagent-unit').val();
+                const type = $('#reagent-type').val();
+
+                if (!name || !amount || !unit || !type) {
+                    alert('请填写完整的试剂信息');
+                    return;
+                }
+
+                reagentCounter++;
+
+                // 添加到试剂数组
+                const reagent = {
+                    id: reagentCounter,
+                    name: name,
+                    amount: amount,
+                    unit: unit,
+                    type: type,
+                    order: reagentCounter
+                };
+
+                reagents.push(reagent);
+
+                // 更新表格显示
+                updateReagentsTable();
+
+                // 清空表单
+                $('#reagent-form')[0].reset();
+            });
+
+            // 添加手套箱试剂功能
+        $('#add-glovebox-reagent-btn').on('click', function (e) {
+            e.preventDefault();
+
+            const name = $('#glovebox-reagent-name').val();
+            const amount = $('#glovebox-reagent-amount').val();
+            const unit = $('#glovebox-reagent-unit').val();
+            const type = $('#glovebox-reagent-type').val();
+
+            if (!name || !amount || !unit || !type) {
+                alert('请填写完整的手套箱试剂信息');
+                return;
+            }
+
+            gloveboxReagentCounter++;
+
+            // 添加到手套箱试剂数组
+            const reagent = {
+                id: gloveboxReagentCounter,
+                name: name,
+                amount: amount,
+                unit: unit,
+                type: type,
+                order: gloveboxReagentCounter
+            };
+
+            gloveboxReagents.push(reagent);
+
+            // 更新手套箱试剂表格显示
+            updateGloveboxReagentsTable();
+
+            // 清空表单
+            $('#glovebox-reagent-form')[0].reset();
+        });
+
+            // 更新试剂表格
+            function updateReagentsTable() {
+                // 移除现有数据行，但保留提示行
+                $('#reagents-list tr').not('#no-reagents-message').remove();
+
+                if (reagents.length > 0) {
+                    // 隐藏"暂无配料信息"提示
+                    $('#no-reagents-message').hide();
+
+                    // 按顺序排序
+                    reagents.sort((a, b) => a.order - b.order);
+
+                    // 添加所有试剂行
+                    reagents.forEach((reagent, index) => {
+                        const typeText = reagent.type === 'solid' ? '固体' : '液体';
+                        const row = `                    <tr id="reagent-row-${reagent.id}">
+                        <td>${index + 1}</td>
+                        <td>${reagent.name}</td>
+                        <td>${reagent.amount}</td>
+                        <td>${reagent.unit}</td>
+                        <td>${typeText}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">${reagent.order}</span>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary move-up"
+                                            data-id="${reagent.id}" ${(index === 0) ? 'disabled' : ''}>
+                                        <i class="fas fa-arrow-up"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary move-down"
+                                            data-id="${reagent.id}" ${(index === reagents.length - 1) ? 'disabled' : ''}>
+                                        <i class="fas fa-arrow-down"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <button class="btn btn-danger btn-sm delete-reagent" data-id="${reagent.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                        $('#reagents-list').append(row);
+                    });
+
+                    // 绑定删除按钮事件
+                    $('.delete-reagent').on('click', function () {
+                        const id = $(this).data('id');
+                        deleteReagent(id);
+                    });
+
+                    // 绑定上移按钮事件
+                    $('.move-up').on('click', function () {
+                        const id = $(this).data('id');
+                        moveReagentUp(id);
+                    });
+
+                    // 绑定下移按钮事件
+                    $('.move-down').on('click', function () {
+                        const id = $(this).data('id');
+                        moveReagentDown(id);
+                    });
+                } else {
+                    // 显示"暂无配料信息"提示
+                    $('#no-reagents-message').show();
+                }
+            }
+
+            // 上移试剂
+            function moveReagentUp(id) {
+                const index = reagents.findIndex(r => r.id == id);
+                if (index > 0) {
+                    // 交换当前试剂和前一个试剂的order值
+                    const tempOrder = reagents[index].order;
+                    reagents[index].order = reagents[index - 1].order;
+                    reagents[index - 1].order = tempOrder;
+
+                    // 更新表格
+                    updateReagentsTable();
+                }
+            }
+
+            // 下移试剂
+            function moveReagentDown(id) {
+                const index = reagents.findIndex(r => r.id == id);
+                if (index < reagents.length - 1) {
+                    // 交换当前试剂和后一个试剂的order值
+                    const tempOrder = reagents[index].order;
+                    reagents[index].order = reagents[index + 1].order;
+                    reagents[index + 1].order = tempOrder;
+
+                    // 更新表格
+                    updateReagentsTable();
+                }
+            }
+
+            // 删除试剂
+            function deleteReagent(id) {
+                if (confirm('确定要删除这个试剂吗？')) {
+                    const index = reagents.findIndex(r => r.id == id);
+                    if (index !== -1) {
+                        reagents.splice(index, 1);
+                        updateReagentsTable();
+                    }
+                }
+            }
+
+            // 更新手套箱试剂表格
+            function updateGloveboxReagentsTable() {
+                // 移除现有数据行，但保留提示行
+                $('#glovebox-reagents-list tr').not('#no-glovebox-reagents-message').remove();
+
+                if (gloveboxReagents.length > 0) {
+                    // 隐藏"暂无配料信息"提示
+                    $('#no-glovebox-reagents-message').hide();
+
+                    // 按顺序排序
+                    gloveboxReagents.sort((a, b) => a.order - b.order);
+
+                    // 添加所有试剂行
+                    gloveboxReagents.forEach((reagent, index) => {
+                        const typeText = reagent.type === 'solid' ? '固体' : '液体';
+                        const row = `                    <tr id="glovebox-reagent-row-${reagent.id}">
+                        <td>${index + 1}</td>
+                        <td>${reagent.name}</td>
+                        <td>${reagent.amount}</td>
+                        <td>${reagent.unit}</td>
+                        <td>${typeText}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">${reagent.order}</span>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary move-glovebox-up"
+                                            data-id="${reagent.id}" ${(index === 0) ? 'disabled' : ''}>
+                                        <i class="fas fa-arrow-up"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary move-glovebox-down"
+                                            data-id="${reagent.id}" ${(index === gloveboxReagents.length - 1) ? 'disabled' : ''}>
+                                        <i class="fas fa-arrow-down"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <button class="btn btn-danger btn-sm delete-glovebox-reagent" data-id="${reagent.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                        $('#glovebox-reagents-list').append(row);
+                    });
+
+                    // 绑定删除按钮事件
+                    $('.delete-glovebox-reagent').on('click', function () {
+                        const id = $(this).data('id');
+                        deleteGloveboxReagent(id);
+                    });
+
+                    // 绑定上移按钮事件
+                    $('.move-glovebox-up').on('click', function () {
+                        const id = $(this).data('id');
+                        moveGloveboxReagentUp(id);
+                    });
+
+                    // 绑定下移按钮事件
+                    $('.move-glovebox-down').on('click', function () {
+                        const id = $(this).data('id');
+                        moveGloveboxReagentDown(id);
+                    });
+                } else {
+                    // 显示"暂无配料信息"提示
+                    $('#no-glovebox-reagents-message').show();
+                }
+            }
+
+            // 上移手套箱试剂
+            function moveGloveboxReagentUp(id) {
+                const index = gloveboxReagents.findIndex(r => r.id == id);
+                if (index > 0) {
+                    // 交换当前试剂和前一个试剂的order值
+                    const tempOrder = gloveboxReagents[index].order;
+                    gloveboxReagents[index].order = gloveboxReagents[index - 1].order;
+                    gloveboxReagents[index - 1].order = tempOrder;
+
+                    // 更新表格
+                    updateGloveboxReagentsTable();
+                }
+            }
+
+            // 下移手套箱试剂
+            function moveGloveboxReagentDown(id) {
+                const index = gloveboxReagents.findIndex(r => r.id == id);
+                if (index < gloveboxReagents.length - 1) {
+                    // 交换当前试剂和后一个试剂的order值
+                    const tempOrder = gloveboxReagents[index].order;
+                    gloveboxReagents[index].order = gloveboxReagents[index + 1].order;
+                    gloveboxReagents[index + 1].order = tempOrder;
+
+                    // 更新表格
+                    updateGloveboxReagentsTable();
+                }
+            }
+
+            // 删除手套箱试剂
+            function deleteGloveboxReagent(id) {
+                if (confirm('确定要删除这个手套箱试剂吗？')) {
+                    const index = gloveboxReagents.findIndex(r => r.id == id);
+                    if (index !== -1) {
+                        gloveboxReagents.splice(index, 1);
+                        updateGloveboxReagentsTable();
+                    }
+                }
+            }
+
+            // 序列选择功能
+            $('#sequence-selector').on('change', function () {
+                const sequence = $(this).val();
+                if (sequence) {
+                    let details = '';
+
+                    // 根据选择的序列显示详细信息
+                    if (sequence === 'test-20240705') {
+                        details = `                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <tbody>
+                                <tr>
+                                    <td class="fw-bold">样品数量</td>
+                                    <td>1</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">运行时间</td>
+                                    <td>5.375min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">设定升温温度</td>
+                                    <td>250度</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">升温速率</td>
+                                    <td>40度/min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">保持时间</td>
+                                    <td>0.5min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">分流比</td>
+                                    <td>不分流</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">分流流量</td>
+                                    <td>0mL/min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">方法文件</td>
+                                    <td>test-fid.m</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">数据名称</td>
+                                    <td>test001</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">数据存储路径</td>
+                                    <td>D:\\20240705-FID</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                    } else if (sequence === 'test-20240708') {
+                        details = `                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <tbody>
+                                <tr>
+                                    <td class="fw-bold">样品数量</td>
+                                    <td>7</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">运行时间</td>
+                                    <td>5.375min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">设定升温温度</td>
+                                    <td>250度</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">升温速率</td>
+                                    <td>40度/min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">保持时间</td>
+                                    <td>0.5min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">分流比</td>
+                                    <td>不分流</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">分流流量</td>
+                                    <td>0mL/min</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">方法文件</td>
+                                    <td>test-fid.m</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">数据名称</td>
+                                    <td>测试</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">数据存储路径</td>
+                                    <td>D:\\20240708</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                    }
+
+                    $('#sequence-details-content').html(details);
+                    $('#sequence-details').show();
+                } else {
+                    $('#sequence-details').hide();
+                }
+            });
+
+            // 页面初始化
+            // 默认隐藏所有内容区域，显示"实验信息"；如为编辑态则回填数据
+            $('.content-section').hide();
+            $('#experiment-info-content').show();
+
+            // 检查是否为编辑模式（从URL参数获取id），编辑态从服务端加载
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const editingId = params.get('id');
+                if (editingId && editingId.trim() !== '') {
+                    // 编辑模式：从服务器拉取任务详情
+                    TaskService.detail(editingId).then(function(resp) {
+                        if (!(resp && resp.ok)) {
+                            console.warn('获取任务详情失败，进入新建模式');
+                            return;
+                        }
+                        const task = resp.task || {};
+                        console.log('编辑模式：回填任务数据', task);
+                        
+                        // 基础信息
+                        $('#experiment-name-input').val(task.name || '');
+                        $('#experiment-remark-input').val(task.remark || '');
+
+                        // 固液配料
+                        if (task.stations && task.stations.solidLiquid && task.stations.solidLiquid.enabled) {
+                            console.log('启用固液配料工站，数据：', task.stations.solidLiquid);
+                            
+                            // 只禁用手套箱工站（因为互斥），其他工站保持原状态
+                            $('#glovebox-station-enable').prop('checked', false);
+                            // 手动隐藏手套箱相关表单
+                            $('#glovebox-reagent-form-card').hide();
+                            $('#glovebox-reagents-list-card').hide();
+                            $('#glovebox-reaction-form-card').hide();
+                            
+                            // 启用固液配料工站
+                            $('#solid-liquid-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#reagent-form-card').show();
+                            $('#reagents-list-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                if (Array.isArray(task.stations.solidLiquid.reagents)) {
+                                    // 清空本地数组后填充
+                                    reagents.length = 0;
+                                    let maxOrder = 0;
+                                    task.stations.solidLiquid.reagents.forEach(r => {
+                                        maxOrder = Math.max(maxOrder, Number(r.order) || 0);
+                                        reagents.push({
+                                            id: r.id || ++reagentCounter,
+                                            name: r.name,
+                                            amount: r.amount,
+                                            unit: r.unit,
+                                            type: r.type,
+                                            order: r.order
+                                        });
+                                    });
+                                    reagentCounter = Math.max(reagentCounter, maxOrder);
+                                    updateReagentsTable();
+                                }
+                            }, 100);
+                        }
+
+                        // 手套箱配料与反应
+                        if (task.stations && task.stations.glovebox && task.stations.glovebox.enabled) {
+                            console.log('启用手套箱工站，数据：', task.stations.glovebox);
+                            
+                            // 只禁用固液配料工站和反应工站（因为互斥），其他工站保持原状态
+                            $('#solid-liquid-station-enable').prop('checked', false);
+                            $('#reaction-station-enable').prop('checked', false);
+                            // 手动隐藏相关表单
+                            $('#reagent-form-card').hide();
+                            $('#reagents-list-card').hide();
+                            $('#reaction-form-card').hide();
+                            
+                            // 启用手套箱工站
+                            $('#glovebox-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#glovebox-reagent-form-card').show();
+                            $('#glovebox-reagents-list-card').show();
+                            $('#glovebox-reaction-form-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                if (Array.isArray(task.stations.glovebox.reagents)) {
+                                    // 清空本地数组后填充
+                                    gloveboxReagents.length = 0;
+                                    let maxOrder = 0;
+                                    task.stations.glovebox.reagents.forEach(r => {
+                                        maxOrder = Math.max(maxOrder, Number(r.order) || 0);
+                                        gloveboxReagents.push({
+                                            id: r.id || ++gloveboxReagentCounter,
+                                            name: r.name,
+                                            amount: r.amount,
+                                            unit: r.unit,
+                                            type: r.type,
+                                            order: r.order
+                                        });
+                                    });
+                                    gloveboxReagentCounter = Math.max(gloveboxReagentCounter, maxOrder);
+                                    updateGloveboxReagentsTable();
+                                }
+                                // 回填反应参数
+                                const gp = task.stations.glovebox.params || {};
+                                $('#glovebox-reaction-temperature').val(gp.temperature || '');
+                                $('#glovebox-stirring-speed').val(gp.stirringSpeed || '');
+                                $('#glovebox-reaction-duration').val(gp.duration || '');
+                                $('#glovebox-sampling-interval').val(gp.samplingInterval || '');
+                                $('#glovebox-sampling-volume').val(gp.samplingVolume || '');
+                                $('#glovebox-quenching-agent').val(gp.quenchingAgent || '');
+                                $('#glovebox-quenching-agent-volume').val(gp.quenchingAgentVolume || '');
+                                $('#glovebox-sampling-analysis').val(gp.samplingAnalysis || '');
+                            }, 100);
+                        }
+
+                        // 反应参数
+                        if (task.stations && task.stations.reaction && task.stations.reaction.enabled) {
+                            console.log('启用反应工站，数据：', task.stations.reaction);
+                            
+                            // 只禁用手套箱工站（因为互斥），其他工站保持原状态
+                            $('#glovebox-station-enable').prop('checked', false);
+                            // 手动隐藏手套箱相关表单
+                            $('#glovebox-reagent-form-card').hide();
+                            $('#glovebox-reagents-list-card').hide();
+                            $('#glovebox-reaction-form-card').hide();
+                            
+                            // 启用反应工站
+                            $('#reaction-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#reaction-form-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                const p = task.stations.reaction.params || {};
+                                $('#reaction-temperature').val(p.temperature || '');
+                                $('#stirring-speed').val(p.stirringSpeed || '');
+                                $('#reaction-duration').val(p.duration || '');
+                                $('#sampling-interval').val(p.samplingInterval || '');
+                                $('#sampling-volume').val(p.samplingVolume || '');
+                                $('#quenching-agent').val(p.quenchingAgent || '');
+                                $('#quenching-agent-volume').val(p.quenchingAgentVolume || '');
+                                $('#reaction-sampling-analysis').val(p.samplingAnalysis || '');
+                            }, 100);
+                        }
+
+                        // GCMS
+                        if (task.stations && task.stations.gcms && task.stations.gcms.enabled) {
+                            console.log('启用GCMS工站，数据：', task.stations.gcms);
+                            
+                            // GCMS工站可以与其他工站同时使用，不需要禁用其他工站
+                            $('#gcms-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#gcms-sequence-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                const gp = task.stations.gcms.params || {};
+                                $('#sequence-selector').val(gp.sequence || '');
+                                $('#sequence-selector').trigger('change');
+                            }, 100);
+                        }
+
+                        // 旋蒸工站
+                        if (task.stations && task.stations.evaporation && task.stations.evaporation.enabled) {
+                            console.log('启用旋蒸工站，数据：', task.stations.evaporation);
+                            
+                            // 旋蒸工站可以与其他工站同时使用，不需要禁用其他工站
+                            $('#evaporation-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#evaporation-mode-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                const ep = task.stations.evaporation.params || {};
+                                if (ep.mode === 'manual') {
+                                    $('#evaporation-mode-manual').prop('checked', true);
+                                    $('#evaporation-manual-params-card').show();
+                                    $('#evaporation-rotation-speed').val(ep.rotationSpeed || '');
+                                    $('#evaporation-bath-temperature').val(ep.bathTemperature || '');
+                                    $('#evaporation-vacuum-pressure').val(ep.vacuumPressure || '');
+                                    $('#evaporation-condenser-temperature').val(ep.condenserTemperature || '');
+                                } else {
+                                    $('#evaporation-mode-auto').prop('checked', true);
+                                    $('#evaporation-manual-params-card').hide();
+                                }
+                            }, 100);
+                        }
+
+                        // TLC分析工站
+                        if (task.stations && task.stations.tlc && task.stations.tlc.enabled) {
+                            console.log('启用TLC分析工站，数据：', task.stations.tlc);
+                            
+                            // TLC工站可以与其他工站同时使用，不需要禁用其他工站
+                            $('#tlc-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#tlc-developer-card').show();
+                            $('#tlc-detection-card').show();
+                            $('#tlc-sample-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                const tp = task.stations.tlc.params || {};
+                                
+                                // 展开剂设置
+                                $('#developer-system').val(tp.developerSystem || '');
+                                $('#developer-ratio').val(tp.developerRatio || '');
+                                
+                                // 自定义展开剂
+                                if (tp.developerSystem === 'custom') {
+                                    $('#custom-developer-section').show();
+                                    $('#custom-solvent1').val(tp.customSolvent1 || '');
+                                    $('#custom-solvent2').val(tp.customSolvent2 || '');
+                                    $('#custom-solvent3').val(tp.customSolvent3 || '');
+                                }
+                                
+                                // 自定义比例
+                                if (tp.developerRatio === 'custom') {
+                                    $('#custom-ratio-section').show();
+                                    $('#custom-ratio1').val(tp.customRatio1 || '');
+                                    $('#custom-ratio2').val(tp.customRatio2 || '');
+                                    $('#custom-ratio3').val(tp.customRatio3 || '');
+                                }
+                                
+                                // 检测参数
+                                if (tp.uvWavelengths) {
+                                    $('#uv-254').prop('checked', tp.uvWavelengths.uv254 || false);
+                                    $('#uv-365').prop('checked', tp.uvWavelengths.uv365 || false);
+                                }
+                                
+                                $('#tlc-plate-type').val(tp.plateType || '');
+                                $('#tlc-plate-size').val(tp.plateSize || '');
+                                $('#tlc-developing-time').val(tp.developingTime || '');
+                                $('#tlc-chamber-type').val(tp.chamberType || '');
+                                $('#tlc-temperature').val(tp.temperature || '');
+                                
+                                // 样品信息
+                                $('#tlc-sample-concentration').val(tp.sampleConcentration || '');
+                                $('#tlc-spot-volume').val(tp.spotVolume || '');
+                                $('#tlc-rf-min').val(tp.expectedRfMin || '');
+                                $('#tlc-rf-max').val(tp.expectedRfMax || '');
+                                $('#tlc-detection-method').val(tp.detectionMethod || '');
+                                
+                                // 更新展开剂信息说明
+                                updateDeveloperInfo(tp.developerSystem);
+                            }, 100);
+                        }
+                    }).catch(function() { console.warn('获取任务详情异常，进入新建模式'); });
+                } else {
+                    // 新建模式：确保所有工站都是禁用状态，清空所有数据
+                    console.log('新建模式：初始化干净状态');
+                    
+                    // 确保所有工站开关都是未选中状态
+                    $('#solid-liquid-station-enable').prop('checked', false);
+                    $('#glovebox-station-enable').prop('checked', false);
+                    $('#reaction-station-enable').prop('checked', false);
+                    $('#gcms-station-enable').prop('checked', false);
+                    $('#evaporation-station-enable').prop('checked', false);
+                    $('#tlc-station-enable').prop('checked', false);
+                    
+                    // 隐藏所有工站相关表单
+                    $('#reagent-form-card').hide();
+                    $('#reagents-list-card').hide();
+                    $('#glovebox-reagent-form-card').hide();
+                    $('#glovebox-reagents-list-card').hide();
+                    $('#glovebox-reaction-form-card').hide();
+                    $('#reaction-form-card').hide();
+                    $('#gcms-sequence-card').hide();
+                    $('#evaporation-mode-card').hide();
+                    $('#evaporation-manual-params-card').hide();
+                    
+                    // 清空所有数组数据
+                    reagents.length = 0;
+                    gloveboxReagents.length = 0;
+                    reagentCounter = 0;
+                    gloveboxReagentCounter = 0;
+                    
+                    // 清空所有表单
+                    $('#reagent-form')[0].reset();
+                    $('#glovebox-reagent-form')[0].reset();
+                    $('#glovebox-reaction-form')[0].reset();
+                    $('#reaction-form')[0].reset();
+                    $('#sequence-selector').val('');
+                    $('#evaporation-manual-form')[0].reset();
+                    $('#tlc-developer-form')[0].reset();
+                    $('#tlc-detection-form')[0].reset();
+                    $('#tlc-sample-form')[0].reset();
+                    
+                    // 清空新增的采样分析字段
+                    $('#glovebox-sampling-analysis').val('');
+                    $('#reaction-sampling-analysis').val('');
+                    
+                    // 重置旋蒸模式选择
+                    $('#evaporation-mode-auto').prop('checked', true);
+                    
+                    // 重置TLC设置
+                    $('#developer-system').val('');
+                    $('#developer-ratio').val('');
+                    $('#uv-254').prop('checked', true);
+                    $('#uv-365').prop('checked', false);
+                    $('#custom-developer-section').hide();
+                    $('#custom-ratio-section').hide();
+                    $('#developer-info').hide();
+                    
+                    // 清空表格显示
+                    updateReagentsTable();
+                    updateGloveboxReagentsTable();
+                }
+            } catch (e) {
+                console.error('初始化过程中发生错误：', e);
+            }
+
+            // 提交实验任务：汇总参数并弹出模态展示（确认后再保存并跳转）
+            $('#submit-task-btn').on('click', function () {
+                // 校验实验名称
+                const inputName = $('#experiment-name-input').val().trim();
+                if (!inputName) {
+                    alert('请先输入实验名称');
+                    return;
+                }
+                // 数值范围校验（以输入控件的 min/max 为准）
+                const errors = [];
+                function checkRangeByAttr(selector, label) {
+                    const $el = $(selector);
+                    if ($el.length === 0) return;
+                    const raw = $el.val();
+                    if (raw === undefined || raw === null || raw === '') return;
+                    const val = Number(raw);
+                    if (Number.isNaN(val)) { errors.push(label + '必须是数字'); return; }
+                    const minStr = $el.attr('min');
+                    const maxStr = $el.attr('max');
+                    if (minStr === undefined && maxStr === undefined) return; // 未设置范围则不校验
+                    if (minStr !== undefined) {
+                        const min = Number(minStr);
+                        if (!Number.isNaN(min) && val < min) { errors.push(label + '需≥ ' + min); }
+                    }
+                    if (maxStr !== undefined) {
+                        const max = Number(maxStr);
+                        if (!Number.isNaN(max) && val > max) { errors.push(label + '需≤ ' + max); }
+                    }
+                }
+
+                // 仅当对应工站启用时才校验
+                if ($('#reaction-station-enable').is(':checked')) {
+                    checkRangeByAttr('#reaction-temperature', '反应温度');
+                    checkRangeByAttr('#stirring-speed', '搅拌速度');
+                    checkRangeByAttr('#reaction-duration', '反应时长(分钟)');
+                    checkRangeByAttr('#sampling-interval', '采样间隔(分钟)');
+                    checkRangeByAttr('#sampling-volume', '采样体积(μL)');
+                }
+                if ($('#glovebox-station-enable').is(':checked')) {
+                    checkRangeByAttr('#glovebox-reaction-temperature', '手套箱反应温度');
+                    checkRangeByAttr('#glovebox-stirring-speed', '手套箱搅拌速度');
+                    checkRangeByAttr('#glovebox-reaction-duration', '手套箱反应时长(分钟)');
+                    checkRangeByAttr('#glovebox-sampling-interval', '手套箱采样间隔(分钟)');
+                    checkRangeByAttr('#glovebox-sampling-volume', '手套箱采样体积(μL)');
+                }
+                if ($('#evaporation-station-enable').is(':checked')) {
+                    // 仅在手动模式下校验手动参数
+                    if ($('input[name="evaporation-mode"]:checked').val() === 'manual') {
+                        checkRangeByAttr('#evaporation-rotation-speed', '旋转速度');
+                        checkRangeByAttr('#evaporation-bath-temperature', '浴热温度');
+                        checkRangeByAttr('#evaporation-vacuum-pressure', '真空压力');
+                        checkRangeByAttr('#evaporation-condenser-temperature', '冷凝温度');
+                    }
+                }
+                if ($('#tlc-station-enable').is(':checked')) {
+                    checkRangeByAttr('#tlc-temperature', 'TLC展开温度');
+                }
+
+                if (errors.length > 0) {
+                    alert('参数校验失败：\n- ' + errors.join('\n- '));
+                    return;
+                }
+                const solidLiquidEnabled = $('#solid-liquid-station-enable').is(':checked');
+                const gloveboxEnabled = $('#glovebox-station-enable').is(':checked');
+                const reactionEnabled = $('#reaction-station-enable').is(':checked');
+                const gcmsEnabled = $('#gcms-station-enable').is(':checked');
+                const evaporationEnabled = $('#evaporation-station-enable').is(':checked');
+                const tlcEnabled = $('#tlc-station-enable').is(':checked');
+
+                // 采集固液配料列表（使用已有reagents数组，如未启用则为空）
+                let solidReagents = [];
+                if (solidLiquidEnabled) {
+                    try { solidReagents = (typeof reagents !== 'undefined') ? reagents.slice() : []; } catch (e) { solidReagents = []; }
+                }
+
+                // 采集手套箱配料列表
+                let gloveboxReagentsData = [];
+                if (gloveboxEnabled) {
+                    try { gloveboxReagentsData = (typeof gloveboxReagents !== 'undefined') ? gloveboxReagents.slice() : []; } catch (e) { gloveboxReagentsData = []; }
+                }
+
+                // 采集手套箱反应参数
+                const gloveboxReactionParams = gloveboxEnabled ? {
+                    temperature: $('#glovebox-reaction-temperature').val() || null,
+                    stirringSpeed: $('#glovebox-stirring-speed').val() || null,
+                    duration: $('#glovebox-reaction-duration').val() || null,
+                    samplingInterval: $('#glovebox-sampling-interval').val() || null,
+                    samplingVolume: $('#glovebox-sampling-volume').val() || null,
+                    quenchingAgent: $('#glovebox-quenching-agent').val() || null,
+                    quenchingAgentVolume: $('#glovebox-quenching-agent-volume').val() || null,
+                    samplingAnalysis: $('#glovebox-sampling-analysis').val() || null
+                } : null;
+
+                // 采集反应参数
+                const reactionParams = reactionEnabled ? {
+                    temperature: $('#reaction-temperature').val() || null,
+                    stirringSpeed: $('#stirring-speed').val() || null,
+                    duration: $('#reaction-duration').val() || null,
+                    samplingInterval: $('#sampling-interval').val() || null,
+                    samplingVolume: $('#sampling-volume').val() || null,
+                    quenchingAgent: $('#quenching-agent').val() || null,
+                    quenchingAgentVolume: $('#quenching-agent-volume').val() || null,
+                    samplingAnalysis: $('#reaction-sampling-analysis').val() || null
+                } : null;
+
+                // 采集GCMS参数
+                const gcmsParams = gcmsEnabled ? {
+                    sequence: $('#sequence-selector').val() || null
+                } : null;
+
+                // 采集旋蒸参数
+                const evaporationParams = evaporationEnabled ? {
+                    mode: $('input[name="evaporation-mode"]:checked').val() || 'auto',
+                    rotationSpeed: $('input[name="evaporation-mode"]:checked').val() === 'manual' ? $('#evaporation-rotation-speed').val() || null : null,
+                    bathTemperature: $('input[name="evaporation-mode"]:checked').val() === 'manual' ? $('#evaporation-bath-temperature').val() || null : null,
+                    vacuumPressure: $('input[name="evaporation-mode"]:checked').val() === 'manual' ? $('#evaporation-vacuum-pressure').val() || null : null,
+                    condenserTemperature: $('input[name="evaporation-mode"]:checked').val() === 'manual' ? $('#evaporation-condenser-temperature').val() || null : null
+                } : null;
+
+                // 采集TLC参数
+                const tlcParams = tlcEnabled ? {
+                    // 展开剂设置
+                    developerSystem: $('#developer-system').val() || null,
+                    developerRatio: $('#developer-ratio').val() || null,
+                    customSolvent1: $('#developer-system').val() === 'custom' ? $('#custom-solvent1').val() || null : null,
+                    customSolvent2: $('#developer-system').val() === 'custom' ? $('#custom-solvent2').val() || null : null,
+                    customSolvent3: $('#developer-system').val() === 'custom' ? $('#custom-solvent3').val() || null : null,
+                    customRatio1: $('#developer-ratio').val() === 'custom' ? $('#custom-ratio1').val() || null : null,
+                    customRatio2: $('#developer-ratio').val() === 'custom' ? $('#custom-ratio2').val() || null : null,
+                    customRatio3: $('#developer-ratio').val() === 'custom' ? $('#custom-ratio3').val() || null : null,
+                    
+                    // 检测参数
+                    uvWavelengths: {
+                        uv254: $('#uv-254').is(':checked'),
+                        uv365: $('#uv-365').is(':checked')
+                    },
+                    plateType: $('#tlc-plate-type').val() || null,
+                    plateSize: $('#tlc-plate-size').val() || null,
+                    developingTime: $('#tlc-developing-time').val() || null,
+                    chamberType: $('#tlc-chamber-type').val() || null,
+                    temperature: $('#tlc-temperature').val() || null,
+                    
+                    // 样品信息
+                    sampleConcentration: $('#tlc-sample-concentration').val() || null,
+                    spotVolume: $('#tlc-spot-volume').val() || null,
+                    expectedRfMin: $('#tlc-rf-min').val() || null,
+                    expectedRfMax: $('#tlc-rf-max').val() || null,
+                    detectionMethod: $('#tlc-detection-method').val() || null
+                } : null;
+
+                // 元信息：名称/日期/状态
+                const now = new Date();
+                const two = n => (n < 10 ? '0' + n : '' + n);
+                const name = inputName;
+                const dateStr = now.getFullYear() + '-' + two(now.getMonth() + 1) + '-' + two(now.getDate()) + ' ' + two(now.getHours()) + ':' + two(now.getMinutes()) + ':' + two(now.getSeconds());
+                const status = '待提交';
+
+                // 检查是否为编辑模式（来自URL）
+                const params = new URLSearchParams(window.location.search);
+                const editingId = params.get('id');
+                const numericEditingId = editingId ? Number(editingId) : null;
+
+                const task = {
+                    id: numericEditingId || Date.now(),
+                    name: name,
+                    date: dateStr,
+                    status: status,
+                    stations: {
+                        solidLiquid: { enabled: solidLiquidEnabled, reagents: solidReagents },
+                        glovebox: { enabled: gloveboxEnabled, reagents: gloveboxReagentsData, params: gloveboxReactionParams },
+                        reaction: { enabled: reactionEnabled, params: reactionParams },
+                        gcms: { enabled: gcmsEnabled, params: gcmsParams },
+                        evaporation: { enabled: evaporationEnabled, params: evaporationParams },
+                        tlc: { enabled: tlcEnabled, params: tlcParams }
+                    }
+                };
+                // 生成摘要HTML
+                const reagentRows = (task.stations.solidLiquid.enabled && task.stations.solidLiquid.reagents && task.stations.solidLiquid.reagents.length)
+                    ? task.stations.solidLiquid.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name}</td><td>${r.amount}</td><td>${r.unit}</td><td>${r.type === 'solid' ? '固体' : '液体'}</td><td>${r.order}</td></tr>`).join('')
+                    : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+                const gloveboxReagentRows = (task.stations.glovebox.enabled && task.stations.glovebox.reagents && task.stations.glovebox.reagents.length)
+                    ? task.stations.glovebox.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name}</td><td>${r.amount}</td><td>${r.unit}</td><td>${r.type === 'solid' ? '固体' : '液体'}</td><td>${r.order}</td></tr>`).join('')
+                    : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+                const gloveboxReactionHtml = task.stations.glovebox.enabled ? `
+                    <ul class="list-group mb-3">
+                        <li class="list-group-item">反应温度：${gloveboxReactionParams.temperature || '-'} °C</li>
+                        <li class="list-group-item">搅拌速度：${gloveboxReactionParams.stirringSpeed || '-'} rpm</li>
+                        <li class="list-group-item">反应时长：${gloveboxReactionParams.duration || '-'} min</li>
+                        <li class="list-group-item">采样间隔：${gloveboxReactionParams.samplingInterval || '-'} min</li>
+                        <li class="list-group-item">采样体积：${gloveboxReactionParams.samplingVolume || '-'} μL</li>
+                        <li class="list-group-item">淬灭剂：${gloveboxReactionParams.quenchingAgent || '-'}</li>
+                        <li class="list-group-item">淬灭剂体积：${gloveboxReactionParams.quenchingAgentVolume || '-'} μL</li>
+                        <li class="list-group-item">采样分析方式：${gloveboxReactionParams.samplingAnalysis || '-'}</li>
+                    </ul>
+                ` : '';
+
+                const reactionHtml = task.stations.reaction.enabled ? `
+                    <ul class="list-group mb-3">
+                        <li class="list-group-item">反应温度：${reactionParams.temperature || '-'} °C</li>
+                        <li class="list-group-item">搅拌速度：${reactionParams.stirringSpeed || '-'} rpm</li>
+                        <li class="list-group-item">反应时长：${reactionParams.duration || '-'} min</li>
+                        <li class="list-group-item">采样间隔：${reactionParams.samplingInterval || '-'} min</li>
+                        <li class="list-group-item">采样体积：${reactionParams.samplingVolume || '-'} μL</li>
+                        <li class="list-group-item">淬灭剂：${reactionParams.quenchingAgent || '-'}</li>
+                        <li class="list-group-item">淬灭剂体积：${reactionParams.quenchingAgentVolume || '-'} μL</li>
+                        <li class="list-group-item">采样分析方式：${reactionParams.samplingAnalysis || '-'}</li>
+                    </ul>
+                ` : '';
+
+                const gcmsHtml = task.stations.gcms.enabled ? `
+                    <div class="mb-3">序列：${gcmsParams.sequence || '-'}</div>
+                ` : '';
+
+                const evaporationHtml = task.stations.evaporation.enabled ? `
+                    <div class="mb-3">
+                        <strong>旋蒸模式：</strong>${evaporationParams.mode === 'auto' ? '自动模式' : '手动模式'}
+                        ${evaporationParams.mode === 'manual' ? `
+                            <ul class="list-group mt-2">
+                                <li class="list-group-item">旋转速度：${evaporationParams.rotationSpeed || '-'} rpm</li>
+                                <li class="list-group-item">浴热温度：${evaporationParams.bathTemperature || '-'} °C</li>
+                                <li class="list-group-item">真空压力：${evaporationParams.vacuumPressure || '-'} mbar</li>
+                                <li class="list-group-item">冷凝温度：${evaporationParams.condenserTemperature || '-'} °C</li>
+                            </ul>
+                        ` : ''}
+                    </div>
+                ` : '';
+
+                const tlcHtml = task.stations.tlc.enabled ? `
+                    <div class="mb-3">
+                        <strong>展开剂体系：</strong>${tlcParams.developerSystem || '-'}
+                        ${tlcParams.developerSystem === 'custom' ? 
+                            `<br><strong>自定义展开剂：</strong>${tlcParams.customSolvent1 || '-'} / ${tlcParams.customSolvent2 || '-'} ${tlcParams.customSolvent3 ? '/ ' + tlcParams.customSolvent3 : ''}` : ''}
+                        <br><strong>展开剂比例：</strong>${tlcParams.developerRatio || '-'}
+                        ${tlcParams.developerRatio === 'custom' ? 
+                            `<br><strong>自定义比例：</strong>${tlcParams.customRatio1 || '-'} : ${tlcParams.customRatio2 || '-'} ${tlcParams.customRatio3 ? ' : ' + tlcParams.customRatio3 : ''}` : ''}
+                        <br><strong>灯光波长：</strong>${tlcParams.uvWavelengths.uv254 ? '254nm' : ''}${tlcParams.uvWavelengths.uv254 && tlcParams.uvWavelengths.uv365 ? ', ' : ''}${tlcParams.uvWavelengths.uv365 ? '365nm' : ''}
+                        <br><strong>TLC板类型：</strong>${tlcParams.plateType || '-'}
+                        <br><strong>板尺寸：</strong>${tlcParams.plateSize || '-'}
+                        <br><strong>展开时间：</strong>${tlcParams.developingTime || '-'} 分钟
+                        <br><strong>展开缸类型：</strong>${tlcParams.chamberType || '-'}
+                        <br><strong>展开温度：</strong>${tlcParams.temperature || '-'} °C
+                        <br><strong>样品浓度：</strong>${tlcParams.sampleConcentration || '-'} mg/mL
+                        <br><strong>点样体积：</strong>${tlcParams.spotVolume || '-'} μL
+                        <br><strong>预期Rf值：</strong>${tlcParams.expectedRfMin || '-'} - ${tlcParams.expectedRfMax || '-'}
+                        <br><strong>检测方法：</strong>${tlcParams.detectionMethod || '-'}
+                    </div>
+                ` : '';
+
+                const remark = ($('#experiment-remark-input').val() || '').trim();
+
+                const summaryHtml = `
+                    <div class="mb-3"><strong>实验名称：</strong>${task.name}</div>
+                    <div class="mb-3"><strong>实验备注：</strong>${remark || '-'}</div>
+                    <div class="mb-3"><strong>提交时间：</strong>${task.date}</div>
+                    <div class="mb-3"><strong>状态：</strong>${task.status}</div>
+                    <div class="mb-3"><strong>固液配料工站：</strong>${task.stations.solidLiquid.enabled ? '已启用' : '未启用'}</div>
+                    <div class="table-responsive mb-3">
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                            <tbody>${reagentRows}</tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3"><strong>手套箱配料与反应工站：</strong>${task.stations.glovebox.enabled ? '已启用' : '未启用'}</div>
+                    ${gloveboxReactionHtml}
+                    <div class="table-responsive mb-3">
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                            <tbody>${gloveboxReagentRows}</tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3"><strong>反应工站：</strong>${task.stations.reaction.enabled ? '已启用' : '未启用'}</div>
+                    ${reactionHtml}
+                    <div class="mb-3"><strong>GCMS工站：</strong>${task.stations.gcms.enabled ? '已启用' : '未启用'}</div>
+                    ${gcmsHtml}
+                    <div class="mb-3"><strong>旋蒸工站：</strong>${task.stations.evaporation.enabled ? '已启用' : '未启用'}</div>
+                    ${evaporationHtml}
+                    <div class="mb-3"><strong>TLC分析工站：</strong>${task.stations.tlc.enabled ? '已启用' : '未启用'}</div>
+                    ${tlcHtml}
+                `;
+
+                // 暂存任务，等待确认
+                // 将备注加入待提交任务（前端展示用途）
+                pendingTask = Object.assign({}, task, { remark: remark });
+
+                $('#submit-summary').html(summaryHtml);
+                const modal = new bootstrap.Modal(document.getElementById('submit-confirm-modal'));
+                modal.show();
+            });
+
+            // 确认提交：保存到服务器并跳转到用户仪表盘（状态强制为 草稿）
+            $('#confirm-submit-btn').on('click', function () {
+                if (!pendingTask) return;
+                const params = new URLSearchParams(window.location.search);
+                const editingId = params.get('id');
+                const numericEditingId = editingId ? Number(editingId) : null;
+                const payload = Object.assign({}, pendingTask, { status: '草稿' });
+                const apiCall = numericEditingId ? TaskService.update(numericEditingId, payload) : TaskService.create(payload);
+                apiCall.then(function(resp){
+                    if (resp && resp.ok) {
+                        window.location.href = "{% url 'user_task_management' %}";
+                    } else {
+                        alert('保存失败：' + (resp && resp.message ? resp.message : '未知错误'));
+                    }
+                }).catch(function(){ alert('网络错误，保存失败'); });
+            });
+        });
+    </script>
+</body>

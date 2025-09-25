@@ -1,0 +1,246 @@
+{% extends 'user_base.html' %}
+
+{% block title %}数据分析{% endblock %}
+
+
+{% block main_content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">数据建模分析</h1>
+            <p class="text-muted">上传数据、创建模型、训练机器学习算法</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="refreshData()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+    </div>
+
+    <!-- 功能模块卡片 -->
+    <div class="row mb-4">
+        <!-- 数据解析模块 -->
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 shadow-sm hover-card" onclick="goToDataAnalysis()" style="cursor: pointer;">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-file-csv fa-3x text-primary"></i>
+                    </div>
+                    <h5 class="card-title text-primary">数据解析</h5>
+                    <p class="card-text text-muted">
+                        上传CSV文件，进行数据质量分析，处理缺失值和异常值，进行数据分割
+                    </p>
+                    <div class="mt-3">
+                        <span class="badge bg-primary">数据预处理</span>
+                        <span class="badge bg-secondary">质量分析</span>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>预计用时：1-5分钟
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模型创建模块 -->
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 shadow-sm hover-card" onclick="goToModelCreation()" style="cursor: pointer;">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-brain fa-3x text-success"></i>
+                    </div>
+                    <h5 class="card-title text-success">创建模型</h5>
+                    <p class="card-text text-muted">
+                        选择机器学习算法，配置参数，训练模型，获得预测结果和性能评估
+                    </p>
+                    <div class="mt-3">
+                        <span class="badge bg-success">机器学习</span>
+                        <span class="badge bg-info">模型训练</span>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>预计用时：1-5分钟
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务管理模块 -->
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100 shadow-sm hover-card" onclick="goToTaskManagement()" style="cursor: pointer;">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="fas fa-tasks fa-3x text-warning"></i>
+                    </div>
+                    <h5 class="card-title text-warning">任务管理</h5>
+                    <p class="card-text text-muted">
+                        查看训练任务状态，监控进度，查看结果，管理已完成的模型
+                    </p>
+                    <div class="mt-3">
+                        <span class="badge bg-warning">任务监控</span>
+                        <span class="badge bg-dark">结果查看</span>
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-clock me-1"></i>实时更新
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 已移除统计信息模块 -->
+
+    <!-- 最近任务 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <!-- <h6 class="m-0 font-weight-bold text-primary">最近任务</h6>
+            <button class="btn btn-sm btn-outline-primary" onclick="goToTaskManagement()">
+                查看全部
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>任务名称</th>
+                            <th>算法</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-tasks-body">
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">暂无任务</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div> -->
+        </div>
+    </div>
+
+    <!-- 快速开始指南 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">快速开始指南</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <span class="fw-bold">1</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">上传数据</h6>
+                            <small class="text-muted">点击"数据解析"上传CSV文件</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <span class="fw-bold">2</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">创建模型</h6>
+                            <small class="text-muted">选择算法和参数开始训练</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-warning text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <span class="fw-bold">3</span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">查看结果</h6>
+                            <small class="text-muted">在任务管理中查看训练结果</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hover-card {
+        transition: all 0.3s ease;
+    }
+    
+    .hover-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    
+    .border-left-warning {
+        border-left: 0.25rem solid #f6c23e !important;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadRecentTasks();
+    });
+
+    // 统计信息功能已移除
+
+    // 加载最近任务
+    function loadRecentTasks() {
+        // 这里将通过API获取最近任务
+        // 暂时显示空状态
+    }
+
+    // 刷新数据
+    function refreshData() {
+        loadRecentTasks();
+        showToast('数据已刷新', 'success');
+    }
+
+    // 跳转到数据解析页面
+    function goToDataAnalysis() {
+        window.location.href = "{% url 'ml_data_analysis' %}";
+    }
+
+    // 跳转到模型创建页面
+    function goToModelCreation() {
+        window.location.href = "{% url 'ml_model_creation' %}";
+    }
+
+    // 跳转到任务管理页面
+    function goToTaskManagement() {
+        window.location.href = "{% url 'ml_task_management' %}";
+    }
+</script>
+{% endblock %}
+

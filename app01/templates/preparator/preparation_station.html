@@ -1,0 +1,420 @@
+{% extends 'preparator_base.html' %}
+
+{% block title %}备料员-放入备料区{% endblock %}
+
+
+{% block main_content %}
+
+<div class="card mt-4">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="fas fa-boxes"></i> 备料区</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for station in prep_stations %}
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card {% if station.is_occupied %}border-success{% else %}border-light{% endif %}">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">{{ station.position_name }}</h5>
+                        <p class="card-text text-muted small">{{ station.get_expected_material_kind_display }}</p>
+                        
+                        <!-- 当前转移仓信息 -->
+                        <div class="current-container-info mb-3">
+                            {% if station.is_occupied and station.current_container %}
+                                <div class="alert alert-success py-2 mb-2">
+                                    <i class="fas fa-check-circle"></i>
+                                    <strong>当前转移仓：</strong><br>
+                                    <span class="container-name">{{ station.current_container.name }}</span><br>
+                                    <small class="text-muted">{{ station.current_container.spec.name }}</small>
+                                </div>
+                                <div class="text-muted small">
+                                    <i class="fas fa-clock"></i> 放置时间：{{ station.placed_at|date:"Y-m-d H:i" }}<br>
+                                    <i class="fas fa-user"></i> 操作人：{{ station.placed_by.username }}
+                                </div>
+                            {% else %}
+                                <div class="alert alert-light py-2 mb-2">
+                                    <i class="fas fa-circle"></i>
+                                    <span class="text-muted">位置空闲</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- 操作按钮 -->
+                        <div class="btn-group-vertical w-100" role="group">
+                            {% if not station.is_occupied %}
+                                <button type="button" class="btn btn-outline-primary btn-sm" 
+                                        onclick="showPlaceContainerModal('{{ station.id }}', '{{ station.expected_material_kind }}', '{{ station.position_name }}')">
+                                    <i class="fas fa-plus"></i> 放置转移仓
+                                </button>
+                            {% else %}
+                                <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        onclick="removeContainer('{{ station.id }}', '{{ station.position_name }}')">
+                                    <i class="fas fa-times"></i> 移除当前转移仓
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% if forloop.counter|divisibleby:6 %}
+            <div class="w-100 d-none d-lg-block"></div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark">
+        <h4 class="mb-0"><i class="fas fa-undo"></i> 回料区</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for station in return_stations %}
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card {% if station.is_occupied %}border-success{% else %}border-light{% endif %}">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-warning">{{ station.position_name }}</h5>
+                        <p class="card-text text-muted small">{{ station.get_expected_material_kind_display }}</p>
+                        
+                        <!-- 当前转移仓信息 -->
+                        <div class="current-container-info mb-3">
+                            {% if station.is_occupied and station.current_container %}
+                                <div class="alert alert-success py-2 mb-2">
+                                    <i class="fas fa-check-circle"></i>
+                                    <strong>当前转移仓：</strong><br>
+                                    <span class="container-name">{{ station.current_container.name }}</span><br>
+                                    <small class="text-muted">{{ station.current_container.spec.name }}</small>
+                                </div>
+                                <div class="text-muted small">
+                                    <i class="fas fa-clock"></i> 放置时间：{{ station.placed_at|date:"Y-m-d H:i" }}<br>
+                                    <i class="fas fa-user"></i> 操作人：{{ station.placed_by.username }}
+                                </div>
+                            {% else %}
+                                <div class="alert alert-light py-2 mb-2">
+                                    <i class="fas fa-circle"></i>
+                                    <span class="text-muted">位置空闲</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- 操作按钮 -->
+                        <div class="btn-group-vertical w-100" role="group">
+                            {% if not station.is_occupied %}
+                                <button type="button" class="btn btn-outline-warning btn-sm" 
+                                        onclick="showPlaceContainerModal('{{ station.id }}', '{{ station.expected_material_kind }}', '{{ station.position_name }}')">
+                                    <i class="fas fa-plus"></i> 放置转移仓
+                                </button>
+                            {% else %}
+                                <button type="button" class="btn btn-outline-danger btn-sm" 
+                                        onclick="removeContainer('{{ station.id }}', '{{ station.position_name }}')">
+                                    <i class="fas fa-times"></i> 移除当前转移仓
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% if forloop.counter|divisibleby:6 %}
+            <div class="w-100 d-none d-lg-block"></div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- 放置转移仓模态框 -->
+<div class="modal fade" id="placeContainerModal" tabindex="-1" aria-labelledby="placeContainerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="placeContainerModalLabel">放置转移仓</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">目标位置：</label>
+                    <input type="text" class="form-control" id="targetPosition" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">选择转移仓：</label>
+                    <select class="form-select" id="containerSelect">
+                        <option value="">请选择转移仓...</option>
+                    </select>
+                </div>
+                <div id="containerInfo" class="alert alert-info" style="display: none;">
+                    <h6>转移仓信息：</h6>
+                    <p class="mb-1"><strong>名称：</strong><span id="containerName"></span></p>
+                    <p class="mb-1"><strong>类型：</strong><span id="containerSpec"></span></p>
+                    <p class="mb-0"><strong>容量：</strong><span id="containerCapacity"></span> 槽位</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmPlaceContainer" disabled>确认放置</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 移除转移仓确认模态框 -->
+<div class="modal fade" id="removeContainerModal" tabindex="-1" aria-labelledby="removeContainerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="removeContainerModalLabel">确认移除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要从 <strong id="removePositionName"></strong> 移除当前转移仓吗？</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    此操作将把转移仓状态设置为空闲，请确认操作。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmRemoveContainer">确认移除</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPositionId = null;
+let currentPositionName = null;
+
+// 显示放置转移仓模态框
+function showPlaceContainerModal(positionId, materialKind, positionName) {
+    currentPositionId = positionId;
+    currentPositionName = positionName;
+    
+    document.getElementById('targetPosition').value = positionName;
+    document.getElementById('containerSelect').innerHTML = '<option value="">加载中...</option>';
+    document.getElementById('containerInfo').style.display = 'none';
+    document.getElementById('confirmPlaceContainer').disabled = true;
+    
+    // 获取可用转移仓
+    fetch(`/api/preparation-station/available-containers/?material_kind=${materialKind}`)
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById('containerSelect');
+            select.innerHTML = '<option value="">请选择转移仓...</option>';
+            
+            if (data.success && data.containers.length > 0) {
+                data.containers.forEach(container => {
+                    const option = document.createElement('option');
+                    option.value = container.id;
+                    option.textContent = `${container.name} (${container.spec_name})`;
+                    option.dataset.name = container.name;
+                    option.dataset.spec = container.spec_name;
+                    option.dataset.capacity = container.capacity;
+                    select.appendChild(option);
+                });
+            } else {
+                select.innerHTML = '<option value="">暂无可用转移仓</option>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('containerSelect').innerHTML = '<option value="">加载失败</option>';
+        });
+    
+    new bootstrap.Modal(document.getElementById('placeContainerModal')).show();
+}
+
+// 转移仓选择变化
+document.getElementById('containerSelect').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const containerInfo = document.getElementById('containerInfo');
+    const confirmBtn = document.getElementById('confirmPlaceContainer');
+    
+    if (this.value) {
+        document.getElementById('containerName').textContent = selectedOption.dataset.name;
+        document.getElementById('containerSpec').textContent = selectedOption.dataset.spec;
+        document.getElementById('containerCapacity').textContent = selectedOption.dataset.capacity;
+        containerInfo.style.display = 'block';
+        confirmBtn.disabled = false;
+    } else {
+        containerInfo.style.display = 'none';
+        confirmBtn.disabled = true;
+    }
+});
+
+// 确认放置转移仓
+document.getElementById('confirmPlaceContainer').addEventListener('click', function() {
+    const containerId = document.getElementById('containerSelect').value;
+    
+    if (!containerId) {
+        alert('请选择转移仓');
+        return;
+    }
+    
+    fetch('/api/preparation-station/place-container/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            position_id: currentPositionId,
+            container_id: containerId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            bootstrap.Modal.getInstance(document.getElementById('placeContainerModal')).hide();
+            // 刷新页面
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', '操作失败，请重试');
+    });
+});
+
+// 移除转移仓
+function removeContainer(positionId, positionName) {
+    currentPositionId = positionId;
+    currentPositionName = positionName;
+    
+    document.getElementById('removePositionName').textContent = positionName;
+    new bootstrap.Modal(document.getElementById('removeContainerModal')).show();
+}
+
+// 确认移除转移仓
+document.getElementById('confirmRemoveContainer').addEventListener('click', function() {
+    fetch('/api/preparation-station/remove-container/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            position_id: currentPositionId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            bootstrap.Modal.getInstance(document.getElementById('removeContainerModal')).hide();
+            // 刷新页面
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', '操作失败，请重试');
+    });
+});
+
+// 显示提示信息
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // 自动移除提示
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.parentNode.removeChild(alertDiv);
+        }
+    }, 5000);
+}
+
+// 获取CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+
+<style>
+.station-card {
+    transition: all 0.3s ease;
+    border-width: 2px;
+}
+
+.station-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.station-card.border-success {
+    border-color: #28a745 !important;
+    background-color: #f8fff9;
+}
+
+.station-card.border-light {
+    border-color: #dee2e6 !important;
+}
+
+.current-container-info .alert {
+    margin-bottom: 0.5rem;
+}
+
+.container-name {
+    font-weight: bold;
+    color: #155724;
+}
+
+.btn-group-vertical .btn {
+    margin-bottom: 0.25rem;
+}
+
+.btn-group-vertical .btn:last-child {
+    margin-bottom: 0;
+}
+
+.card-header.bg-primary {
+    background: linear-gradient(135deg, #007bff, #0056b3) !important;
+}
+
+.card-header.bg-warning {
+    background: linear-gradient(135deg, #ffc107, #e0a800) !important;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.alert-light {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #6c757d;
+}
+</style>
+{% endblock %}

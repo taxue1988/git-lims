@@ -1,0 +1,61 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}物料需求 - 自动实验管理系统{% endblock %}
+
+{% block sidebar_menu %}
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_dashboard' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-tachometer-alt fa-lg me-3 text-primary"></i>
+        <span class="text-white">仪表板</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_experiment_tasks' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-vials fa-lg me-3"></i>
+        <span class="text-white">实验任务</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_material_requirements' %}" class="nav-link active bg-warning rounded shadow">
+        <i class="fas fa-boxes fa-lg me-3 text-warning"></i>
+        <span class="text-white fw-bold">物料需求</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_user_management' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-users fa-lg me-3 text-success"></i>
+        <span class="text-white">用户管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="{% url 'admin_equipment_management' %}" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-flask fa-lg me-3 text-info"></i>
+        <span class="text-white">设备管理</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-chart-bar fa-lg me-3 text-warning"></i>
+        <span class="text-white">数据统计</span>
+    </a>
+</li>
+<li class="nav-item mb-3">
+    <a href="#" class="nav-link rounded hover-bg-light">
+        <i class="fas fa-cog fa-lg me-3 text-secondary"></i>
+        <span class="text-white">系统设置</span>
+    </a>
+</li>
+{% endblock %}
+
+{% block main_content %}
+<h1 class="h3 mb-4 text-gray-800">物料需求（占位）</h1>
+
+<div class="card shadow">
+    <div class="card-body">
+        <p class="text-muted mb-0">这里将用于管理“物料需求分液”等相关功能。后续将逐步完善。</p>
+    </div>
+    
+</div>
+{% endblock %}
+
+

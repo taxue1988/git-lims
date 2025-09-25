@@ -1,0 +1,651 @@
+{% extends 'preparator_base.html' %}
+
+{% block title %}备料员-物料管理{% endblock %}
+
+
+{% block main_content %}
+
+<!-- 物料管理页面 -->
+<section id="container-management">
+    <div class="container-fluid">
+        <h1 class="h3 mb-4 text-gray-800">物料管理</h1>
+
+        <!-- 物料统计（5种类型） -->
+        <div class="col-lg-12 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">物料统计</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>总物料数</th>
+                                    <th>15mL试管</th>
+                                    <th>铼羽粉筒</th>
+                                    <th>晶泰粉筒</th>
+                                    <th>150mL试剂瓶</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td id="stat_total" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_test_tube_15" data-code="container_test_tube_15"
+                                        class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_laiyu_powder" data-code="container_laiyu_powder"
+                                        class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_jingtai_powder" data-code="container_jingtai_powder"
+                                        class="stat-code" style="cursor: pointer;">0</td>
+                                    <td id="stat_container_reagent_bottle_150" data-code="container_reagent_bottle_150"
+                                        class="stat-code" style="cursor: pointer;">0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜索和新增物料 -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">物料操作</h6>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <a id="add-experiment-btn" class="btn btn-success" href="javascript:void(0)">
+                        <i class="fas fa-plus me-1"></i>新增物料
+                    </a>
+                    <button id="refresh-container-btn" class="btn btn-outline-secondary">
+                        <i class="fas fa-rotate"></i> 刷新列表
+                    </button>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-nowrap">
+                    <input type="text" id="search-experiment-name" class="form-control" placeholder="按物料名称搜索"
+                        style="min-width: 220px;">
+                    <button id="search-experiment-btn" class="btn btn-primary" style="min-width: 110px;">
+                        <i class="fas fa-search me-1"></i>搜索
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 物料列表 -->
+    <div class="card shadow mb-4 experiment-table">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">物料列表</h6>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="batch-approve-btn">
+                    <i class="fas fa-check me-1"></i>批量导出名称
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:40px;">
+                                <input type="checkbox" id="select-all-containers">
+                            </th>
+                            <th>物料名称</th>
+                            <th>类型</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="container-list-body">
+                        <!-- 物料数据将通过JavaScript动态加载 -->
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+    </div>
+</section>
+
+<!-- 新增物料 Modal -->
+<div class="modal fade" id="createMaterialModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">新增物料</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">物料类型</label>
+                    <select id="materialKindSelect" class="form-select">
+                        <option value="test_tube_15">15mL试管</option>
+                        <option value="laiyu_powder">铼羽粉筒</option>
+                        <option value="jingtai_powder">晶泰粉筒</option>
+                        <option value="reagent_bottle_150">150mL试剂瓶</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">创建数量</label>
+                    <input type="number" class="form-control" id="createCountInput" value="1" min="1" max="100">
+                </div>
+                <!-- 可选：固体/液体详细信息（随类型切换显示） -->
+                <div class="mb-3" id="solidFields" style="display:none;">
+                    <label class="form-label">固体试剂名称（可选）</label>
+                    <input type="text" class="form-control mb-2" id="solidNameInput" placeholder="如：NaCl（可留空）">
+                    <label class="form-label">质量（mg，可选）</label>
+                    <input type="number" class="form-control" id="solidMassInput" min="0" step="0.01"
+                        placeholder="如：100（可留空）">
+                </div>
+                <div class="mb-3" id="liquidFields" style="display:none;">
+                    <label class="form-label">液体试剂名称（可选）</label>
+                    <input type="text" class="form-control mb-2" id="liquidNameInput" placeholder="如：乙醇（可留空）">
+                    <label class="form-label">体积（mL，可选）</label>
+                    <input type="number" class="form-control" id="liquidVolumeInput" min="0" step="0.01"
+                        placeholder="如：50（可留空）">
+                </div>
+
+                <div class="text-danger small" id="createError" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmCreateBtn">创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 查看物料详情 Modal -->
+<div class="modal fade" id="containerDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">物料详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <div class="mb-2"><strong>名称：</strong><span data-field="name"></span></div>
+                        <div class="mb-2"><strong>状态：</strong><span data-field="state"></span></div>
+                        <div class="mb-2"><strong>类型：</strong><span data-field="spec"></span></div>
+                        <div class="mb-2"><strong>当前转移仓名称：</strong><span data-field="current_container"></span></div>
+                        <div class="mb-2 d-none" id="detail-row-task"><strong>任务ID：</strong><span
+                                data-field="task_id"></span></div>
+                        <div class="mb-2 d-none" id="detail-row-solid-name"><strong>固体试剂名称：</strong><span
+                                data-field="material_name"></span></div>
+                        <div class="mb-2 d-none" id="detail-row-solid-mass"><strong>剩余质量(mg)：</strong><span
+                                data-field="mass_mg"></span></div>
+                        <div class="mb-2 d-none" id="detail-row-liquid-name"><strong>液体试剂名称：</strong><span
+                                data-field="reagent_name"></span></div>
+                        <div class="mb-2 d-none" id="detail-row-liquid-volume"><strong>体积(mL)：</strong><span
+                                data-field="volume_ml"></span></div>
+                        <div class="mb-2"><strong>创建时间：</strong><span data-field="created"></span></div>
+                        <div class="mb-2"><strong>更新时间：</strong><span data-field="updated"></span></div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <img data-field="qr" alt="QR"
+                            style="width:160px;height:160px;border:1px solid #eee;border-radius:6px;" />
+                        <div class="small text-muted mt-1">扫码标识：名称</div>
+                    </div>
+                </div>
+                <!-- 不再显示槽位/占用/物料类型/物料名称/附加信息 -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑物料 Modal -->
+<div class="modal fade" id="editMaterialModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑物料</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editKind">
+                <input type="hidden" id="editId">
+                <div class="mb-3">
+                    <label class="form-label">名称</label>
+                    <input type="text" class="form-control" id="editName" placeholder="物料名称">
+                </div>
+                <div class="mb-3 d-none" id="editRowTask">
+                    <label class="form-label">任务ID（可空）</label>
+                    <input type="number" class="form-control" id="editTaskId" min="0" placeholder="如不关联可留空">
+                </div>
+                <div class="mb-3 d-none" id="editRowSolid">
+                    <label class="form-label">固体试剂名称</label>
+                    <input type="text" class="form-control mb-2" id="editMaterialName" placeholder="如：NaCl">
+                    <label class="form-label">质量（mg）</label>
+                    <input type="number" class="form-control" id="editMassMg" min="0" step="0.01" placeholder="如：100">
+                </div>
+                <div class="mb-3 d-none" id="editRowLiquid">
+                    <label class="form-label">液体试剂名称</label>
+                    <input type="text" class="form-control mb-2" id="editReagentName" placeholder="如：乙醇">
+                    <label class="form-label">体积（mL）</label>
+                    <input type="number" class="form-control" id="editVolumeMl" min="0" step="0.01" placeholder="如：50">
+                </div>
+                <div class="text-danger small d-none" id="editError"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmEditBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script>
+    (function () {
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        const tableBody = document.getElementById('container-list-body');
+        const searchBtn = document.getElementById('search-experiment-btn');
+        const nameInputEl = document.getElementById('search-experiment-name');
+        const refreshBtn = document.getElementById('refresh-container-btn');
+        const selectAll = document.getElementById('select-all-containers');
+        const exportBtn = document.getElementById('batch-approve-btn');
+
+        function render(items) {
+            tableBody.innerHTML = '';
+            (items || []).forEach(function (it) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="row-check" data-id="${it.id}"></td>
+                    <td>${it.name}</td>
+                    <td>${it.kind}</td>
+                    <td>${it.state}</td>
+                    <td>${it.created_at}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" title="查看" data-action="view" data-kind="${it.kind}" data-id="${it.id}"><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary me-1" title="编辑" data-action="edit" data-kind="${it.kind}" data-id="${it.id}"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-outline-warning me-1" title="清空" data-action="clear" data-kind="${it.kind}" data-id="${it.id}"><i class="fas fa-broom"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" title="删除" data-action="delete" data-kind="${it.kind}" data-id="${it.id}"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            tableBody.querySelectorAll('button[data-action="view"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    openDetail(this.getAttribute('data-kind'), this.getAttribute('data-id'));
+                });
+            });
+            tableBody.querySelectorAll('button[data-action="edit"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    openEdit(this.getAttribute('data-kind'), this.getAttribute('data-id'));
+                });
+            });
+            tableBody.querySelectorAll('button[data-action="clear"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    doClear(this.getAttribute('data-kind'), this.getAttribute('data-id'));
+                });
+            });
+            tableBody.querySelectorAll('button[data-action="delete"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    doDelete(this.getAttribute('data-kind'), this.getAttribute('data-id'));
+                });
+            });
+        }
+
+        function loadList(extra) {
+            const params = new URLSearchParams({ name: (nameInputEl && nameInputEl.value) || '' });
+            if (extra && extra.kind) { params.set('kind', extra.kind); }
+            fetch('/api/materials/?' + params.toString(), { credentials: 'same-origin' })
+                .then(r => r.json()).then(data => {
+                    if (!(data && data.ok)) return;
+                    render(data.materials || []);
+                });
+        }
+
+        function loadStats() {
+            fetch('/api/materials/stats/', { credentials: 'same-origin' })
+                .then(r => r.json()).then(data => {
+                    if (!(data && data.ok)) return;
+                    const total = document.getElementById('stat_total');
+                    total && (total.textContent = data.total || 0);
+                    const map = data.by_kind || {};
+                    const cells = {
+                        'container_test_tube_15': map['test_tube_15'] || 0,
+                        'container_laiyu_powder': map['laiyu_powder'] || 0,
+                        'container_jingtai_powder': map['jingtai_powder'] || 0,
+                        'container_reagent_bottle_150': map['reagent_bottle_150'] || 0,
+                    };
+                    Object.keys(cells).forEach(function (id) {
+                        const el = document.getElementById('stat_' + id);
+                        if (el) el.textContent = cells[id];
+                    });
+                });
+        }
+
+        searchBtn && searchBtn.addEventListener('click', function () { loadList(); loadStats(); });
+        refreshBtn && refreshBtn.addEventListener('click', function () { loadList(); loadStats(); });
+        selectAll && selectAll.addEventListener('change', function () {
+            tableBody.querySelectorAll('input.row-check').forEach(cb => { cb.checked = selectAll.checked; });
+        });
+
+        exportBtn && exportBtn.addEventListener('click', function () {
+            const ids = Array.from(document.querySelectorAll('input.row-check:checked')).map(cb => Number(cb.getAttribute('data-id'))).filter(Boolean);
+            if (!ids.length) { alert('请先勾选要导出的物料'); return; }
+            fetch('/api/materials/export/names/', {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
+                body: JSON.stringify({ ids })
+            }).then(async r => {
+                if (r.ok) {
+                    const blob = await r.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = 'materials_export';
+                    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+                } else {
+                    const data = await r.json().catch(() => ({ message: '导出失败' }));
+                    alert(data.message || '导出失败');
+                }
+            });
+        });
+
+        // 根据转移仓ID获取转移仓名称
+        function getContainerNameById(containerId) {
+            return new Promise((resolve, reject) => {
+                if (!containerId) {
+                    resolve('空闲');
+                    return;
+                }
+                fetch('/api/containers/names/', { credentials: 'same-origin' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data && data.ok) {
+                            const container = data.containers.find(c => c.id === containerId);
+                            resolve(container ? container.name : '未知转移仓');
+                        } else {
+                            resolve('获取失败');
+                        }
+                    })
+                    .catch(() => resolve('获取失败'));
+            });
+        }
+
+        function openDetail(kind, id) {
+            const kindCodeMap = {
+                '15mL试管': 'test_tube_15',
+                '铼羽粉筒': 'laiyu_powder',
+                '晶泰粉筒': 'jingtai_powder',
+                '150mL试剂瓶': 'reagent_bottle_150',
+            };
+            const kindLabelMap = {
+                'test_tube_15': '15mL试管',
+                'laiyu_powder': '铼羽粉筒',
+                'jingtai_powder': '晶泰粉筒',
+                'reagent_bottle_150': '150mL试剂瓶',
+            };
+            const kcode = kindCodeMap[kind] || kind; // 兼容传入中文或机器码
+            fetch(`/api/materials/${kcode}/${id}/`, { credentials: 'same-origin' })
+                .then(r => r.json()).then(data => {
+                    if (!(data && data.ok)) return;
+                    const m = data.material;
+                    const modalEl = document.getElementById('containerDetailModal');
+                    if (!modalEl) return;
+                    modalEl.querySelector('[data-field="name"]').textContent = m.name || '';
+                    modalEl.querySelector('[data-field="state"]').textContent = m.state || '';
+                    modalEl.querySelector('[data-field="spec"]').textContent = kindLabelMap[kcode] || kcode;
+                    // 当前转移仓名称/空闲
+                    const cc = modalEl.querySelector('[data-field="current_container"]');
+                    if (cc) {
+                        getContainerNameById(m.current_container_id).then(containerName => {
+                            cc.textContent = containerName;
+                        });
+                    }
+                    // 隐藏所有类型特有行
+                    const rowTask = modalEl.querySelector('#detail-row-task');
+                    const rowSolidName = modalEl.querySelector('#detail-row-solid-name');
+                    const rowSolidMass = modalEl.querySelector('#detail-row-solid-mass');
+                    const rowLiquidName = modalEl.querySelector('#detail-row-liquid-name');
+                    const rowLiquidVolume = modalEl.querySelector('#detail-row-liquid-volume');
+                    [rowTask, rowSolidName, rowSolidMass, rowLiquidName, rowLiquidVolume].forEach(function (el) { if (el) { el.classList.add('d-none'); } });
+                    // 按类型填充特有字段（统一按机器码判断）
+                    if (kcode === 'test_tube_15') {
+                        if (rowTask) { rowTask.classList.remove('d-none'); }
+                        const elTask = modalEl.querySelector('[data-field="task_id"]');
+                        if (elTask) elTask.textContent = (m.task_id ? String(m.task_id) : '空闲');
+                    } else if (kcode === 'laiyu_powder' || kcode === 'jingtai_powder') {
+                        if (rowSolidName) { rowSolidName.classList.remove('d-none'); }
+                        if (rowSolidMass) { rowSolidMass.classList.remove('d-none'); }
+                        const elName = modalEl.querySelector('[data-field="material_name"]');
+                        const elMass = modalEl.querySelector('[data-field="mass_mg"]');
+                        if (elName) elName.textContent = m.material_name || '';
+                        if (elMass) elMass.textContent = (m.mass_mg != null ? String(m.mass_mg) : '');
+                    } else if (kcode === 'reagent_bottle_150') {
+                        if (rowLiquidName) { rowLiquidName.classList.remove('d-none'); }
+                        if (rowLiquidVolume) { rowLiquidVolume.classList.remove('d-none'); }
+                        const elLName = modalEl.querySelector('[data-field="reagent_name"]');
+                        const elVol = modalEl.querySelector('[data-field="volume_ml"]');
+                        if (elLName) elLName.textContent = m.reagent_name || '';
+                        if (elVol) elVol.textContent = (m.volume_ml != null ? String(m.volume_ml) : '');
+                    }
+                    modalEl.querySelector('[data-field="created"]').textContent = m.created_at || '';
+                    modalEl.querySelector('[data-field="updated"]').textContent = m.updated_at || '';
+                    const qr = modalEl.querySelector('[data-field="qr"]');
+                    if (qr) {
+                        const txt = encodeURIComponent(m.name || '');
+                        qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + txt;
+                        qr.alt = m.name || '';
+                    }
+                    const modal = new bootstrap.Modal(modalEl); modal.show();
+                });
+        }
+
+        function openEdit(kind, id) {
+            const kindCodeMap = {
+                '15mL试管': 'test_tube_15',
+                '铼羽粉筒': 'laiyu_powder',
+                '晶泰粉筒': 'jingtai_powder',
+                '150mL试剂瓶': 'reagent_bottle_150',
+            };
+            const kcode = kindCodeMap[kind] || kind;
+            fetch(`/api/materials/${kcode}/${id}/`, { credentials: 'same-origin' })
+                .then(r => r.json()).then(data => {
+                    if (!(data && data.ok)) return;
+                    const m = data.material;
+                    const editEl = document.getElementById('editMaterialModal');
+                    if (!editEl) return;
+                    const kindInput = document.getElementById('editKind');
+                    const idInput = document.getElementById('editId');
+                    const nameInput = document.getElementById('editName');
+                    const rowTask = document.getElementById('editRowTask');
+                    const rowSolid = document.getElementById('editRowSolid');
+                    const rowLiquid = document.getElementById('editRowLiquid');
+                    const taskInput = document.getElementById('editTaskId');
+                    const materialNameInput = document.getElementById('editMaterialName');
+                    const massInput = document.getElementById('editMassMg');
+                    const reagentNameInput = document.getElementById('editReagentName');
+                    const volumeInput = document.getElementById('editVolumeMl');
+                    const errEl = document.getElementById('editError');
+                    if (errEl) { errEl.classList.add('d-none'); errEl.textContent = ''; }
+                    if (kindInput) kindInput.value = kcode; // 存机器码
+                    if (idInput) idInput.value = String(id);
+                    if (nameInput) nameInput.value = m.name || '';
+                    if (rowTask) rowTask.classList.add('d-none');
+                    if (rowSolid) rowSolid.classList.add('d-none');
+                    if (rowLiquid) rowLiquid.classList.add('d-none');
+                    if (kcode === 'test_tube_15') {
+                        if (rowTask) rowTask.classList.remove('d-none');
+                        if (taskInput) taskInput.value = m.task_id != null ? String(m.task_id) : '';
+                    } else if (kcode === 'laiyu_powder' || kcode === 'jingtai_powder') {
+                        if (rowSolid) rowSolid.classList.remove('d-none');
+                        if (materialNameInput) materialNameInput.value = m.material_name || '';
+                        if (massInput) massInput.value = m.mass_mg != null ? String(m.mass_mg) : '';
+                    } else if (kcode === 'reagent_bottle_150') {
+                        if (rowLiquid) rowLiquid.classList.remove('d-none');
+                        if (reagentNameInput) reagentNameInput.value = m.reagent_name || '';
+                        if (volumeInput) volumeInput.value = m.volume_ml != null ? String(m.volume_ml) : '';
+                    }
+                    const modal = new bootstrap.Modal(editEl); modal.show();
+                    const confirmBtn = document.getElementById('confirmEditBtn');
+                    if (confirmBtn) {
+                        confirmBtn.onclick = function () {
+                            const payload = {};
+                            const k = kindInput ? kindInput.value : kcode;
+                            const rid = idInput ? idInput.value : String(id);
+                            const newName = nameInput ? (nameInput.value || '').trim() : '';
+                            if (newName) payload['name'] = newName;
+                            if (k === 'test_tube_15') {
+                                if (taskInput) {
+                                    const t = (taskInput.value || '').trim();
+                                    payload['task_id'] = t ? Number(t) : null;
+                                }
+                            } else if (k === 'laiyu_powder' || k === 'jingtai_powder') {
+                                if (materialNameInput) payload['material_name'] = (materialNameInput.value || '').trim();
+                                if (massInput) {
+                                    const v = Number(massInput.value || '');
+                                    if (!Number.isNaN(v)) payload['mass_mg'] = v;
+                                }
+                            } else if (k === 'reagent_bottle_150') {
+                                if (reagentNameInput) payload['reagent_name'] = (reagentNameInput.value || '').trim();
+                                if (volumeInput) {
+                                    const v = Number(volumeInput.value || '');
+                                    if (!Number.isNaN(v)) payload['volume_ml'] = v;
+                                }
+                            }
+                            fetch(`/api/materials/${k}/${rid}/update/`, {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
+                                body: JSON.stringify(payload)
+                            }).then(r => r.json()).then(resp => {
+                                if (!(resp && resp.ok)) { if (errEl) { errEl.textContent = (resp && resp.message) || '保存失败'; errEl.classList.remove('d-none'); } return; }
+                                bootstrap.Modal.getInstance(editEl).hide();
+                                loadList(); loadStats();
+                            }).catch(() => { if (errEl) { errEl.textContent = '网络错误'; errEl.classList.remove('d-none'); } });
+                        };
+                    }
+                });
+        }
+
+        function doClear(kind, id) {
+            if (!confirm('确定要清空该物料吗？这将重置状态为空闲并清空所有关联信息。')) return;
+            fetch(`/api/materials/${kind}/${id}/clear/`, { 
+                method: 'POST', 
+                credentials: 'same-origin', 
+                headers: { 'X-CSRFToken': csrftoken || '' } 
+            })
+                .then(r => r.json()).then(data => {
+                    if (!(data && data.ok)) { alert((data && data.message) || '清空失败'); return; }
+                    loadList(); loadStats();
+                });
+        }
+
+        function doDelete(kind, id) {
+            if (!confirm('删除不可恢复，确定要删除该物料吗？')) return;
+            fetch(`/api/materials/${kind}/${id}/delete/`, { method: 'DELETE', credentials: 'same-origin', headers: { 'X-CSRFToken': csrftoken || '' } })
+                .then(r => r.json()).then(data => {
+                    if (!(data && data.ok)) { alert((data && data.message) || '删除失败'); return; }
+                    loadList(); loadStats();
+                });
+        }
+
+        // 统计点击筛选
+        document.querySelectorAll('.stat-code').forEach(function (td) {
+            td.addEventListener('click', function () {
+                const code = this.getAttribute('data-code');
+                let kind = '';
+                if (code === 'container_test_tube_15') kind = 'test_tube_15';
+                else if (code === 'container_laiyu_powder') kind = 'laiyu_powder';
+                else if (code === 'container_jingtai_powder') kind = 'jingtai_powder';
+                else if (code === 'container_reagent_bottle_150') kind = 'reagent_bottle_150';
+                loadList({ kind });
+            });
+        });
+
+        // 新增物料（批量）
+        (function () {
+            const addBtn = document.getElementById('add-experiment-btn');
+            const confirmBtn = document.getElementById('confirmCreateBtn');
+            const modalEl = document.getElementById('createMaterialModal');
+            const createError = document.getElementById('createError');
+            const countInput = document.getElementById('createCountInput');
+            const kindSelect = document.getElementById('materialKindSelect');
+            const solidFields = document.getElementById('solidFields');
+            const solidNameInput = document.getElementById('solidNameInput');
+            const solidMassInput = document.getElementById('solidMassInput');
+            const liquidFields = document.getElementById('liquidFields');
+            const liquidNameInput = document.getElementById('liquidNameInput');
+            const liquidVolumeInput = document.getElementById('liquidVolumeInput');
+            if (addBtn && confirmBtn && modalEl) {
+                addBtn.addEventListener('click', function () {
+                    createError && (createError.style.display = 'none');
+                    if (countInput) countInput.value = '1';
+                    // 重置可选输入
+                    if (solidNameInput) solidNameInput.value = '';
+                    if (solidMassInput) solidMassInput.value = '';
+                    if (liquidNameInput) liquidNameInput.value = '';
+                    if (liquidVolumeInput) liquidVolumeInput.value = '';
+                    // 显示对应可选字段
+                    const k = kindSelect ? kindSelect.value : '';
+                    if (solidFields) solidFields.style.display = (k === 'laiyu_powder' || k === 'jingtai_powder') ? '' : 'none';
+                    if (liquidFields) liquidFields.style.display = (k === 'reagent_bottle_150') ? '' : 'none';
+                    const modal = new bootstrap.Modal(modalEl); modal.show();
+                    confirmBtn.onclick = function () {
+                        const kind = kindSelect ? kindSelect.value : '';
+                        const count = Number(countInput ? (countInput.value || '1') : '1');
+                        if (!kind) { if (createError) { createError.textContent = '请选择物料类型'; createError.style.display = 'block'; } return; }
+                        if (!Number.isFinite(count) || count < 1) { if (createError) { createError.textContent = '数量需为正整数'; createError.style.display = 'block'; } return; }
+                        // 组装可选负载
+                        const payload = { kind, count };
+                        if (kind === 'laiyu_powder' || kind === 'jingtai_powder') {
+                            const material_name = solidNameInput ? (solidNameInput.value || '') : '';
+                            const mass_mg = solidMassInput ? Number(solidMassInput.value || 0) : 0;
+                            if (material_name) payload['material_name'] = material_name;
+                            if (Number.isFinite(mass_mg) && mass_mg > 0) payload['mass_mg'] = mass_mg;
+                        } else if (kind === 'reagent_bottle_150') {
+                            const reagent_name = liquidNameInput ? (liquidNameInput.value || '') : '';
+                            const volume_ml = liquidVolumeInput ? Number(liquidVolumeInput.value || 0) : 0;
+                            if (reagent_name) payload['reagent_name'] = reagent_name;
+                            if (Number.isFinite(volume_ml) && volume_ml > 0) payload['volume_ml'] = volume_ml;
+                        }
+                        fetch('/api/materials/create/', {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' },
+                            body: JSON.stringify(payload)
+                        }).then(r => r.json()).then(data => {
+                            if (!(data && data.ok)) { if (createError) { createError.textContent = (data && data.message) || '创建失败'; createError.style.display = 'block'; } return; }
+                            bootstrap.Modal.getInstance(modalEl).hide();
+                            loadList(); loadStats();
+                        }).catch(() => { if (createError) { createError.textContent = '网络错误'; createError.style.display = 'block'; } });
+                    };
+                });
+                // 类型切换时动态显示字段
+                if (kindSelect) {
+                    kindSelect.addEventListener('change', function () {
+                        const k = kindSelect.value;
+                        if (solidFields) solidFields.style.display = (k === 'laiyu_powder' || k === 'jingtai_powder') ? '' : 'none';
+                        if (liquidFields) liquidFields.style.display = (k === 'reagent_bottle_150') ? '' : 'none';
+                    });
+                }
+            }
+        })();
+
+        // 初次加载
+        loadList(); loadStats();
+    })();
+</script>
+
+{% endblock %}
