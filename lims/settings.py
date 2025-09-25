@@ -84,7 +84,7 @@ if os.getenv('DJANGO_ENV') == 'production':
             'NAME': 'git_lims_db',
             'USER': 'git_lims_user',
             'PASSWORD': '6202380a*#',
-            'HOST': '%',
+            'HOST': '127.0.0.1',
             'PORT': '3306',
             'OPTIONS': {
                 'charset': 'utf8mb4',
