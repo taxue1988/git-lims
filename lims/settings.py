@@ -81,8 +81,8 @@ if os.getenv('DJANGO_ENV') == 'production':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'git-lims-db',
-            'USER': 'git-lims-user',
+            'NAME': 'git_lims_db',
+            'USER': 'git_lims_user',
             'PASSWORD': '6202380a*#',
             'HOST': '127.0.0.1',
             'PORT': '3306',
