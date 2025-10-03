@@ -9,7 +9,16 @@ sleep 0.5
 
 echo -e '\n-----------------going to close----------------- '
 
-ps -ef|grep git_lims_uwsgi.ini | grep -v grep | awk '{print $2}' | xargs kill -9
+# 获取进程ID
+PIDS=$(ps -ef | grep git_lims_uwsgi.ini | grep -v grep | awk '{print $2}')
+
+# 检查是否有进程需要杀死
+if [ -n "$PIDS" ]; then
+    echo $PIDS | xargs kill -9
+    echo "Killed processes: $PIDS"
+else
+    echo "No uWSGI processes found to kill."
+fi
 
 sleep 0.5
 
