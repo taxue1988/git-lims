@@ -1,0 +1,238 @@
+{% extends 'admin/station_management.html' %}
+
+{% block title %}反应 - 工站管理{% endblock %}
+
+{% block main_content %}
+{{ block.super }}
+
+<!-- 工站状态 -->
+<div class="card mt-4">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#stationStatusContent" aria-expanded="true" aria-controls="stationStatusContent" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-cogs"></i> 工站状态</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="stationStatusContent">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">机械臂</div>
+                    <div class="text-muted small">工作状态：<span id="arm-status" class="text-dark">--</span></div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">导轨</div>
+                    <div class="text-muted small">当前位置：<span id="rail-position" class="text-dark">--</span></div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">过滤器</div>
+                    <div class="text-muted small">连接状态：<span id="filter-conn" class="text-dark">--</span></div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">运行与统计</div>
+                    <div class="text-muted small">运行时间：<span id="uptime-text">--:--:--</span></div>
+                    <div class="text-muted small">正在反应数：<span id="reacting-count">0</span></div>
+                    <div class="text-muted small">反应结束数：<span id="reacted-count">0</span></div>
+                    <div class="text-muted small">待监测任务数：<span id="monitor-pending">0</span></div>
+                    <div class="text-muted small">已完成监测任务数：<span id="monitor-done">0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+
+<!-- 转移仓位置（12个） -->
+<div class="card mt-4">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#transferPositions" aria-expanded="true" aria-controls="transferPositions" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-box"></i> 当前仓位（10）</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="transferPositions">
+    <div class="card-body">
+        <div class="row">
+            {% for num in "12345"|make_list %}
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 {{ forloop.counter }}</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-2">
+                            <div class="alert alert-light py-2 mb-0">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="row mt-1">
+            {% for num in "678910"|make_list %}
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 {{ forloop.counter|add:5 }}</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-2">
+                            <div class="alert alert-light py-2 mb-0">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    </div>
+
+<!-- 磁搅设备（20台，每台12孔位） -->
+<div class="card mt-4">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#stirrers" aria-expanded="true" aria-controls="stirrers" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-fan"></i> 磁搅设备（20）</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="stirrers">
+    <div class="card-body">
+        <div class="row">
+            {% for _ in "12345678901234567890"|make_list %}
+            <div class="col-xl-3 col-lg-4 col-md-6 mb-3">
+                <div class="card h-100 stirrer-card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <h5 class="card-title mb-0">磁搅 #{{ forloop.counter }}</h5>
+                            <span class="badge bg-light text-muted">只读</span>
+                        </div>
+                        <div class="mb-2 small text-muted">
+                            当前温度：<span class="text-dark fw-semibold">--</span> °C
+                            <span class="mx-2">|</span>
+                            搅拌速度：<span class="text-dark fw-semibold">--</span> rpm
+                        </div>
+                        <div class="tube-grid">
+                            {% for __ in "123456789012"|make_list %}
+                            <button type="button" class="tube-hole" disabled title="孔位 {{ forloop.counter }}"></button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    </div>
+</div>
+
+<!-- 待检测任务列表 -->
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#pendingDetectTasks" aria-expanded="true" aria-controls="pendingDetectTasks" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-clipboard-list"></i> 待检测任务列表</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="pendingDetectTasks">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 140px;">实验任务ID</th>
+                        <th>实验名称</th>
+                        <th style="width: 120px;">试管ID</th>
+                        <th style="width: 120px;">磁搅孔位</th>
+                        <th style="width: 180px;">创建时间</th>
+                    </tr>
+                </thead>
+                <tbody id="reaction-pending-detect-body">
+                    <!-- 数据通过JS加载 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // 高亮“反应”标签并同步下划线
+    var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
+    if (breadcrumb) {
+        var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
+        var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
+        var target = null;
+        for (var i = 0; i < links.length; i++) {
+            if (links[i].textContent.trim() === '反应') { target = links[i]; break; }
+        }
+        if (target) {
+            links.forEach(function(a){ a.classList.remove('active'); });
+            target.classList.add('active');
+            if (indicator) {
+                indicator.style.width = target.offsetWidth + 'px';
+                indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
+            }
+        }
+    }
+
+    // 折叠箭头旋转
+    var collapseHeaders = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    collapseHeaders.forEach(function(header){
+        header.addEventListener('click', function(){
+            var icon = this.querySelector('.collapse-icon');
+            var target = document.querySelector(this.getAttribute('data-bs-target'));
+            setTimeout(function(){
+                if (target && target.classList.contains('show')) {
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                } else {
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                }
+            }, 50);
+        });
+    });
+});
+</script>
+<style>
+.station-card { transition: all .3s ease; border-width: 2px; }
+.station-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,.1); }
+.station-card.border-light { border-color: #dee2e6 !important; }
+.current-container-info .alert { margin-bottom: .5rem; }
+
+.stirrer-card { transition: all .2s ease; }
+.stirrer-card:hover { box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+.tube-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+.tube-hole {
+    width: 100%;
+    padding-top: 100%;
+    position: relative;
+    border-radius: 50%;
+    border: 2px dashed #ced4da;
+    background: #f8f9fa;
+    cursor: not-allowed;
+}
+.tube-hole::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #adb5bd;
+    transform: translate(-50%, -50%);
+}
+.collapse-icon { transition: transform .3s ease; }
+</style>
+{% endblock %}
+
+

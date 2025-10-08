@@ -242,7 +242,7 @@ class UserViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '用户名或密码错误')
 
-    def test_admin_dashboard_access(self):
+    def test_admin_experiment_tasks_access(self):
         """测试管理员仪表板访问"""
         self.client.login(username='admin', password='Admin123')
         response = self.client.get('/dashboard/admin/')

@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>中科院化学所自动化实验室</title>
+    <script src="https://res.gemcoder.com/js/reload.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#0E2E8A',
+                        success: '#00B42A',
+                        warning: '#FF7D00',
+                        danger: '#F53F3F',
+                        info: '#86909C',
+                        dark: '#1D2129',
+                        'dark-blue': '#0F172A',
+                        'light-blue': '#E8F3FF',
+                        'card-bg': '#1E293B'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif']
+                    },
+                    spacing: {
+                        '72': '18rem',
+                        '80': '20rem',
+                        '88': '22rem',
+                        '96': '24rem'
+                    }
+                }
+            }
+        };
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .bg-grid {
+                background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+                background-size: 20px 20px;
+            }
+            .card-glow {
+                box-shadow: 0 0 15px rgba(22, 93, 255, 0.2);
+            }
+            .task-progress-bar {
+                height: 6px;
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            .task-progress-value {
+                height: 100%;
+                transition: width 1s ease-in-out;
+            }
+        }
+    </style>
+</head>
+<body class="bg-dark-blue text-white font-inter min-h-screen overflow-x-hidden">
+    <!-- [MODULE] abc_主内容区域 -->
+    <div class="relative bg-grid min-h-screen">
+        <!-- 顶部导航栏 -->
+    <!-- [MODULE] d23_顶部导航栏 -->
+        <header class="bg-secondary/80 backdrop-blur-md border-b border-primary/30 sticky top-0 z-50">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-flask text-primary text-2xl"></i>
+                    <h1 class="text-xl md:text-2xl font-bold text-shadow">中科院化学所自动化实验室</h1>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <a href="/admin/experiment-tasks/" class="hidden md:inline-flex items-center px-3 py-1.5 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors text-sm">
+                        <i class="fas fa-arrow-left mr-2"></i>返回管理页
+                    </a>
+                    <div class="hidden md:flex items-center space-x-6 text-sm">
+                        <button class="page-nav-btn text-white font-medium" data-page="lab-overview">实验室概览</button>
+                        <button class="page-nav-btn text-light-blue hover:text-white transition-colors" data-page="workstation-overview">工站概览</button>
+                        <button class="page-nav-btn text-light-blue hover:text-white transition-colors" data-page="task-overview">实验任务概览</button>
+                        <div class="flex items-center text-light-blue">
+                            <i class="far fa-calendar-alt mr-2"></i>
+                            <span id="current-date">2025-04-10</span>
+                        </div>
+                        <div class="flex items-center text-light-blue">
+                            <i class="far fa-clock mr-2"></i>
+                            <span id="current-time">14:30:05</span>
+                        </div>
+                        <div class="flex items-center text-light-blue">
+                            <i class="fas fa-temperature-high mr-2"></i>
+                            <span>32°C</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button class="p-2 rounded-full hover:bg-primary/20 transition-colors">
+                            <i class="fas fa-bell text-light-blue"></i>
+                        </button>
+                        <button class="p-2 rounded-full hover:bg-primary/20 transition-colors">
+                            <i class="fas fa-cog text-light-blue"></i>
+                        </button>
+                        <div class="h-8 w-8 rounded-full bg-primary flex items-center justify-center font-medium">
+                            <span>AD</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <!-- [/MODULE] d23_顶部导航栏 -- 显示实验室标题、当前时间、温度和用户信息 -->
+        
+        <!-- 主内容区域 -->
+        <main class="container mx-auto px-4 py-6">
+            <!-- [MODULE] efg_实验室概览 -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6" id="lab-overview-page">
+                <!-- 左侧任务信息区 -->
+                <!-- [MODULE] 33f_左侧任务信息区 -->
+                <div class="lg:col-span-3 space-y-6">
+                    <!-- 任务状态统计 -->
+                    <!-- [MODULE] a1b_任务状态统计 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-tasks text-primary mr-2"></i>任务状态统计
+                        </h2>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-warning mr-2"></span>
+                                    <span>等待中</span>
+                                </div>
+                                <span class="text-warning font-medium">15</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-primary mr-2"></span>
+                                    <span>运行中</span>
+                                </div>
+                                <span class="text-primary font-medium">30</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-success mr-2"></span>
+                                    <span>已完成</span>
+                                </div>
+                                <span class="text-success font-medium">10</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-danger mr-2"></span>
+                                    <span>已终止</span>
+                                </div>
+                                <span class="text-danger font-medium">5</span>
+                            </div>
+                            <div class="pt-3 border-t border-gray-700 flex justify-between items-center">
+                                <span class="font-semibold">总计</span>
+                                <span class="text-xl font-bold">60</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- [/MODULE] a1b_任务状态统计 -- 显示等待中、运行中、已完成、已终止的任务数量统计 -->
+                    
+                    <!-- 任务执行详情 -->
+                    <!-- [MODULE] c2d_任务执行详情 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-list-alt text-primary mr-2"></i>任务执行详情
+                        </h2>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="text-xs text-gray-400 border-b border-gray-700">
+                                        <th class="pb-2 text-left">任务编号</th>
+                                        <th class="pb-2 text-left">状态</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">T2025041001</td>
+                                        <td class="py-2 text-sm">
+                                            <span class="px-2 py-1 rounded-full text-xs bg-primary/20 text-primary">运行中</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">T2025041002</td>
+                                        <td class="py-2 text-sm">
+                                            <span class="px-2 py-1 rounded-full text-xs bg-warning/20 text-warning">等待中</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">T2025041003</td>
+                                        <td class="py-2 text-sm">
+                                            <span class="px-2 py-1 rounded-full text-xs bg-success/20 text-success">已完成</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">T2025041004</td>
+                                        <td class="py-2 text-sm">
+                                            <span class="px-2 py-1 rounded-full text-xs bg-primary/20 text-primary">运行中</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">T2025041005</td>
+                                        <td class="py-2 text-sm">
+                                            <span class="px-2 py-1 rounded-full text-xs bg-danger/20 text-danger">已终止</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button class="w-full mt-4 py-2 text-sm text-primary border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors">
+                            查看全部任务
+                        </button>
+                    </div>
+                    <!-- [/MODULE] c2d_任务执行详情 -- 显示任务编号和状态，包含查看全部任务按钮 -->
+                    
+                    <!-- 站内资源详情 -->
+                    <!-- [MODULE] d4e_站内资源详情 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-cubes text-primary mr-2"></i>站内资源详情
+                        </h2>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="text-xs text-gray-400 border-b border-gray-700">
+                                        <th class="pb-2 text-left">物质</th>
+                                        <th class="pb-2 text-left">数量</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">乙腈</td>
+                                        <td class="py-2 text-sm">25瓶</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">甲醇</td>
+                                        <td class="py-2 text-sm">18瓶</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">乙酸乙酯</td>
+                                        <td class="py-2 text-sm">12瓶</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">二氯甲烷</td>
+                                        <td class="py-2 text-sm">8瓶</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">石油醚</td>
+                                        <td class="py-2 text-sm">5瓶</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button class="w-full mt-4 py-2 text-sm text-primary border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors">
+                            资源管理
+                        </button>
+                    </div>
+                    <!-- [/MODULE] d4e_站内资源详情 -- 显示各类化学物质及库存数量，包含资源管理按钮 -->
+                </div>
+                <!-- [/MODULE] 33f_左侧任务信息区 -- 包含任务状态统计、任务执行详情和站内资源详情 -->
+                
+                <!-- 中间资源详情区 -->
+                <!-- [MODULE] 56g_中间资源详情区 -->
+                <div class="lg:col-span-6 space-y-6">
+                    <!-- 实验室布局图 -->
+                    <!-- [MODULE] h7i_实验室布局图 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-map-marker-alt text-primary mr-2"></i>实验室布局与工站状态
+                        </h2>
+                        <div class="relative aspect-video bg-dark/50 rounded-lg overflow-hidden border border-gray-700">
+                            <!-- 工站布局 -->
+                            <div class="absolute inset-0 p-4 grid grid-cols-5 grid-rows-5 gap-4">
+                                <!-- 第一行 -->
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">人工备料</div>
+                                    <div class="text-xs text-success">运行中</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">固液配料</div>
+                                    <div class="text-xs text-primary">运行中</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">反应</div>
+                                    <div class="text-xs text-warning">等待中</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">手套箱</div>
+                                    <div class="text-xs text-primary">运行中</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">过滤分液</div>
+                                    <div class="text-xs text-success">空闲</div>
+                                </div>
+                                <!-- 第二行 -->
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">旋蒸</div>
+                                    <div class="text-xs text-primary">运行中</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">过柱</div>
+                                    <div class="text-xs text-warning">等待中</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">点板</div>
+                                    <div class="text-xs text-success">空闲</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">GCMS</div>
+                                    <div class="text-xs text-primary">运行中</div>
+                                </div>
+                                <div class="col-span-1 row-span-1 bg-primary/20 rounded-lg p-2 border border-primary/30 hover:scale-105 transition-transform cursor-pointer">
+                                    <div class="text-xs font-medium mb-1">HPLC</div>
+                                    <div class="text-xs text-danger">维护中</div>
+                                </div>
+                                <!-- AGV路线 -->
+                                <div class="col-span-5 row-span-3 flex items-center justify-center">
+                                    <div class="relative w-full h-full">
+                                        <!-- 路线图 -->
+                                        <svg class="w-full h-full" fill="none" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M50,100 L350,100" stroke="#165DFF" stroke-dasharray="5,5" stroke-width="2"></path>
+                                            <circle cx="150" cy="100" fill="#165DFF" r="5"></circle>
+                                            <circle cx="250" cy="100" fill="#165DFF" r="5"></circle>
+                                        </svg>
+                                        <!-- AGV小车 -->
+                                        <div class="absolute top-1/2 left-1/4 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-primary rounded-md flex items-center justify-center animate-pulse">
+                                            <i class="fas fa-truck text-xs"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- [/MODULE] h7i_实验室布局图 -- 显示10个工站和AGV的位置及运行状态，工站可点击查看详情 -->
+                    
+                    <!-- 缺料列表 -->
+                    <!-- [MODULE] j8k_缺料列表 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-exclamation-triangle text-warning mr-2"></i>缺料预警
+                        </h2>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="text-xs text-gray-400 border-b border-gray-700">
+                                        <th class="pb-2 text-left">资源名称</th>
+                                        <th class="pb-2 text-left">需求数量</th>
+                                        <th class="pb-2 text-left">场内总量</th>
+                                        <th class="pb-2 text-left">关联任务</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">正己烷</td>
+                                        <td class="py-2 text-sm">5瓶</td>
+                                        <td class="py-2 text-sm text-danger">2瓶</td>
+                                        <td class="py-2 text-sm">T2025041006</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">四氢呋喃</td>
+                                        <td class="py-2 text-sm">3瓶</td>
+                                        <td class="py-2 text-sm text-warning">3瓶</td>
+                                        <td class="py-2 text-sm">T2025041007</td>
+                                    </tr>
+                                    <tr class="border-b border-gray-800/50 hover:bg-primary/5 transition-colors">
+                                        <td class="py-2 text-sm">无水乙醇</td>
+                                        <td class="py-2 text-sm">8瓶</td>
+                                        <td class="py-2 text-sm text-warning">6瓶</td>
+                                        <td class="py-2 text-sm">T2025041008</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button class="w-full mt-4 py-2 text-sm text-primary border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors">
+                            生成采购清单
+                        </button>
+                    </div>
+                    <!-- [/MODULE] j8k_缺料列表 -- 显示缺料资源名称、需求数量、场内总量和关联任务，包含生成采购清单按钮 -->
+                </div>
+                <!-- [/MODULE] 56g_中间资源详情区 -- 包含实验室布局图和缺料列表 -->
+                
+                <!-- 右侧样品信息统计区 -->
+                <!-- [MODULE] 78h_右侧样品信息统计区 -->
+                <div class="lg:col-span-3 space-y-6">
+                    <!-- 样品信息统计 -->
+                    <!-- [MODULE] i9j_样品信息统计 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-chart-line text-primary mr-2"></i>样品信息统计
+                        </h2>
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div class="bg-dark/30 rounded-lg p-4 text-center">
+                                <div class="text-xs text-gray-400 mb-1">月累计完成数</div>
+                                <div class="text-2xl font-bold text-primary">128</div>
+                            </div>
+                            <div class="bg-dark/30 rounded-lg p-4 text-center">
+                                <div class="text-xs text-gray-400 mb-1">周累计完成数</div>
+                                <div class="text-2xl font-bold text-primary">36</div>
+                            </div>
+                            <div class="bg-dark/30 rounded-lg p-4 text-center">
+                                <div class="text-xs text-gray-400 mb-1">日累计完成数</div>
+                                <div class="text-2xl font-bold text-primary">8</div>
+                            </div>
+                            <div class="bg-dark/30 rounded-lg p-4 text-center">
+                                <div class="text-xs text-gray-400 mb-1">平均完成时间</div>
+                                <div class="text-2xl font-bold text-primary">4.2h</div>
+                            </div>
+                        </div>
+                        <div class="w-full h-64" id="sample-stat-chart"></div>
+                    </div>
+                    <!-- [/MODULE] i9j_样品信息统计 -- 显示月、周、日累计完成数和平均完成时间，包含样品统计图表 -->
+                    
+                    <!-- 工作站状态统计 -->
+                    <!-- [MODULE] k0l_工作站状态统计 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-chart-pie text-primary mr-2"></i>工作站状态统计
+                        </h2>
+                        <div class="w-full h-64" id="workstation-chart"></div>
+                        <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
+                            <div class="flex items-center">
+                                <span class="w-2 h-2 rounded-full bg-success mr-2"></span>
+                                <span>空闲: 2</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="w-2 h-2 rounded-full bg-primary mr-2"></span>
+                                <span>运行中: 6</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="w-2 h-2 rounded-full bg-warning mr-2"></span>
+                                <span>等待中: 1</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="w-2 h-2 rounded-full bg-danger mr-2"></span>
+                                <span>维护中: 1</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- [/MODULE] k0l_工作站状态统计 -- 显示各工作站状态分布饼图及具体数量 -->
+                    
+                    <!-- AGV运行状态 -->
+                    <!-- [MODULE] m1n_AGV运行状态 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h2 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-robot text-primary mr-2"></i>AGV运行状态
+                        </h2>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-primary mr-2"></span>
+                                    <span>当前状态</span>
+                                </div>
+                                <span class="text-primary font-medium">运行中</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-light-blue mr-2"></span>
+                                    <span>当前任务</span>
+                                </div>
+                                <span class="font-medium">T2025041001</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-light-blue mr-2"></span>
+                                    <span>电池电量</span>
+                                </div>
+                                <span class="font-medium">85%</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <span class="w-3 h-3 rounded-full bg-light-blue mr-2"></span>
+                                    <span>已完成任务</span>
+                                </div>
+                                <span class="font-medium">12</span>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-gray-700">
+                            <button class="w-full py-2 text-sm bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors">
+                                查看AGV路线
+                            </button>
+                        </div>
+                    </div>
+                    <!-- [/MODULE] m1n_AGV运行状态 -- 显示AGV当前状态、任务、电量和已完成任务数，包含查看AGV路线按钮 -->
+                </div>
+                <!-- [/MODULE] 78h_右侧样品信息统计区 -- 包含样品信息统计、工作站状态统计和AGV运行状态 -->
+            </div>
+            <!-- [/MODULE] efg_实验室概览 -- 显示实验室整体布局、工站状态、任务信息和资源情况 -->
+            
+            <!-- [MODULE] hij_工站概览页面 -->
+            <div class="hidden" id="workstation-overview-page">
+                <div class="mb-6">
+                    <h2 class="text-[clamp(1.5rem,3vw,2rem)] font-bold mb-2">工站概览</h2>
+                    <p class="text-info">实时监控和管理各个实验工站的运行状态与资源分配</p>
+                </div>
+                <!-- [MODULE] klm_工站概览页面:工站选择Tab -->
+                <div class="mb-6 border-b border-primary/30">
+                    <div class="flex space-x-1 workstation-tabs">
+                        <button class="workstation-tab-btn active px-4 py-2 rounded-t-lg bg-primary/20 border border-primary/30 border-b-0" data-workstation="station1">
+                            <i class="fas fa-flask mr-2"></i>合成工站
+                        </button>
+                        <button class="workstation-tab-btn px-4 py-2 rounded-t-lg hover:bg-primary/10 transition-colors" data-workstation="station2">
+                            <i class="fas fa-microscope mr-2"></i>分析工站
+                        </button>
+                        <button class="workstation-tab-btn px-4 py-2 rounded-t-lg hover:bg-primary/10 transition-colors" data-workstation="station3">
+                            <i class="fas fa-vial mr-2"></i>检测工站
+                        </button>
+                        <button class="workstation-tab-btn px-4 py-2 rounded-t-lg hover:bg-primary/10 transition-colors" data-workstation="station4">
+                            <i class="fas fa-tools mr-2"></i>预处理工站
+                        </button>
+                    </div>
+                </div>
+                <!-- [/MODULE] klm_工站概览页面:工站选择Tab -- 包含合成工站、分析工站、检测工站、预处理工站四个tab切换按钮 -->
+                
+                <!-- [MODULE] nop_工站概览页面:工站内容区域 -->
+                <div class="workstation-content">
+                    <!-- [MODULE] qrs_合成工站内容 -->
+                    <div class="workstation-panel active" id="station1-panel">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                            <!-- 工站状态卡片 -->
+                            <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                                <div class="flex justify-between items-start mb-4">
+                                    <h3 class="text-lg font-semibold">工站状态</h3>
+                                    <span class="bg-success/20 text-success text-xs px-2 py-1 rounded-full">运行中</span>
+                                </div>
+                                <div class="flex items-center justify-center my-6">
+                                    <div class="relative w-32 h-32">
+                                        <div class="absolute inset-0 rounded-full border-8 border-primary/20"></div>
+                                        <div class="absolute inset-0 rounded-full border-8 border-t-primary" style="transform: rotate(270deg);"></div>
+                                        <div class="absolute inset-0 flex items-center justify-center flex-col">
+                                            <span class="text-3xl font-bold">75%</span>
+                                            <span class="text-sm text-info">负载率</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p class="text-info">运行时长</p>
+                                        <p class="font-medium">128小时</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-info">完成任务</p>
+                                        <p class="font-medium">24个</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-info">当前任务</p>
+                                        <p class="font-medium">3个</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-info">设备状态</p>
+                                        <p class="font-medium">正常</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 资源使用情况 -->
+                            <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                                <h3 class="text-lg font-semibold mb-4">资源使用</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span>试剂</span>
+                                            <span>68%</span>
+                                        </div>
+                                        <div class="w-full bg-dark rounded-full h-2">
+                                            <div class="bg-primary h-2 rounded-full" style="width: 68%"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span>耗材</span>
+                                            <span>42%</span>
+                                        </div>
+                                        <div class="w-full bg-dark rounded-full h-2">
+                                            <div class="bg-warning h-2 rounded-full" style="width: 42%"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span>仪器</span>
+                                            <span>85%</span>
+                                        </div>
+                                        <div class="w-full bg-dark rounded-full h-2">
+                                            <div class="bg-danger h-2 rounded-full" style="width: 85%"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span>人员</span>
+                                            <span>50%</span>
+                                        </div>
+                                        <div class="w-full bg-dark rounded-full h-2">
+                                            <div class="bg-success h-2 rounded-full" style="width: 50%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="mt-4 w-full py-2 border border-primary/50 rounded-lg text-primary hover:bg-primary/10 transition-colors text-sm">
+                                    <i class="fas fa-sync-alt mr-1"></i>资源调配
+                                </button>
+                            </div>
+                            
+                            <!-- 环境参数 -->
+                            <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                                <h3 class="text-lg font-semibold mb-4">环境参数</h3>
+                                <div class="space-y-4">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-temperature-high text-danger mr-3 text-xl"></i>
+                                            <div>
+                                                <p class="text-sm text-info">温度</p>
+                                                <p class="font-medium">25.6°C</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">正常</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-tint text-primary mr-3 text-xl"></i>
+                                            <div>
+                                                <p class="text-sm text-info">湿度</p>
+                                                <p class="font-medium">48%</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">正常</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-wind text-warning mr-3 text-xl"></i>
+                                            <div>
+                                                <p class="text-sm text-info">气压</p>
+                                                <p class="font-medium">101.3 kPa</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">正常</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-radiation text-danger mr-3 text-xl"></i>
+                                            <div>
+                                                <p class="text-sm text-info">洁净度</p>
+                                                <p class="font-medium">Class 5</p>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs bg-warning/20 text-warning px-2 py-1 rounded-full">注意</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 任务列表 -->
+                        <div class="bg-card-bg rounded-xl p-5 border border-primary/20 mb-6">
+                            <div class="flex justify-between items-center mb-5">
+                                <h3 class="text-lg font-semibold">当前任务列表</h3>
+                                <button class="text-primary hover:text-primary/80 text-sm">
+                                    <i class="fas fa-plus-circle mr-1"></i>新增任务
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="border-b border-primary/20">
+                                            <th class="text-left py-3 px-4">任务ID</th>
+                                            <th class="text-left py-3 px-4">任务名称</th>
+                                            <th class="text-left py-3 px-4">优先级</th>
+                                            <th class="text-left py-3 px-4">开始时间</th>
+                                            <th class="text-left py-3 px-4">预计完成</th>
+                                            <th class="text-left py-3 px-4">状态</th>
+                                            <th class="text-left py-3 px-4">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                                            <td class="py-3 px-4">TK-2025-0412</td>
+                                            <td class="py-3 px-4">高分子材料合成</td>
+                                            <td class="py-3 px-4">
+                                                <span class="bg-danger/20 text-danger text-xs px-2 py-1 rounded-full">高</span>
+                                            </td>
+                                            <td class="py-3 px-4">09:30</td>
+                                            <td class="py-3 px-4">14:30</td>
+                                            <td class="py-3 px-4">
+                                                <span class="bg-primary/20 text-primary text-xs px-2 py-1 rounded-full">进行中</span>
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <button class="text-info hover:text-white mr-3">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="text-warning hover:text-white">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                                            <td class="py-3 px-4">TK-2025-0413</td>
+                                            <td class="py-3 px-4">催化剂性能测试</td>
+                                            <td class="py-3 px-4">
+                                                <span class="bg-warning/20 text-warning text-xs px-2 py-1 rounded-full">中</span>
+                                            </td>
+                                            <td class="py-3 px-4">10:15</td>
+                                            <td class="py-3 px-4">16:45</td>
+                                            <td class="py-3 px-4">
+                                                <span class="bg-primary/20 text-primary text-xs px-2 py-1 rounded-full">进行中</span>
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <button class="text-info hover:text-white mr-3">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="text-warning hover:text-white">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                                            <td class="py-3 px-4">TK-2025-0414</td>
+                                            <td class="py-3 px-4">反应条件优化</td>
+                                            <td class="py-3 px-4">
+                                                <span class="bg-warning/20 text-warning text-xs px-2 py-1 rounded-full">中</span>
+                                            </td>
+                                            <td class="py-3 px-4">13:00</td>
+                                            <td class="py-3 px-4">18:00</td>
+                                            <td class="py-3 px-4">
+                                                <span class="bg-info/20 text-info text-xs px-2 py-1 rounded-full">等待中</span>
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <button class="text-info hover:text-white mr-3">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="text-warning hover:text-white">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="flex justify-between items-center mt-4 text-sm">
+                                <div class="text-info">显示 1-3 条，共 12 条</div>
+                                <div class="flex space-x-1">
+                                    <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10 disabled:opacity-50" disabled>
+                                        <i class="fas fa-chevron-left text-xs"></i>
+                                    </button>
+                                    <button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white">1</button>
+                                    <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">2</button>
+                                    <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">3</button>
+                                    <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">4</button>
+                                    <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">
+                                        <i class="fas fa-chevron-right text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 历史统计图表 -->
+                        <div class="bg-card-bg rounded-xl p-5 border border-primary/20">
+                            <div class="flex justify-between items-center mb-5">
+                                <h3 class="text-lg font-semibold">历史统计</h3>
+                                <div class="flex space-x-2">
+                                    <button class="bg-primary/20 text-primary text-xs px-3 py-1 rounded-full">日</button>
+                                    <button class="hover:bg-primary/10 text-xs px-3 py-1 rounded-full">周</button>
+                                    <button class="hover:bg-primary/10 text-xs px-3 py-1 rounded-full">月</button>
+                                    <button class="hover:bg-primary/10 text-xs px-3 py-1 rounded-full">年</button>
+                                </div>
+                            </div>
+                            <div class="h-64" id="station-stat-chart"></div>
+                        </div>
+                    </div>
+                    <!-- [/MODULE] qrs_合成工站内容 -- 包含工站状态、资源使用、环境参数卡片，当前任务列表和历史统计图表 -->
+                    
+                    <!-- 其他工站面板内容结构类似，默认隐藏 -->
+                    <div class="workstation-panel hidden" id="station2-panel">
+                        <div class="flex items-center justify-center h-96">
+                            <div class="text-center">
+                                <i class="fas fa-microscope text-5xl text-primary/30 mb-4"></i>
+                                <p class="text-info">分析工站数据加载中...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="workstation-panel hidden" id="station3-panel">
+                        <div class="flex items-center justify-center h-96">
+                            <div class="text-center">
+                                <i class="fas fa-vial text-5xl text-primary/30 mb-4"></i>
+                                <p class="text-info">检测工站数据加载中...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="workstation-panel hidden" id="station4-panel">
+                        <div class="flex items-center justify-center h-96">
+                            <div class="text-center">
+                                <i class="fas fa-tools text-5xl text-primary/30 mb-4"></i>
+                                <p class="text-info">预处理工站数据加载中...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- [/MODULE] nop_工站概览页面:工站内容区域 -- 根据选择的工站tab显示对应的工站详细信息 -->
+            </div>
+            <!-- [/MODULE] hij_工站概览页面 -- 通过tab切换不同工站，显示站内资源、工作状态、任务列表和历史统计信息 -->
+            
+            <!-- [MODULE] rst_实验任务概览页面 -->
+            <div class="hidden" id="task-overview-page">
+                <div class="mb-6">
+                    <h2 class="text-[clamp(1.5rem,3vw,2rem)] font-bold mb-2">实验任务概览</h2>
+                    <p class="text-info">全面监控实验室所有实验任务的执行情况、效率分析和时间统计</p>
+                </div>
+                
+                <!-- [MODULE] uvw_实验任务概览页面:任务统计卡片 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                    <!-- 总任务数 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-info text-sm">总任务数</p>
+                                <h3 class="text-3xl font-bold mt-1">60</h3>
+                                <p class="text-success text-xs mt-2 flex items-center">
+                                    <i class="fas fa-arrow-up mr-1"></i> 12% 较上周
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                                <i class="fas fa-tasks text-primary text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 平均完成时间 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-info text-sm">平均完成时间</p>
+                                <h3 class="text-3xl font-bold mt-1">4.2h</h3>
+                                <p class="text-danger text-xs mt-2 flex items-center">
+                                    <i class="fas fa-arrow-up mr-1"></i> 5% 较上周
+                                </p>
+                            </div>
+                            <div class="w-12 h12 rounded-full bg-warning/20 flex items-center justify-center">
+                                <i class="fas fa-clock text-warning text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 任务完成率 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-info text-sm">任务完成率</p>
+                                <h3 class="text-3xl font-bold mt-1">85%</h3>
+                                <p class="text-success text-xs mt-2 flex items-center">
+                                    <i class="fas fa-arrow-up mr-1"></i> 3% 较上周
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center">
+                                <i class="fas fa-check-circle text-success text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 任务延迟率 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <p class="text-info text-sm">任务延迟率</p>
+                                <h3 class="text-3xl font-bold mt-1">8%</h3>
+                                <p class="text-success text-xs mt-2 flex items-center">
+                                    <i class="fas fa-arrow-down mr-1"></i> 2% 较上周
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 rounded-full bg-danger/20 flex items-center justify-center">
+                                <i class="fas fa-exclamation-circle text-danger text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- [/MODULE] uvw_实验任务概览页面:任务统计卡片 -- 显示总任务数、平均完成时间、任务完成率和任务延迟率卡片 -->
+                
+                <!-- [MODULE] xyz_实验任务概览页面:图表区域 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- 任务趋势图表 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h3 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-chart-line text-primary mr-2"></i>任务执行趋势
+                        </h3>
+                        <div class="h-72" id="task-trend-chart"></div>
+                    </div>
+                    
+                    <!-- 任务类型分布 -->
+                    <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                        <h3 class="text-lg font-semibold mb-4 flex items-center">
+                            <i class="fas fa-chart-pie text-primary mr-2"></i>任务类型分布
+                        </h3>
+                        <div class="h-72" id="task-type-chart"></div>
+                    </div>
+                </div>
+                <!-- [/MODULE] xyz_实验任务概览页面:图表区域 -- 包含任务执行趋势和任务类型分布图表 -->
+                
+                <!-- [MODULE] 123_实验任务概览页面:任务列表 -->
+                <div class="bg-card-bg rounded-xl p-5 border border-primary/20 card-glow">
+                    <div class="flex justify-between items-center mb-5">
+                        <h3 class="text-lg font-semibold">任务执行详情</h3>
+                        <div class="flex items-center space-x-3">
+                            <div class="relative">
+                                <input type="text" placeholder="搜索任务..." class="bg-dark border border-gray-700 rounded-lg px-3 py-2 text-sm w-48 focus:outline-none focus:border-primary">
+                                <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-info"></i>
+                            </div>
+                            <button class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                                <i class="fas fa-plus mr-1"></i>新建任务
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-primary/20">
+                                    <th class="text-left py-3 px-4">任务ID</th>
+                                    <th class="text-left py-3 px-4">任务名称</th>
+                                    <th class="text-left py-3 px-4">任务类型</th>
+                                    <th class="text-left py-3 px-4">优先级</th>
+                                    <th class="text-left py-3 px-4">开始时间</th>
+                                    <th class="text-left py-3 px-4">预计完成</th>
+                                    <th class="text-left py-3 px-4">进度</th>
+                                    <th class="text-left py-3 px-4">状态</th>
+                                    <th class="text-left py-3 px-4">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                                    <td class="py-3 px-4">T2025041001</td>
+                                    <td class="py-3 px-4">高分子材料合成</td>
+                                    <td class="py-3 px-4">合成反应</td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-danger/20 text-danger text-xs px-2 py-1 rounded-full">高</span>
+                                    </td>
+                                    <td class="py-3 px-4">09:30</td>
+                                    <td class="py-3 px-4">14:30</td>
+                                    <td class="py-3 px-4">
+                                        <div class="task-progress-bar bg-dark">
+                                            <div class="task-progress-value bg-primary" style="width: 65%"></div>
+                                        </div>
+                                        <div class="text-xs text-right mt-1">65%</div>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-primary/20 text-primary text-xs px-2 py-1 rounded-full">进行中</span>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <button class="text-info hover:text-white mr-3">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="text-warning hover:text-white">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                                    <td class="py-3 px-4">T2025041002</td>
+                                    <td class="py-3 px-4">催化剂性能测试</td>
+                                    <td class="py-3 px-4">性能测试</td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-warning/20 text-warning text-xs px-2 py-1 rounded-full">中</span>
+                                    </td>
+                                    <td class="py-3 px-4">10:15</td>
+                                    <td class="py-3 px-4">16:45</td>
+                                    <td class="py-3 px-4">
+                                        <div class="task-progress-bar bg-dark">
+                                            <div class="task-progress-value bg-primary" style="width: 40%"></div>
+                                        </div>
+                                        <div class="text-xs text-right mt-1">40%</div>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-primary/20 text-primary text-xs px-2 py-1 rounded-full">进行中</span>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <button class="text-info hover:text-white mr-3">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="text-warning hover:text-white">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                                    <td class="py-3 px-4">T2025041003</td>
+                                    <td class="py-3 px-4">反应条件优化</td>
+                                    <td class="py-3 px-4">条件优化</td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-warning/20 text-warning text-xs px-2 py-1 rounded-full">中</span>
+                                    </td>
+                                    <td class="py-3 px-4">13:00</td>
+                                    <td class="py-3 px-4">18:00</td>
+                                    <td class="py-3 px-4">
+                                        <div class="task-progress-bar bg-dark">
+                                            <div class="task-progress-value bg-info" style="width: 0%"></div>
+                                        </div>
+                                        <div class="text-xs text-right mt-1">0%</div>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-info/20 text-info text-xs px-2 py-1 rounded-full">等待中</span>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <button class="text-info hover:text-white mr-3">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="text-warning hover:text-white">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                                    <td class="py-3 px-4">T2025041004</td>
+                                    <td class="py-3 px-4">样品成分分析</td>
+                                    <td class="py-3 px-4">成分分析</td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-success/20 text-success text-xs px-2 py-1 rounded-full">低</span>
+                                    </td>
+                                    <td class="py-3 px-4">08:15</td>
+                                    <td class="py-3 px-4">11:45</td>
+                                    <td class="py-3 px-4">
+                                        <div class="task-progress-bar bg-dark">
+                                            <div class="task-progress-value bg-success" style="width: 100%"></div>
+                                        </div>
+                                        <div class="text-xs text-right mt-1">100%</div>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-success/20 text-success text-xs px-2 py-1 rounded-full">已完成</span>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <button class="text-info hover:text-white mr-3">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="text-gray-500 cursor-not-allowed">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-primary/10 hover:bg-primary/5 transition-colors">T2025041005</td>
+                                    <td class="py-3 px-4">T2025041005</td>
+                                    <td class="py-3 px-4">溶剂纯化处理</td>
+                                    <td class="py-3 px-4">预处理</td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-success/20 text-success text-xs px-2 py-1 rounded-full">低</span>
+                                    </td>
+                                    <td class="py-3 px-4">10:00</td>
+                                    <td class="py-3 px-4">12:30</td>
+                                    <td class="py-3 px-4">
+                                        <div class="task-progress-bar bg-dark">
+                                            <div class="task-progress-value bg-danger" style="width: 45%"></div>
+                                        </div>
+                                        <div class="text-xs text-right mt-1">45%</div>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <span class="bg-danger/20 text-danger text-xs px-2 py-1 rounded-full">已终止</span>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <button class="text-info hover:text-white mr-3">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="text-gray-500 cursor-not-allowed">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex justify-between items-center mt-4 text-sm">
+                        <div class="text-info">显示 1-5 条，共 60 条</div>
+                        <div class="flex space-x-1">
+                            <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10 disabled:opacity-50" disabled>
+                                <i class="fas fa-chevron-left text-xs"></i>
+                            </button>
+                            <button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white">1</button>
+                            <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">2</button>
+                            <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">3</button>
+                            <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">4</button>
+                            <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">5</button>
+                            <button class="w-8 h-8 flex items-center justify-center rounded border border-primary/30 hover:bg-primary/10">
+                                <i class="fas fa-chevron-right text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- [/MODULE] 123_实验任务概览页面:任务列表 -- 显示任务详细信息，包含搜索和新建任务功能 -->
+            </div>
+            <!-- [/MODULE] rst_实验任务概览页面 -- 显示实验任务的统计信息、趋势图表和详细列表 -->
+        </main>
+    </div>
+    <!-- [/MODULE] abc_主内容区域 -- 包含实验室综合信息大屏显示 -->
+    
+    <!-- JavaScript -->
+    <!-- [JSMOD] eft_时间更新 -->
+    <script id="time-update">
+        // 更新当前时间和日期
+        function updateDateTime() {
+            var now = new Date();
+            var date = now.toISOString().split('T')[0];
+            var time = now.toTimeString().split(" ")[0];
+            document.getElementById('current-date').textContent = date;
+            document.getElementById('current-time').textContent = time;
+        }
+        // 初始化时间并每秒更新
+        document.addEventListener('DOMContentLoaded', function () {
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+        });
+    </script>
+    <!-- [/JSMOD] eft_时间更新 -- 实时更新页面显示的当前日期和时间 -->
+    
+    <!-- [JSMOD] z1x_页面切换逻辑 -->
+    <script id="page-switch-script">
+        document.addEventListener('DOMContentLoaded', () => {
+            // 页面切换功能
+            const pageNavBtns = document.querySelectorAll('.page-nav-btn');
+            const labOverviewPage = document.querySelector('#lab-overview-page');
+            const workstationOverviewPage = document.querySelector('#workstation-overview-page');
+            const taskOverviewPage = document.querySelector('#task-overview-page');
+            
+            pageNavBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // 更新导航按钮样式
+                    pageNavBtns.forEach(b => {
+                        b.classList.remove('text-white', 'font-medium');
+                        b.classList.add('text-light-blue', 'hover:text-white');
+                    });
+                    btn.classList.remove('text-light-blue', 'hover:text-white');
+                    btn.classList.add('text-white', 'font-medium');
+                    
+                    // 显示对应的页面
+                    const pageId = btn.getAttribute('data-page');
+                    labOverviewPage.classList.add('hidden');
+                    workstationOverviewPage.classList.add('hidden');
+                    taskOverviewPage.classList.add('hidden');
+                    
+                    if (pageId === 'lab-overview') {
+                        labOverviewPage.classList.remove('hidden');
+                    } else if (pageId === 'workstation-overview') {
+                        workstationOverviewPage.classList.remove('hidden');
+                        // 初始化图表（如果尚未初始化）
+                        initStationChart();
+                    } else if (pageId === 'task-overview') {
+                        taskOverviewPage.classList.remove('hidden');
+                        // 初始化任务概览图表
+                        initTaskOverviewCharts();
+                    }
+                });
+            });
+            
+            // 工站Tab切换功能
+            const tabBtns = document.querySelectorAll('.workstation-tab-btn');
+            const tabPanels = document.querySelectorAll('.workstation-panel');
+            
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const workstationId = btn.getAttribute('data-workstation');
+                    
+                    // 更新Tab按钮样式
+                    tabBtns.forEach(b => {
+                        b.classList.remove('active', 'bg-primary/20', 'border', 'border-primary/30', 'border-b-0');
+                        b.classList.add('hover:bg-primary/10');
+                    });
+                    btn.classList.add('active', 'bg-primary/20', 'border', 'border-primary/30', 'border-b-0');
+                    btn.classList.remove('hover:bg-primary/10');
+                    
+                    // 显示对应的工站面板
+                    tabPanels.forEach(panel => {
+                        panel.classList.add('hidden');
+                        panel.classList.remove('active');
+                    });
+                    const activePanel = document.getElementById(`${workstationId}-panel`);
+                    activePanel.classList.remove('hidden');
+                    activePanel.classList.add('active');
+                    
+                    // 如果是合成工站，初始化图表
+                    if (workstationId === 'station1') {
+                        initStationChart();
+                    }
+                });
+            });
+            
+            // 初始化日期和时间
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+            
+            // 工站统计图表初始化
+            let stationChart = null;
+            
+            function initStationChart() {
+                const chartDom = document.getElementById('station-stat-chart');
+                if (!chartDom || chartDom.offsetParent === null) return;
+                
+                // 销毁已有图表
+                if (stationChart) {
+                    stationChart
+stationChart.dispose();
+        }
+        
+        // 创建新图表
+        stationChart = echarts.init(chartDom);
+        
+        const option = {
+          color: ['#165DFF', '#00B42A', '#FF7D00'],
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'shadow'
+            }
+          },
+          legend: {
+            data: ['完成任务', '失败任务', '平均耗时(分钟)'],
+            textStyle: {
+              color: '#86909C'
+            },
+            top: 0
+          },
+          grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '3%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'category',
+            data: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+            axisLine: {
+              lineStyle: {
+                color: '#334155'
+              }
+            },
+            axisLabel: {
+              color: '#86909C'
+            }
+          },
+          yAxis: [
+            {
+              type: 'value',
+              name: '任务数',
+              nameTextStyle: {
+                color: '#86909C'
+              },
+              axisLine: {
+                lineStyle: {
+                  color: '#334155'
+                }
+              },
+              axisLabel: {
+                color: '#86909C',
+                formatter: '{value}'
+              },
+              splitLine: {
+                lineStyle: {
+                  color: '#334155'
+                }
+              }
+            },
+            {
+              type: 'value',
+              name: '耗时',
+              nameTextStyle: {
+                color: '#86909C'
+              },
+              axisLine: {
+                lineStyle: {
+                  color: '#334155'
+                }
+              },
+              axisLabel: {
+                color: '#86909C',
+                formatter: '{value} min'
+              },
+              splitLine: {
+                show: false
+              }
+            }
+          ],
+          series: [
+            {
+              name: '完成任务',
+              type: 'bar',
+              data: [3, 5, 8, 6, 4, 2]
+            },
+            {
+              name: '失败任务',
+              type: 'bar',
+              data: [0, 1, 2, 0, 1, 0]
+            },
+            {
+              name: '平均耗时(分钟)',
+              type: 'line',
+              yAxisIndex: 1,
+              data: [45, 38, 52, 40, 65, 42]
+            }
+          ]
+        };
+        
+        stationChart.setOption(option);
+        
+        // 监听窗口大小变化，调整图表大小
+        window.addEventListener('resize', () => {
+          if (stationChart) {
+            stationChart.resize();
+          }
+        });
+      }
+      
+      // 任务概览图表初始化
+      let taskTrendChart = null;
+      let taskTypeChart = null;
+      
+      function initTaskOverviewCharts() {
+        // 任务趋势图表
+        const trendChartDom = document.getElementById('task-trend-chart');
+        if (trendChartDom && trendChartDom.offsetParent !== null) {
+          if (taskTrendChart) {
+            taskTrendChart.dispose();
+          }
+          taskTrendChart = echarts.init(trendChartDom);
+          
+          const trendOption = {
+            color: ['#165DFF', '#00B42A', '#F53F3F'],
+            tooltip: {
+              trigger: 'axis',
+              axisPointer: {
+                type: 'shadow'
+              }
+            },
+            legend: {
+              data: ['已完成', '进行中', '已终止'],
+              textStyle: {
+                color: '#86909C'
+              },
+              top: 0
+            },
+            grid: {
+              left: '3%',
+              right: '4%',
+              bottom: '10%',
+              containLabel: true
+            },
+            xAxis: {
+              type: 'category',
+              data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
+              axisLine: {
+                lineStyle: {
+                  color: '#334155'
+                }
+              },
+              axisLabel: {
+                color: '#86909C'
+              }
+            },
+            yAxis: {
+              type: 'value',
+              axisLine: {
+                lineStyle: {
+                  color: '#334155'
+                }
+              },
+              axisLabel: {
+                color: '#86909C',
+                formatter: '{value} 个'
+              },
+              splitLine: {
+                lineStyle: {
+                  color: '#334155'
+                }
+              }
+            },
+            series: [
+              {
+                name: '已完成',
+                type: 'bar',
+                stack: 'total',
+                emphasis: {
+                  focus: 'series'
+                },
+                data: [8, 10, 12, 9, 7, 5, 8]
+              },
+              {
+                name: '进行中',
+                type: 'bar',
+                stack: 'total',
+                emphasis: {
+                  focus: 'series'
+                },
+                data: [3, 4, 2, 5, 3, 2, 3]
+              },
+              {
+                name: '已终止',
+                type: 'bar',
+                stack: 'total',
+                emphasis: {
+                  focus: 'series'
+                },
+                data: [1, 0, 1, 0, 2, 1, 0]
+              }
+            ]
+          };
+          
+          taskTrendChart.setOption(trendOption);
+        }
+        
+        // 任务类型分布图表
+        const typeChartDom = document.getElementById('task-type-chart');
+        if (typeChartDom && typeChartDom.offsetParent !== null) {
+          if (taskTypeChart) {
+            taskTypeChart.dispose();
+          }
+          taskTypeChart = echarts.init(typeChartDom);
+          
+          const typeOption = {
+            color: ['#165DFF', '#00B42A', '#FF7D00', '#F53F3F', '#722ED1', '#86909C'],
+            tooltip: {
+              trigger: 'item'
+            },
+            legend: {
+              orient: 'vertical',
+              left: 'left',
+              textStyle: {
+                color: '#86909C'
+              }
+            },
+            series: [
+              {
+                name: '任务类型',
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                  borderRadius: 10,
+                  borderColor: '#1E293B',
+                  borderWidth: 2
+                },
+                label: {
+                  show: false,
+                  position: 'center'
+                },
+                emphasis: {
+                  label: {
+                    show: true,
+                    fontSize: 16,
+                    fontWeight: 'bold',
+                    color: '#fff'
+                  }
+                },
+                labelLine: {
+                  show: false
+                },
+                data: [
+                  { value: 25, name: '合成反应' },
+                  { value: 15, name: '性能测试' },
+                  { value: 10, name: '成分分析' },
+                  { value: 8, name: '条件优化' },
+                  { value: 7, name: '预处理' },
+                  { value: 5, name: '其他' }
+                ]
+              }
+            ]
+          };
+          
+          taskTypeChart.setOption(typeOption);
+        }
+        
+        // 监听窗口大小变化，调整图表大小
+        window.addEventListener('resize', () => {
+          if (taskTrendChart) {
+            taskTrendChart.resize();
+          }
+          if (taskTypeChart) {
+            taskTypeChart.resize();
+          }
+        });
+      }
+      
+      // 初始化合成工站图表
+      initStationChart();
+    });
+  </script>
+  <!-- [/JSMOD] z1x_页面切换逻辑 -->
+  
+  <!-- [JSMOD] ghi_样品统计图表 -->
+  <script id="sample-stat-chart-script">
+    // 初始化样品统计图表
+document.addEventListener('DOMContentLoaded', function () {
+  var sampleChart = echarts.init(document.getElementById('sample-stat-chart'));
+  var option = {
+    grid: {
+      left: '5%',
+      right: '5%',
+      bottom: '10%',
+      top: '5%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: ['1日', '2日', '3日', '4日', '5日', '6日', '7日'],
+      axisLine: {
+        lineStyle: {
+          color: '#475569'
+        }
+      },
+      axisLabel: {
+        color: '#94a3b8'
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        lineStyle: {
+          color: '#475569'
+        }
+      },
+      axisLabel: {
+        color: '#94a3b8'
+      },
+      splitLine: {
+        lineStyle: {
+          color: 'rgba(255, 255, 255, 0.05)'
+        }
+      }
+    },
+    series: [{
+      data: [5, 7, 9, 6, 8, 10, 8],
+      type: 'line',
+      smooth: true,
+      itemStyle: {
+        color: '#165DFF'
+      },
+      lineStyle: {
+        color: '#165DFF'
+      },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{
+          offset: 0,
+          color: 'rgba(22, 93, 255, 0.3)'
+        }, {
+          offset: 1,
+          color: 'rgba(22, 93, 255, 0)'
+        }])
+      }
+    }]
+  };
+  sampleChart.setOption(option);
+  // 响应窗口大小变化
+  window.addEventListener('resize', function () {
+    sampleChart.resize();
+  });
+});
+  </script>
+  <!-- [/JSMOD] ghi_样品统计图表 -- 使用echarts绘制样品日完成数量趋势图 -->
+  
+  <!-- [JSMOD] jkl_工作站状态图表 -->
+  <script id="workstation-chart-script">
+    // 初始化工作站状态图表
+document.addEventListener('DOMContentLoaded', function () {
+  var workstationChart = echarts.init(document.getElementById('workstation-chart'));
+  var option = {
+    tooltip: {
+      trigger: 'item'
+    },
+    series: [{
+      type: 'pie',
+      radius: '80%',
+      data: [{
+        value: 2,
+        name: '空闲',
+        itemStyle: {
+          color: '#00B42A'
+        }
+      }, {
+        value: 6,
+        name: '运行中',
+        itemStyle: {
+          color: '#165DFF'
+        }
+      }, {
+        value: 1,
+        name: '等待中',
+        itemStyle: {
+          color: '#FF7D00'
+        }
+      }, {
+        value: 1,
+        name: '维护中',
+        itemStyle: {
+          color: '#F53F3F'
+        }
+      }],
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.5)'
+        }
+      },
+      label: {
+        show: false
+      },
+      labelLine: {
+        show: false
+      }
+    }]
+  };
+  workstationChart.setOption(option);
+  // 响应窗口大小变化
+  window.addEventListener('resize', function () {
+    workstationChart.resize();
+  });
+});
+  </script>
+  <!-- [/JSMOD] jkl_工作站状态图表 -- 使用echarts绘制工作站状态分布饼图 -->
+  
+  <!-- [JSMOD] mno_工站交互 -->
+  <script id="workstation-interaction">
+    // 工站点击交互效果
+document.addEventListener('DOMContentLoaded', function () {
+  var workstations = document.querySelectorAll('.bg-primary\\/20.rounded-lg');
+  workstations.forEach(function (station) {
+    station.addEventListener('click', function () {
+      // 这里可以添加工站详情弹窗逻辑
+      var stationName = station.querySelector('div:first-child').textContent;
+      var stationStatus = station.querySelector('div:last-child').textContent;
+      alert(`工站:${stationName}\n状态:${stationStatus}`);
+    });
+  });
+  
+  // 任务进度条动画效果
+  const progressBars = document.querySelectorAll('.task-progress-value');
+  progressBars.forEach(bar => {
+    const width = bar.style.width;
+    bar.style.width = '0';
+    setTimeout(() => {
+      bar.style.width = width;
+    }, 300);
+  });
+});
+  </script>
+  <!-- [/JSMOD] mno_工站交互 -- 为工站添加点击事件，显示工站详情信息 -->
+</body>
+</html>
