@@ -5,9 +5,19 @@ from app01 import views
 urlpatterns = [
     # ==================== 管理后台页面（自定义） - 必须在 admin.site.urls 之前 ====================
     path('admin/experiment-tasks/', views.admin_experiment_tasks, name='admin_experiment_tasks'),
-    path('admin/material-requirements/', views.admin_material_requirements, name='admin_material_requirements'),
     path('admin/user-management/', views.admin_user_management, name='admin_user_management'),
-    path('admin/equipment-management/', views.admin_equipment_management, name='admin_equipment_management'),
+    path('admin/overview/', views.admin_overview, name='admin_overview'),
+    path('admin/station-management/manual/', views.admin_station_manual, name='admin_station_manual'),
+    path('admin/station-management/reaction/', views.admin_station_reaction, name='admin_station_reaction'),
+    path('admin/station-management/glove-reaction/', views.admin_station_glove_reaction, name='admin_station_glove_reaction'),
+    path('admin/station-management/filtration/', views.admin_station_filtration, name='admin_station_filtration'),
+    path('admin/station-management/rotavap/', views.admin_station_rotavap, name='admin_station_rotavap'),
+    path('admin/station-management/column/', views.admin_station_column, name='admin_station_column'),
+    path('admin/station-management/tlc/', views.admin_station_tlc, name='admin_station_tlc'),
+    path('admin/station-management/gcms/', views.admin_station_gcms, name='admin_station_gcms'),
+    path('admin/station-management/hplc/', views.admin_station_hplc, name='admin_station_hplc'),
+    path('admin/station-management/agv/', views.admin_station_agv, name='admin_station_agv'),
+    path('admin/station-management/batching/', views.admin_station_batching, name='admin_station_batching'),
 
     # ==================== Django Admin ====================
     path('admin/', admin.site.urls),
@@ -15,7 +25,6 @@ urlpatterns = [
     # ==================== 认证与仪表板（页面） ====================
     path('', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
-    path('dashboard/admin/', views.admin_dashboard, name='admin_dashboard'),
     path('user/task_management', views.user_task_management, name='user_task_management'),
     path('task/edit/', views.task_edit, name='task_edit'),
 
@@ -91,6 +100,22 @@ urlpatterns = [
     path('preparator/container_management/', views.preparator_container_management, name='preparator_container_management'),
     path('preparator/material_management/', views.preparator_material_management, name='preparator_material_management'),
     path('preparator/preparation_station/', views.preparation_station_view, name='preparation_station'),
+    path('preparator/reagents_library/', views.preparator_reagents_library, name='preparator_reagents_library'),
+
+    # ==================== 试剂库 API ====================
+    path('api/reagents/stats/', views.api_reagents_stats, name='api_reagents_stats'),
+    path('api/reagents/', views.api_reagents_list, name='api_reagents_list'),
+    path('api/reagent/create/', views.api_reagent_create, name='api_reagent_create'),
+    path('api/reagent/<int:reagent_id>/', views.api_reagent_detail, name='api_reagent_detail'),
+    path('api/reagent/<int:reagent_id>/update/', views.api_reagent_update, name='api_reagent_update'),
+    path('api/reagent/<int:reagent_id>/delete/', views.api_reagent_delete, name='api_reagent_delete'),
+    path('api/reagent/<int:reagent_id>/take/', views.api_reagent_take, name='api_reagent_take'),
+    # 图谱
+    path('api/reagent/<int:reagent_id>/spectra/', views.api_reagent_spectra, name='api_reagent_spectra'),
+    path('api/reagent/<int:reagent_id>/spectra/upload/', views.api_reagent_spectrum_upload, name='api_reagent_spectrum_upload'),
+    path('api/reagent/spectra/<int:spectrum_id>/update/', views.api_reagent_spectrum_update, name='api_reagent_spectrum_update'),
+    path('api/reagent/spectra/<int:spectrum_id>/delete/', views.api_reagent_spectrum_delete, name='api_reagent_spectrum_delete'),
+    path('api/reagent/spectra/<int:spectrum_id>/download/', views.api_reagent_spectrum_download, name='api_reagent_spectrum_download'),
 
     # ==================== 备料员任务 API ====================
     path('api/preparator/filter-tasks/', views.api_preparator_filter_tasks, name='api_preparator_filter_tasks'),

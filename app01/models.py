@@ -862,6 +862,290 @@ class PreparationStation(models.Model):
         return self
 
 
+# endregion
+
+
+# region 试剂库(Reagent)
+
+
+class ReagentType(models.TextChoices):
+    """试剂物理形态"""
+
+    SOLID = "solid", "固体"
+    LIQUID = "liquid", "液体"
+
+
+class HazardType(models.TextChoices):
+    """危险类型"""
+
+    GENERAL = "general", "一般"
+    OXIDIZING = "oxidizing", "强氧化"
+    REDUCING = "reducing", "强还原"
+    VOLATILE = "volatile", "高挥发"
+    TOXIC = "toxic", "易制毒"
+    EXPLOSIVE = "explosive", "易制爆"
+
+
+class StorageEnvironment(models.TextChoices):
+    """存储环境"""
+
+    ROOM = "room", "室温"
+    REFRIGERATOR = "refrigerator", "冰箱"
+
+
+class Reagent(models.Model):
+    """
+    试剂主数据模型，对应试剂库的条目
+    """
+
+    UNIT_CHOICES = (
+        ("g", "克(g)"),
+        ("mL", "毫升(mL)"),
+    )
+
+    # 必填信息
+    name = models.CharField(max_length=200, db_index=True, verbose_name="试剂名称")
+    cas = models.CharField(max_length=64, db_index=True, verbose_name="CAS号")
+    reagent_type = models.CharField(
+        max_length=16, choices=ReagentType.choices, verbose_name="试剂类型"
+    )
+    quantity = models.DecimalField(
+        max_digits=16, decimal_places=3, default=0, verbose_name="剩余量"
+    )
+    unit = models.CharField(max_length=8, choices=UNIT_CHOICES, verbose_name="单位")
+    molecular_weight = models.DecimalField(
+        max_digits=16, decimal_places=6, verbose_name="分子量"
+    )
+    density = models.DecimalField(
+        max_digits=16, decimal_places=6, verbose_name="密度(g/cm³)"
+    )
+    smiles = models.CharField(max_length=255, verbose_name="SMILES")
+    formula = models.CharField(max_length=128, verbose_name="分子式")
+    hazard_type = models.CharField(
+        max_length=20, choices=HazardType.choices, default=HazardType.GENERAL, verbose_name="危险类型"
+    )
+    warning_threshold = models.DecimalField(
+        max_digits=16, decimal_places=3, default=0, verbose_name="缺料预警阈值"
+    )
+    expiry_date = models.DateField(verbose_name="有效期")
+    storage_env = models.CharField(
+        max_length=20, choices=StorageEnvironment.choices, default=StorageEnvironment.ROOM, verbose_name="存储环境"
+    )
+    storage_location = models.CharField(max_length=200, verbose_name="存储位置")
+
+    # 选填信息
+    chinese_aliases = models.JSONField(default=list, blank=True, verbose_name="中文别名")
+    english_names = models.JSONField(default=list, blank=True, verbose_name="英文名称")
+    color = models.CharField(max_length=64, blank=True, verbose_name="颜色")
+    odor = models.CharField(max_length=128, blank=True, verbose_name="气味")
+    melting_point = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="熔点(°C)"
+    )
+    boiling_point = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="沸点(°C)"
+    )
+    flash_point = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="闪点(°C)"
+    )
+    autoignition_temp = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="自燃温度(°C)"
+    )
+    decomposition_temp = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="分解温度(°C)"
+    )
+    vapor_pressure = models.DecimalField(
+        max_digits=16, decimal_places=6, null=True, blank=True, verbose_name="饱和蒸气压(kPa)"
+    )
+    explosion_limit = models.CharField(
+        max_length=64, blank=True, verbose_name="爆炸极限(%)"
+    )
+    ph_value = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="PH值"
+    )
+    particle_size = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="颗粒度(μm)"
+    )
+    viscosity = models.DecimalField(
+        max_digits=16, decimal_places=6, null=True, blank=True, verbose_name="粘度(mPa·s)"
+    )
+    refractive_index = models.DecimalField(
+        max_digits=8, decimal_places=6, null=True, blank=True, verbose_name="折射率"
+    )
+    water_solubility = models.CharField(
+        max_length=128, blank=True, verbose_name="水溶解性"
+    )
+    logp = models.DecimalField(
+        max_digits=8, decimal_places=3, null=True, blank=True, verbose_name="油水分配系数(logP)"
+    )
+    is_controlled = models.BooleanField(default=False, verbose_name="是否管制品")
+    is_narcotic = models.BooleanField(default=False, verbose_name="是否毒品")
+    disposal_notes = models.TextField(blank=True, verbose_name="废弃注意事项")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "reagent"
+        verbose_name = "试剂"
+        verbose_name_plural = "试剂"
+        ordering = ["name", "cas"]
+        indexes = [
+            models.Index(fields=["cas"]),
+            models.Index(fields=["reagent_type"]),
+            models.Index(fields=["hazard_type"]),
+            models.Index(fields=["expiry_date"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    (models.Q(reagent_type=ReagentType.SOLID) & models.Q(unit="g"))
+                    | (models.Q(reagent_type=ReagentType.LIQUID) & models.Q(unit="mL"))
+                ),
+                name="chk_reagent_unit_matches_type",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.name}({self.cas})"
+
+    def clean(self):
+        # 单位与类型匹配校验
+        if self.reagent_type == ReagentType.SOLID and self.unit != "g":
+            raise ValidationError("固体试剂单位必须为g")
+        if self.reagent_type == ReagentType.LIQUID and self.unit != "mL":
+            raise ValidationError("液体试剂单位必须为mL")
+        # 阈值与数量非负
+        if self.quantity is not None and self.quantity < 0:
+            raise ValidationError("剩余量不能为负数")
+        if self.warning_threshold is not None and self.warning_threshold < 0:
+            raise ValidationError("缺料预警阈值不能为负数")
+
+    def is_low_stock(self) -> bool:
+        return self.quantity is not None and self.warning_threshold is not None and self.quantity <= self.warning_threshold
+
+    def is_expiring(self, days: int = 0) -> bool:
+        if not self.expiry_date:
+            return False
+        if days <= 0:
+            return timezone.now().date() > self.expiry_date
+        return timezone.now().date() >= (self.expiry_date - timezone.timedelta(days=days))
+
+    def take(self, amount, user, purpose: str = ""):
+        """试剂取用，减少库存，并记录操作日志"""
+        if amount is None:
+            raise ValidationError("取用数量不能为空")
+        if amount <= 0:
+            raise ValidationError("取用数量必须大于0")
+        if self.quantity < amount:
+            raise ValidationError("取用数量不能大于当前剩余量")
+        before = self.quantity
+        self.quantity = before - amount
+        self.updated_at = timezone.now()
+        self.save()
+        ReagentOperation.objects.create(
+            reagent=self,
+            operation_type=ReagentOperation.Type.TAKE,
+            amount=amount,
+            unit=self.unit,
+            before_quantity=before,
+            after_quantity=self.quantity,
+            remark=purpose or "",
+            operated_by=user,
+        )
+        return self
+
+
+class SpectrumType(models.TextChoices):
+    """图谱类型"""
+
+    NMR = "nmr", "核磁图谱"
+    GCMS = "gcms", "GCMS图谱"
+    SPECTRA = "spectra", "光谱"
+    ENERGY = "energy", "能谱"
+
+
+class ReagentSpectrum(models.Model):
+    """试剂图谱，多对一关联到试剂"""
+
+    reagent = models.ForeignKey(
+        Reagent, on_delete=models.CASCADE, related_name="spectra", verbose_name="试剂"
+    )
+    spectrum_type = models.CharField(
+        max_length=16, choices=SpectrumType.choices, verbose_name="图谱类型"
+    )
+    # 为兼容性保留原文件路径字段（可选使用）
+    file_path = models.CharField(max_length=500, verbose_name="文件路径", blank=True)
+    # 数据库存储二进制内容与元数据
+    original_filename = models.CharField(max_length=255, blank=True, verbose_name="原始文件名")
+    content_type = models.CharField(max_length=100, blank=True, verbose_name="内容类型")
+    file_size = models.BigIntegerField(null=True, blank=True, verbose_name="文件大小(字节)")
+    binary_content = models.BinaryField(null=True, blank=True, verbose_name="二进制内容")
+    conditions = models.CharField(max_length=255, blank=True, verbose_name="图谱获取条件")
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="上传时间")
+
+    class Meta:
+        db_table = "reagent_spectrum"
+        verbose_name = "试剂图谱"
+        verbose_name_plural = "试剂图谱"
+        ordering = ["-uploaded_at"]
+        indexes = [
+            models.Index(fields=["reagent", "spectrum_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.reagent.name} - {self.get_spectrum_type_display()}"
+
+    def clean(self):
+        # 文件大小限制 20MB，当存在二进制内容时才校验
+        if self.file_size is not None and self.file_size > 20 * 1024 * 1024:
+            raise ValidationError("图谱文件大小不能超过20MB")
+
+
+class ReagentOperation(models.Model):
+    """试剂操作日志：新增、编辑、取用、删除等"""
+
+    class Type(models.TextChoices):
+        CREATE = "create", "新增"
+        UPDATE = "update", "编辑"
+        TAKE = "take", "取用"
+        DELETE = "delete", "删除"
+
+    reagent = models.ForeignKey(
+        Reagent, on_delete=models.CASCADE, related_name="operations", verbose_name="试剂"
+    )
+    operation_type = models.CharField(max_length=16, choices=Type.choices, verbose_name="操作类型")
+    amount = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="数量变更"
+    )
+    unit = models.CharField(max_length=8, blank=True, verbose_name="单位")
+    before_quantity = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="变更前数量"
+    )
+    after_quantity = models.DecimalField(
+        max_digits=16, decimal_places=3, null=True, blank=True, verbose_name="变更后数量"
+    )
+    remark = models.TextField(blank=True, verbose_name="备注/目的")
+    operated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="操作人"
+    )
+    operated_at = models.DateTimeField(auto_now_add=True, verbose_name="操作时间")
+
+    class Meta:
+        db_table = "reagent_operation"
+        verbose_name = "试剂操作日志"
+        verbose_name_plural = "试剂操作日志"
+        ordering = ["-operated_at"]
+        indexes = [
+            models.Index(fields=["reagent", "operation_type", "operated_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.reagent.name} - {self.get_operation_type_display()}"
+
+
+# endregion
+
+
 # region 机器学习相关模型(ML)
 class DataFile(models.Model):
     """

@@ -99,6 +99,21 @@
         .nav-link:hover i {
             transform: scale(1.2);
         }
+
+        /* 防止外部样式（如 Tailwind）影响顶部导航栏显示 */
+        .navbar.bg-dark {
+            background-color: #212529 !important;
+        }
+        .navbar.navbar-dark .navbar-nav .nav-link {
+            color: rgba(255, 255, 255, 0.9) !important;
+        }
+        .navbar.navbar-dark .navbar-nav .nav-link:hover,
+        .navbar.navbar-dark .navbar-nav .nav-link:focus {
+            color: #ffffff !important;
+        }
+        .navbar .navbar-brand span {
+            color: #ffffff !important;
+        }
     </style>
 </head>
 
@@ -160,7 +175,7 @@
                     <li class="nav-item mb-3">
                         <a href="{% url 'preparator_tasks' %}" class="nav-link rounded hover-bg-light">
                             <i class="fas fa-tachometer-alt fa-lg me-3 text-primary"></i>
-                            <span class="text-white">带备料任务</span>
+                            <span class="text-white">待备料任务</span>
                         </a>
                     </li>
                     <li class="nav-item mb-3">
@@ -176,6 +191,9 @@
                         </a>
                     </li>
                     <li class="nav-item mb-3">
+                        <hr class="dropdown-divider" style="border-top: 1px solid #6c757d; opacity: 1;">
+                    </li>
+                    <li class="nav-item mb-3">
                         <a href="{% url 'preparator_container_management' %}" class="nav-link rounded hover-bg-light">
                             <i class="fas fa-users fa-lg me-3 text-success"></i>
                             <span class="text-white">转移仓管理</span>
@@ -185,6 +203,12 @@
                         <a href="{% url 'preparator_material_management' %}" class="nav-link rounded hover-bg-light">
                             <i class="fas fa-flask fa-lg me-3 text-info"></i>
                             <span class="text-white">物料管理</span>
+                        </a>
+                    </li>
+                    <li class="nav-item mb-3">
+                        <a href="{% url 'preparator_reagents_library' %}" class="nav-link rounded hover-bg-light">
+                            <i class="fas fa-flask fa-lg me-3 text-info"></i>
+                            <span class="text-white">试剂库</span>
                         </a>
                     </li>
                 </ul>

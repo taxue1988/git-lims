@@ -1,0 +1,1654 @@
+<html lang="zh-CN">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>
+   试剂管理系统
+  </title>
+  <script src="https://res.gemcoder.com/js/reload.js">
+  </script>
+  <script src="https://cdn.tailwindcss.com">
+  </script>
+  <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+  <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js">
+  </script>
+  <script>
+   tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#165DFF',
+        success: '#00B42A',
+        warning: '#FF7D00',
+        danger: '#F53F3F',
+        info: '#86909C',
+        light: '#F2F3F5',
+        dark: '#1D2129'
+      },
+      fontFamily: {
+        inter: ['Inter', 'sans-serif']
+      }
+    }
+  }
+};
+  </script>
+  <style type="text/tailwindcss">
+   @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 2px 14px 0 rgba(0, 0, 0, 0.06);
+            }
+            .modal-backdrop {
+                backdrop-filter: blur(4px);
+            }
+            .transition-height {
+                transition: max-height 0.3s ease-in-out;
+            }
+        }
+  </style>
+ </head>
+ <body class="bg-gray-50 font-inter text-dark">
+  <!-- [MODULE] a1b_主内容区域 -->
+  <div class="min-h-screen flex flex-col">
+   <!-- [MODULE] c3d_页面头部 -->
+   <header class="bg-white shadow-sm border-b border-gray-200">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+     <h1 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-primary">
+      试剂管理系统
+     </h1>
+     <div class="flex items-center space-x-4">
+      <button class="text-gray-500 hover:text-primary transition-colors">
+       <i class="fas fa-bell text-xl">
+       </i>
+      </button>
+      <div class="flex items-center space-x-2">
+       <img alt="用户头像" class="w-10 h-10 rounded-full object-cover" src="./api/searchImage?query=user avatar with white background, simple icon, vector style&amp;width=40&amp;height=40"/>
+       <span class="font-medium">
+        管理员
+       </span>
+      </div>
+     </div>
+    </div>
+   </header>
+   <!-- [/MODULE] c3d_页面头部 -- 包含系统标题和用户信息 -->
+   <!-- [MODULE] e5f_主内容区 -->
+   <main class="flex-1 container mx-auto px-4 py-6">
+    <!-- [MODULE] g7h_试剂信息统计 -->
+    <section class="mb-8">
+     <h2 class="text-xl font-bold mb-4">
+      试剂信息统计
+     </h2>
+     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <!-- 总试剂种类 -->
+      <div class="bg-white rounded-lg p-4 card-shadow hover:shadow-md transition-shadow cursor-pointer hover:border-primary hover:border" data-filter="all">
+       <div class="flex items-center justify-between mb-2">
+        <h3 class="text-gray-500 font-medium">
+         总试剂种类
+        </h3>
+        <span class="bg-blue-100 text-primary p-2 rounded-full">
+         <i class="fas fa-flask">
+         </i>
+        </span>
+       </div>
+       <p class="text-2xl font-bold">
+        128
+       </p>
+      </div>
+      <!-- 液体种类 -->
+      <div class="bg-white rounded-lg p-4 card-shadow hover:shadow-md transition-shadow cursor-pointer hover:border-primary hover:border" data-filter="liquid">
+       <div class="flex items-center justify-between mb-2">
+        <h3 class="text-gray-500 font-medium">
+         液体种类
+        </h3>
+        <span class="bg-cyan-100 text-cyan-600 p-2 rounded-full">
+         <i class="fas fa-tint">
+         </i>
+        </span>
+       </div>
+       <p class="text-2xl font-bold">
+        76
+       </p>
+      </div>
+      <!-- 固体种类 -->
+      <div class="bg-white rounded-lg p-4 card-shadow hover:shadow-md transition-shadow cursor-pointer hover:border-primary hover:border" data-filter="solid">
+       <div class="flex items-center justify-between mb-2">
+        <h3 class="text-gray-500 font-medium">
+         固体种类
+        </h3>
+        <span class="bg-yellow-100 text-yellow-600 p-2 rounded-full">
+         <i class="fas fa-cubes">
+         </i>
+        </span>
+       </div>
+       <p class="text-2xl font-bold">
+        52
+       </p>
+      </div>
+      <!-- 危险试剂 -->
+      <div class="bg-white rounded-lg p-4 card-shadow hover:shadow-md transition-shadow cursor-pointer hover:border-primary hover:border" data-filter="hazardous">
+       <div class="flex items-center justify-between mb-2">
+        <h3 class="text-gray-500 font-medium">
+         危险试剂
+        </h3>
+        <span class="bg-red-100 text-danger p-2 rounded-full">
+         <i class="fas fa-exclamation-triangle">
+         </i>
+        </span>
+       </div>
+       <p class="text-2xl font-bold">
+        32
+       </p>
+      </div>
+      <!-- 缺料预警 -->
+      <div class="bg-white rounded-lg p-4 card-shadow hover:shadow-md transition-shadow cursor-pointer hover:border-primary hover:border" data-filter="lowStock">
+       <div class="flex items-center justify-between mb-2">
+        <h3 class="text-gray-500 font-medium">
+         缺料预警
+        </h3>
+        <span class="bg-orange-100 text-warning p-2 rounded-full">
+         <i class="fas fa-exclamation-circle">
+         </i>
+        </span>
+       </div>
+       <p class="text-2xl font-bold">
+        8
+       </p>
+      </div>
+      <!-- 过期预警 -->
+      <div class="bg-white rounded-lg p-4 card-shadow hover:shadow-md transition-shadow cursor-pointer hover:border-primary hover:border" data-filter="expiring">
+       <div class="flex items-center justify-between mb-2">
+        <h3 class="text-gray-500 font-medium">
+         过期预警
+        </h3>
+        <span class="bg-purple-100 text-purple-600 p-2 rounded-full">
+         <i class="fas fa-calendar-times">
+         </i>
+        </span>
+       </div>
+       <p class="text-2xl font-bold">
+        5
+       </p>
+      </div>
+     </div>
+    </section>
+    <!-- [/MODULE] g7h_试剂信息统计 -- 包含总试剂种类、液体种类、固体种类、危险试剂、缺料预警、过期预警卡片 -->
+    <!-- [MODULE] i9j_试剂列表 -->
+    <section>
+     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+      <h2 class="text-xl font-bold w-full sm:w-auto">
+       试剂列表
+      </h2>
+      <div class="flex w-full sm:w-auto gap-4">
+       <div class="relative flex-1 sm:flex-none sm:w-64">
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" placeholder="搜索试剂..." type="text"/>
+        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+        </i>
+       </div>
+       <button class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg flex items-center transition-colors whitespace-nowrap" id="add-reagent-btn">
+        <i class="fas fa-plus mr-2">
+        </i>
+        <span>
+         新增试剂
+        </span>
+       </button>
+      </div>
+     </div>
+     <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div class="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+       <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-start sm:justify-end">
+        <select class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+         <option>
+          所有类型
+         </option>
+         <option>
+          固体
+         </option>
+         <option>
+          液体
+         </option>
+        </select>
+        <select class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+         <option>
+          所有状态
+         </option>
+         <option>
+          正常
+         </option>
+         <option>
+          缺料预警
+         </option>
+         <option>
+          过期预警
+         </option>
+         <option>
+          已过期
+         </option>
+        </select>
+        <select class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+         <option>
+          所有危险类型
+         </option>
+         <option>
+          一般
+         </option>
+         <option>
+          强氧化
+         </option>
+         <option>
+          强还原
+         </option>
+         <option>
+          高挥发
+         </option>
+         <option>
+          易制毒
+         </option>
+         <option>
+          易制爆
+         </option>
+        </select>
+       </div>
+      </div>
+      <div class="overflow-x-auto">
+       <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+         <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" scope="col">
+           试剂名称
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" scope="col">
+           CAS号
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" scope="col">
+           类型
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" scope="col">
+           剩余量
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" scope="col">
+           有效期
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" scope="col">
+           存储环境
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" scope="col">
+           操作
+          </th>
+         </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+         <!-- 试剂列表项 -->
+         <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-6 py-4 whitespace-nowrap">
+           <div class="flex items-center">
+            <div class="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-primary mr-3">
+             <i class="fas fa-flask">
+             </i>
+            </div>
+            <div>
+             <div class="text-sm font-medium text-gray-900">
+              乙醇
+             </div>
+             <div class="text-xs text-gray-500">
+              Ethyl alcohol
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           64-17-5
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+            液体
+           </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           <div class="flex items-center">
+            <span>
+             450
+            </span>
+            <span class="ml-1 text-gray-400">
+             mL
+            </span>
+            <div class="ml-2 w-16 bg-gray-200 rounded-full h-2">
+             <div class="bg-success h-2 rounded-full" style="width: 45%">
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           2024-12-15
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           室温
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+           <div class="flex space-x-2">
+            <button class="text-primary hover:text-primary/80 transition-colors edit-btn" data-id="1">
+             <i class="fas fa-edit">
+             </i>
+            </button>
+            <button class="text-danger hover:text-danger/80 transition-colors delete-btn" data-id="1">
+             <i class="fas fa-trash">
+             </i>
+            </button>
+            <button class="text-warning hover:text-warning/80 transition-colors take-btn" data-id="1">
+             <i class="fas fa-minus-circle">
+             </i>
+            </button>
+           </div>
+          </td>
+         </tr>
+         <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-6 py-4 whitespace-nowrap">
+           <div class="flex items-center">
+            <div class="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 mr-3">
+             <i class="fas fa-cube">
+             </i>
+            </div>
+            <div>
+             <div class="text-sm font-medium text-gray-900">
+              氯化钠
+             </div>
+             <div class="text-xs text-gray-500">
+              Sodium chloride
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           7647-14-5
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+            固体
+           </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           <div class="flex items-center">
+            <span>
+             25
+            </span>
+            <span class="ml-1 text-gray-400">
+             g
+            </span>
+            <div class="ml-2 w-16 bg-gray-200 rounded-full h-2">
+             <div class="bg-warning h-2 rounded-full" style="width: 25%">
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           2025-03-22
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           室温
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+           <div class="flex space-x-2">
+            <button class="text-primary hover:text-primary/80 transition-colors edit-btn" data-id="2">
+             <i class="fas fa-edit">
+             </i>
+            </button>
+            <button class="text-danger hover:text-danger/80 transition-colors delete-btn" data-id="2">
+             <i class="fas fa-trash">
+             </i>
+            </button>
+            <button class="text-warning hover:text-warning/80 transition-colors take-btn" data-id="2">
+             <i class="fas fa-minus-circle">
+             </i>
+            </button>
+           </div>
+          </td>
+         </tr>
+         <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-6 py-4 whitespace-nowrap">
+           <div class="flex items-center">
+            <div class="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center text-danger mr-3">
+             <i class="fas fa-flask">
+             </i>
+            </div>
+            <div>
+             <div class="text-sm font-medium text-gray-900">
+              硝酸
+             </div>
+             <div class="text-xs text-gray-500">
+              Nitric acid
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           7697-37-2
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+            液体
+           </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           <div class="flex items-center">
+            <span>
+             120
+            </span>
+            <span class="ml-1 text-gray-400">
+             mL
+            </span>
+            <div class="ml-2 w-16 bg-gray-200 rounded-full h-2">
+             <div class="bg-danger h-2 rounded-full" style="width: 12%">
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-danger">
+           2023-11-05
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           冰箱
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+           <div class="flex space-x-2">
+            <button class="text-primary hover:text-primary/80 transition-colors edit-btn" data-id="3">
+             <i class="fas fa-edit">
+             </i>
+            </button>
+            <button class="text-danger hover:text-danger/80 transition-colors delete-btn" data-id="3">
+             <i class="fas fa-trash">
+             </i>
+            </button>
+            <button class="text-warning hover:text-warning/80 transition-colors take-btn" data-id="3">
+             <i class="fas fa-minus-circle">
+             </i>
+            </button>
+           </div>
+          </td>
+         </tr>
+         <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-6 py-4 whitespace-nowrap">
+           <div class="flex items-center">
+            <div class="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 mr-3">
+             <i class="fas fa-cube">
+             </i>
+            </div>
+            <div>
+             <div class="text-sm font-medium text-gray-900">
+              硫酸铜
+             </div>
+             <div class="text-xs text-gray-500">
+              Copper sulfate
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           7758-99-8
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+            固体
+           </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           <div class="flex items-center">
+            <span>
+             85
+            </span>
+            <span class="ml-1 text-gray-400">
+             g
+            </span>
+            <div class="ml-2 w-16 bg-gray-200 rounded-full h-2">
+             <div class="bg-success h-2 rounded-full" style="width: 85%">
+             </div>
+            </div>
+           </div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           2024-08-18
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+           室温
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+           <div class="flex space-x-2">
+            <button class="text-primary hover:text-primary/80 transition-colors edit-btn" data-id="4">
+             <i class="fas fa-edit">
+             </i>
+            </button>
+            <button class="text-danger hover:text-danger/80 transition-colors delete-btn" data-id="4">
+             <i class="fas fa-trash">
+             </i>
+            </button>
+            <button class="text-warning hover:text-warning/80 transition-colors take-btn" data-id="4">
+             <i class="fas fa-minus-circle">
+             </i>
+            </button>
+           </div>
+          </td>
+         </tr>
+        </tbody>
+       </table>
+      </div>
+      <div class="px-6 py-4 bg-white border-t border-gray-200 flex items-center justify-between">
+       <div class="text-sm text-gray-500">
+        显示 1 至 4，共 128 条
+       </div>
+       <div class="flex space-x-1">
+        <button class="px-3 py-1 border border-gray-300 rounded-md text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed pagination-btn" data-page="prev" disabled="">
+         <i class="fas fa-chevron-left">
+         </i>
+        </button>
+        <button class="px-3 py-1 border border-primary bg-primary text-white rounded-md pagination-btn" data-page="1">
+         1
+        </button>
+        <button class="px-3 py-1 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 pagination-btn" data-page="2">
+         2
+        </button>
+        <button class="px-3 py-1 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 pagination-btn" data-page="3">
+         3
+        </button>
+        <button class="px-3 py-1 border border-gray-300 rounded-md text-gray-500 hover:bg-gray-50 pagination-btn" data-page="next">
+         <i class="fas fa-chevron-right">
+         </i>
+        </button>
+       </div>
+      </div>
+     </div>
+    </section>
+    <!-- [/MODULE] i9j_试剂列表 -- 包含试剂表格、搜索和筛选功能 -->
+   </main>
+   <!-- [/MODULE] e5f_主内容区 -- 包含试剂信息统计和试剂列表 -->
+  </div>
+  <!-- [/MODULE] a1b_主内容区域 -- 包含整个页面内容 -->
+  <!-- [MODULE] k2l_新增试剂弹窗 -->
+  <div class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50 hidden" id="add-reagent-modal">
+   <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div class="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white z-10">
+     <h3 class="text-xl font-bold" id="modal-title">
+      新增试剂
+     </h3>
+     <button class="text-gray-500 hover:text-gray-700" id="close-modal">
+      <i class="fas fa-times text-xl">
+      </i>
+     </button>
+    </div>
+    <form class="p-6 space-y-6" id="reagent-form">
+     <input id="reagent-id" type="hidden" value=""/>
+     <!-- 必填项区域 -->
+     <div>
+      <h4 class="text-lg font-semibold mb-4 flex items-center">
+       <span class="text-danger mr-1">
+        *
+       </span>
+       必填项
+      </h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+       <!-- 试剂名称 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="reagent-name">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         试剂名称
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="reagent-name" name="reagent-name" required="" type="text"/>
+       </div>
+       <!-- CAS号 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="cas-number">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         CAS号
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="cas-number" name="cas-number" required="" type="text"/>
+       </div>
+       <!-- 试剂类型 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="reagent-type">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         试剂类型
+        </label>
+        <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="reagent-type" name="reagent-type" required="">
+         <option value="">
+          请选择
+         </option>
+         <option value="solid">
+          固体
+         </option>
+         <option value="liquid">
+          液体
+         </option>
+        </select>
+       </div>
+       <!-- 试剂量和单位 -->
+       <div class="flex space-x-4">
+        <div class="flex-1">
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="reagent-quantity">
+          <span class="text-danger mr-1">
+           *
+          </span>
+          试剂量
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="reagent-quantity" min="0" name="reagent-quantity" required="" step="0.01" type="number"/>
+        </div>
+        <div class="flex-1">
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="reagent-unit">
+          <span class="text-danger mr-1">
+           *
+          </span>
+          单位
+         </label>
+         <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="reagent-unit" name="reagent-unit" required="">
+          <option value="g">
+           克(g)
+          </option>
+          <option value="mL">
+           毫升(mL)
+          </option>
+         </select>
+        </div>
+       </div>
+       <!-- 分子量 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="molecular-weight">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         分子量
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="molecular-weight" min="0" name="molecular-weight" required="" step="0.001" type="number"/>
+       </div>
+       <!-- 密度 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="density">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         密度 (g/cm³)
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="density" min="0" name="density" required="" step="0.001" type="number"/>
+       </div>
+       <!-- SMILES -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="smiles">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         SMILES
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="smiles" name="smiles" required="" type="text"/>
+       </div>
+       <!-- 分子式 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="molecular-formula">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         分子式
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="molecular-formula" name="molecular-formula" required="" type="text"/>
+       </div>
+       <!-- 危险类型 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="hazard-type">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         危险类型
+        </label>
+        <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="hazard-type" name="hazard-type" required="">
+         <option value="general">
+          一般
+         </option>
+         <option value="oxidizing">
+          强氧化
+         </option>
+         <option value="reducing">
+          强还原
+         </option>
+         <option value="volatile">
+          高挥发
+         </option>
+         <option value="toxic">
+          易制毒
+         </option>
+         <option value="explosive">
+          易制爆
+         </option>
+        </select>
+       </div>
+       <!-- 缺料预警阈值 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="warning-threshold">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         缺料预警阈值
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="warning-threshold" min="0" name="warning-threshold" required="" step="0.01" type="number"/>
+       </div>
+       <!-- 有效期 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="expiry-date">
+         <span class="text-danger mr-1">
+          *
+         </span>
+         有效期
+        </label>
+        <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="expiry-date" name="expiry-date" required="" type="date"/>
+       </div>
+       <!-- 存储环境和存储位置 -->
+       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="storage-environment">
+          <span class="text-danger mr-1">
+           *
+          </span>
+          存储环境
+         </label>
+         <select class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="storage-environment" name="storage-environment" required="">
+          <option value="room">
+           室温
+          </option>
+          <option value="refrigerator">
+           冰箱
+          </option>
+         </select>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="storage-location">
+          <span class="text-danger mr-1">
+           *
+          </span>
+          存储位置
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="storage-location" name="storage-location" placeholder="例如：A区-1柜-2层" required="" type="text"/>
+        </div>
+       </div>
+      </div>
+     </div>
+     <!-- 选填项区域 -->
+     <div>
+      <div class="flex items-center justify-between mb-4">
+       <h4 class="text-lg font-semibold flex items-center">
+        选填项
+       </h4>
+       <button class="text-primary text-sm flex items-center" id="toggle-optional" type="button">
+        <i class="fas fa-chevron-down mr-1">
+        </i>
+        <span>
+         收起
+        </span>
+       </button>
+      </div>
+      <div class="space-y-6" id="optional-fields">
+       <!-- 中文别名 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+         中文别名
+        </label>
+        <div class="space-y-2" id="chinese-aliases-container">
+         <div class="flex items-center">
+          <input class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" name="chinese-aliases[]" type="text"/>
+          <button class="ml-2 text-danger hover:text-danger/80 remove-alias" type="button">
+           <i class="fas fa-times">
+           </i>
+          </button>
+         </div>
+        </div>
+        <button class="mt-2 text-sm text-primary flex items-center" id="add-chinese-alias" type="button">
+         <i class="fas fa-plus mr-1">
+         </i>
+         <span>
+          添加别名
+         </span>
+        </button>
+       </div>
+       <!-- 英文名称 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+         英文名称
+        </label>
+        <div class="space-y-2" id="english-names-container">
+         <div class="flex items-center">
+          <input class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" name="english-names[]" type="text"/>
+          <button class="ml-2 text-danger hover:text-danger/80 remove-english-name" type="button">
+           <i class="fas fa-times">
+           </i>
+          </button>
+         </div>
+        </div>
+        <button class="mt-2 text-sm text-primary flex items-center" id="add-english-name" type="button">
+         <i class="fas fa-plus mr-1">
+         </i>
+         <span>
+          添加英文名称
+         </span>
+        </button>
+       </div>
+       <!-- 物理性质 -->
+       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="color">
+          颜色
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="color" name="color" type="text"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="odor">
+          气味
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="odor" name="odor" type="text"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="melting-point">
+          熔点 (°C)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="melting-point" name="melting-point" step="0.1" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="boiling-point">
+          沸点 (°C)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="boiling-point" name="boiling-point" step="0.1" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="flash-point">
+          闪点 (°C)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="flash-point" name="flash-point" step="0.1" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="autoignition-temp">
+          自燃温度 (°C)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="autoignition-temp" name="autoignition-temp" step="0.1" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="decomposition-temp">
+          分解温度 (°C)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="decomposition-temp" name="decomposition-temp" step="0.1" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="vapor-pressure">
+          饱和蒸气压 (kPa)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="vapor-pressure" name="vapor-pressure" step="0.0001" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="explosion-limit">
+          爆炸极限 (%)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="explosion-limit" name="explosion-limit" placeholder="例如：1.4-7.5" type="text"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="ph-value">
+          PH值
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="ph-value" max="14" min="0" name="ph-value" step="0.1" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="particle-size">
+          颗粒度 (μm)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="particle-size" name="particle-size" step="0.1" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="viscosity">
+          粘度 (mPa·s)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="viscosity" name="viscosity" step="0.001" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="refractive-index">
+          折射率
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="refractive-index" min="1" name="refractive-index" step="0.0001" type="number"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="water-solubility">
+          水溶解性
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="water-solubility" name="water-solubility" type="text"/>
+        </div>
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-1" for="logp">
+          油水分配系数 (logP)
+         </label>
+         <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="logp" name="logp" step="0.01" type="number"/>
+        </div>
+       </div>
+       <!-- 其他信息 -->
+       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="flex items-center">
+         <input class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" id="is-controlled" name="is-controlled" type="checkbox"/>
+         <label class="ml-2 block text-sm text-gray-700" for="is-controlled">
+          是否管制品
+         </label>
+        </div>
+        <div class="flex items-center">
+         <input class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" id="is-narcotic" name="is-narcotic" type="checkbox"/>
+         <label class="ml-2 block text-sm text-gray-700" for="is-narcotic">
+          是否毒品
+         </label>
+        </div>
+       </div>
+       <!-- 废弃注意事项 -->
+       <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1" for="disposal-notes">
+         废弃注意事项
+        </label>
+        <textarea class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="disposal-notes" name="disposal-notes" rows="3">
+        </textarea>
+       </div>
+       <!-- 图谱上传 -->
+       <div class="space-y-4">
+        <h5 class="font-medium text-gray-700">
+         图谱上传
+        </h5>
+        <!-- 核磁图谱 -->
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-2">
+          核磁图谱
+         </label>
+         <div class="space-y-3" id="nmr-spectra-container">
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-primary transition-colors">
+           <div class="flex flex-col items-center justify-center text-center">
+            <i class="fas fa-cloud-upload-alt text-gray-400 text-3xl mb-2">
+            </i>
+            <p class="text-sm text-gray-500 mb-2">
+             点击或拖拽文件至此处上传
+            </p>
+            <p class="text-xs text-gray-400 mb-3">
+             支持 JPG, PNG, PDF, SVG 格式，单个文件不超过 10MB
+            </p>
+            <label class="px-4 py-2 bg-primary text-white rounded-lg text-sm cursor-pointer hover:bg-primary/90 transition-colors">
+             选择文件
+             <input accept=".jpg,.jpeg,.png,.pdf,.svg" class="hidden" type="file"/>
+            </label>
+           </div>
+           <div class="mt-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="nmr-conditions">
+             图谱获取条件
+            </label>
+            <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="nmr-conditions" placeholder="例如：400 MHz, CDCl3" type="text"/>
+           </div>
+          </div>
+         </div>
+         <button class="mt-2 text-sm text-primary flex items-center" type="button">
+          <i class="fas fa-plus mr-1">
+          </i>
+          <span>
+           添加图谱
+          </span>
+         </button>
+        </div>
+        <!-- GCMS图谱 -->
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-2">
+          GCMS图谱
+         </label>
+         <div class="space-y-3" id="gcms-spectra-container">
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-primary transition-colors">
+           <div class="flex flex-col items-center justify-center text-center">
+            <i class="fas fa-cloud-upload-alt text-gray-400 text-3xl mb-2">
+            </i>
+            <p class="text-sm text-gray-500 mb-2">
+             点击或拖拽文件至此处上传
+            </p>
+            <p class="text-xs text-gray-400 mb-3">
+             支持 JPG, PNG, PDF, SVG 格式，单个文件不超过 10MB
+            </p>
+            <label class="px-4 py-2 bg-primary text-white rounded-lg text-sm cursor-pointer hover:bg-primary/90 transition-colors">
+             选择文件
+             <input accept=".jpg,.jpeg,.png,.pdf,.svg" class="hidden" type="file"/>
+            </label>
+           </div>
+           <div class="mt-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="gcms-conditions">
+             图谱获取条件
+            </label>
+            <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="gcms-conditions" placeholder="例如：柱子型号，温度程序" type="text"/>
+           </div>
+          </div>
+         </div>
+         <button class="mt-2 text-sm text-primary flex items-center" type="button">
+          <i class="fas fa-plus mr-1">
+          </i>
+          <span>
+           添加图谱
+          </span>
+         </button>
+        </div>
+        <!-- 光谱 -->
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-2">
+          光谱
+         </label>
+         <div class="space-y-3" id="spectra-container">
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-primary transition-colors">
+           <div class="flex flex-col items-center justify-center text-center">
+            <i class="fas fa-cloud-upload-alt text-gray-400 text-3xl mb-2">
+            </i>
+            <p class="text-sm text-gray-500 mb-2">
+             点击或拖拽文件至此处上传
+            </p>
+            <p class="text-xs text-gray-400 mb-3">
+             支持 JPG, PNG, PDF, SVG 格式，单个文件不超过 10MB
+            </p>
+            <label class="px-4 py-2 bg-primary text-white rounded-lg text-sm cursor-pointer hover:bg-primary/90 transition-colors">
+             选择文件
+             <input accept=".jpg,.jpeg,.png,.pdf,.svg" class="hidden" type="file"/>
+            </label>
+           </div>
+           <div class="mt-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="spectrum-conditions">
+             图谱获取条件
+            </label>
+            <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="spectrum-conditions" placeholder="例如：UV-Vis, 扫描范围 200-800 nm" type="text"/>
+           </div>
+          </div>
+         </div>
+         <button class="mt-2 text-sm text-primary flex items-center" type="button">
+          <i class="fas fa-plus mr-1">
+          </i>
+          <span>
+           添加图谱
+          </span>
+         </button>
+        </div>
+        <!-- 能谱 -->
+        <div>
+         <label class="block text-sm font-medium text-gray-700 mb-2">
+          能谱
+         </label>
+         <div class="space-y-3" id="energy-spectra-container">
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-primary transition-colors">
+           <div class="flex flex-col items-center justify-center text-center">
+            <i class="fas fa-cloud-upload-alt text-gray-400 text-3xl mb-2">
+            </i>
+            <p class="text-sm text-gray-500 mb-2">
+             点击或拖拽文件至此处上传
+            </p>
+            <p class="text-xs text-gray-400 mb-3">
+             支持 JPG, PNG, PDF, SVG 格式，单个文件不超过 10MB
+            </p>
+            <label class="px-4 py-2 bg-primary text-white rounded-lg text-sm cursor-pointer hover:bg-primary/90 transition-colors">
+             选择文件
+             <input accept=".jpg,.jpeg,.png,.pdf,.svg" class="hidden" type="file"/>
+            </label>
+           </div>
+           <div class="mt-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="energy-spectrum-conditions">
+             图谱获取条件
+            </label>
+            <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="energy-spectrum-conditions" placeholder="例如：XPS, Al Kα 射线" type="text"/>
+           </div>
+          </div>
+         </div>
+         <button class="mt-2 text-sm text-primary flex items-center" type="button">
+          <i class="fas fa-plus mr-1">
+          </i>
+          <span>
+           添加图谱
+          </span>
+         </button>
+        </div>
+       </div>
+      </div>
+     </div>
+    </form>
+    <div class="p-6 border-t border-gray-200 flex justify-end space-x-3 sticky bottom-0 bg-white z-10">
+     <button class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors" id="cancel-btn">
+      取消
+     </button>
+     <button class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors" id="save-reagent-btn">
+      保存
+     </button>
+    </div>
+   </div>
+  </div>
+  <!-- [/MODULE] k2l_新增试剂弹窗 -- 包含试剂信息表单，用于新增和编辑试剂 -->
+  <!-- [MODULE] m3n_取用试剂弹窗 -->
+  <div class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50 hidden" id="take-reagent-modal">
+   <div class="bg-white rounded-lg w-full max-w-md">
+    <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+     <h3 class="text-xl font-bold">
+      取用试剂
+     </h3>
+     <button class="text-gray-500 hover:text-gray-700" id="close-take-modal">
+      <i class="fas fa-times text-xl">
+      </i>
+     </button>
+    </div>
+    <div class="p-6">
+     <input id="take-reagent-id" type="hidden" value=""/>
+     <div class="mb-4">
+      <p class="text-gray-700">
+       试剂名称:
+       <span class="font-medium" id="take-reagent-name">
+        乙醇
+       </span>
+      </p>
+      <p class="text-gray-700">
+       当前剩余量:
+       <span class="font-medium" id="take-current-quantity">
+        450 mL
+       </span>
+      </p>
+     </div>
+     <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="take-quantity">
+       <span class="text-danger mr-1">
+        *
+       </span>
+       取用数量
+      </label>
+      <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="take-quantity" min="0" name="take-quantity" required="" step="0.01" type="number"/>
+     </div>
+     <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="take-purpose">
+       <span class="text-danger mr-1">
+        *
+       </span>
+       取用目的
+      </label>
+      <textarea class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="take-purpose" name="take-purpose" required="" rows="2">
+        </textarea>
+     </div>
+     <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="take-person">
+       <span class="text-danger mr-1">
+        *
+       </span>
+       取用人员
+      </label>
+      <input class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="take-person" name="take-person" required="" type="text"/>
+     </div>
+    </div>
+    <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+     <button class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors" id="cancel-take-btn">
+      取消
+     </button>
+     <button class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors" id="confirm-take-btn">
+      确认取用
+     </button>
+    </div>
+   </div>
+  </div>
+  <!-- [/MODULE] m3n_取用试剂弹窗 -- 用于记录试剂取用信息 -->
+  <!-- [MODULE] o4p_删除确认弹窗 -->
+  <div class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50 hidden" id="delete-confirm-modal">
+   <div class="bg-white rounded-lg w-full max-w-md">
+    <div class="p-6 border-b border-gray-200">
+     <h3 class="text-xl font-bold">
+      确认删除
+     </h3>
+    </div>
+    <div class="p-6">
+     <input id="delete-reagent-id" type="hidden" value=""/>
+     <div class="flex items-center mb-4">
+      <i class="fas fa-exclamation-triangle text-warning text-2xl mr-3">
+      </i>
+      <p class="text-gray-700">
+       您确定要删除试剂
+       <span class="font-medium" id="delete-reagent-name">
+        乙醇
+       </span>
+       吗？此操作不可撤销。
+      </p>
+     </div>
+     <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="delete-reason">
+       删除原因
+      </label>
+      <textarea class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary" id="delete-reason" name="delete-reason" rows="2">
+        </textarea>
+     </div>
+    </div>
+    <div class="p-6 border-t border-gray-200 flex justify-end space-x-3">
+     <button class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors" id="cancel-delete-btn">
+      取消
+     </button>
+     <button class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/90 transition-colors" id="confirm-delete-btn">
+      确认删除
+     </button>
+    </div>
+   </div>
+  </div>
+  <!-- [/MODULE] o4p_删除确认弹窗 -- 用于确认删除试剂 -->
+  <!-- [JSMOD] 2a3_统计卡片过滤功能 -->
+  <script id="stat-card-filter">
+   document.addEventListener('DOMContentLoaded', () => {
+  // 统计卡片过滤功能
+  const filterCards = document.querySelectorAll('[data-filter]');
+  filterCards.forEach(card => {
+    card.addEventListener('click', () => {
+      // 移除所有卡片的选中状态
+      filterCards.forEach(c => c.classList.remove('ring-2', 'ring-primary'));
+      // 添加当前卡片的选中状态
+      card.classList.add('ring-2', 'ring-primary');
+      
+      const filterType = card.getAttribute('data-filter');
+      console.log('应用过滤:', filterType);
+      // 这里添加实际过滤逻辑
+    });
+  });
+  
+  // 分页功能
+  const paginationBtns = document.querySelectorAll('.pagination-btn');
+  paginationBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = btn.getAttribute('data-page');
+      console.log('切换到页面:', page);
+      // 这里添加实际分页逻辑
+    });
+  });
+});
+  </script>
+  <!-- [/JSMOD] 2a3_统计卡片过滤功能 -- 实现统计卡片点击过滤试剂列表和分页按钮切换页面功能 -->
+  <!-- [JSMOD] q5r_模态框控制 -->
+  <script id="modal-script">
+   // 获取DOM元素
+var addReagentBtn = document.getElementById('add-reagent-btn');
+var addReagentModal = document.getElementById('add-reagent-modal');
+var closeModalBtn = document.getElementById('close-modal');
+var cancelBtn = document.getElementById('cancel-btn');
+var takeReagentModal = document.getElementById('take-reagent-modal');
+var closeTakeModalBtn = document.getElementById('close-take-modal');
+var cancelTakeBtn = document.getElementById('cancel-take-btn');
+var deleteConfirmModal = document.getElementById('delete-confirm-modal');
+var closeDeleteModalBtn = document.getElementById('close-delete-modal');
+var cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+var toggleOptionalBtn = document.getElementById('toggle-optional');
+var optionalFields = document.getElementById('optional-fields');
+var reagentForm = document.getElementById('reagent-form');
+var modalTitle = document.getElementById('modal-title');
+var reagentIdInput = document.getElementById('reagent-id');
+var reagentTypeSelect = document.getElementById('reagent-type');
+var reagentUnitSelect = document.getElementById('reagent-unit');
+var addChineseAliasBtn = document.getElementById('add-chinese-alias');
+var chineseAliasesContainer = document.getElementById('chinese-aliases-container');
+
+// 打开新增试剂模态框
+addReagentBtn.addEventListener('click', function () {
+  modalTitle.textContent = '新增试剂';
+  reagentIdInput.value = '';
+  reagentForm.reset();
+  addReagentModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+});
+
+// 关闭模态框的通用函数
+function closeModal(modal) {
+  modal.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+// 关闭新增试剂模态框
+closeModalBtn.addEventListener('click', function () {
+  return closeModal(addReagentModal);
+});
+cancelBtn.addEventListener('click', function () {
+  return closeModal(addReagentModal);
+});
+
+// 关闭取用试剂模态框
+closeTakeModalBtn.addEventListener('click', function () {
+  return closeModal(takeReagentModal);
+});
+cancelTakeBtn.addEventListener('click', function () {
+  return closeModal(takeReagentModal);
+});
+
+// 关闭删除确认模态框
+cancelDeleteBtn.addEventListener('click', function () {
+  return closeModal(deleteConfirmModal);
+});
+
+// 点击模态框背景关闭模态框
+addReagentModal.addEventListener('click', function (e) {
+  if (e.target === addReagentModal) closeModal(addReagentModal);
+});
+takeReagentModal.addEventListener('click', function (e) {
+  if (e.target === takeReagentModal) closeModal(takeReagentModal);
+});
+deleteConfirmModal.addEventListener('click', function (e) {
+  if (e.target === deleteConfirmModal) closeModal(deleteConfirmModal);
+});
+
+// 切换选填项显示/隐藏
+toggleOptionalBtn.addEventListener('click', function () {
+  var icon = toggleOptionalBtn.querySelector('i');
+  var text = toggleOptionalBtn.querySelector('span');
+  if (optionalFields.classList.contains('hidden')) {
+    optionalFields.classList.remove('hidden');
+    icon.classList.remove('fa-chevron-right');
+    icon.classList.add('fa-chevron-down');
+    text.textContent = '收起';
+  } else {
+    optionalFields.classList.add('hidden');
+    icon.classList.remove('fa-chevron-down');
+    icon.classList.add('fa-chevron-right');
+    text.textContent = '展开';
+  }
+});
+
+// 根据试剂类型切换单位
+reagentTypeSelect.addEventListener('change', function () {
+  if (reagentTypeSelect.value === 'solid') {
+    reagentUnitSelect.value = 'g';
+  } else if (reagentTypeSelect.value === 'liquid') {
+    reagentUnitSelect.value = 'mL';
+  }
+});
+
+// 添加中文别名
+addChineseAliasBtn.addEventListener('click', function () {
+  var aliasDiv = document.createElement('div');
+  aliasDiv.className = 'flex items-center';
+  aliasDiv.innerHTML = "<input type=\"text\" name=\"chinese-aliases[]\" class=\"flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary\">\n                <button type=\"button\" class=\"ml-2 text-danger hover:text-danger/80 remove-alias\">\n                    <i class=\"fas fa-times\"></i>\n                </button>";
+  chineseAliasesContainer.appendChild(aliasDiv);
+
+  // 添加删除别名事件
+  aliasDiv.querySelector('.remove-alias').addEventListener('click', function () {
+    chineseAliasesContainer.removeChild(aliasDiv);
+  });
+});
+
+// 为已存在的别名添加删除事件
+document.querySelectorAll('.remove-alias').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    btn.parentElement.remove();
+  });
+});
+  </script>
+  <!-- [/JSMOD] q5r_模态框控制 -- 控制各种模态框的显示和隐藏，处理试剂类型和单位的联动，管理中文别名的添加和删除 -->
+  <!-- [JSMOD] s6t_试剂操作处理 -->
+  <script id="reagent-operations-script">
+   // 获取DOM元素
+        const takeBtns = document.querySelectorAll('.take-btn');
+        const deleteBtns = document.querySelectorAll('.delete-btn');
+        const editBtns = document.querySelectorAll('.edit-btn');
+        const takeReagentModal = document.getElementById('take-reagent-modal');
+        const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+        const takeReagentIdInput = document.getElementById('take-reagent-id');
+        const takeReagentNameSpan = document.getElementById('take-reagent-name');
+        const takeCurrentQuantitySpan = document.getElementById('take-current-quantity');
+        const takeQuantityInput = document.getElementById('take-quantity');
+        const takePurposeInput = document.getElementById('take-purpose');
+        const takePersonInput = document.getElementById('take-person');
+        const confirmTakeBtn = document.getElementById('confirm-take-btn');
+        const deleteReagentIdInput = document.getElementById('delete-reagent-id');
+        const deleteReagentNameSpan = document.getElementById('delete-reagent-name');
+        const deleteReasonInput = document.getElementById('delete-reason');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+        const saveReagentBtn = document.getElementById('save-reagent-btn');
+        
+        // 模拟试剂数据
+        const reagents = [
+            { id: 1, name: '乙醇', cas: '64-17-5', type: 'liquid', quantity: 450, unit: 'mL', expiry: '2024-12-15', storage: '室温' },
+            { id: 2, name: '氯化钠', cas: '7647-14-5', type: 'solid', quantity: 25, unit: 'g', expiry: '2025-03-22', storage: '室温' },
+            { id: 3, name: '硝酸', cas: '7697-37-2', type: 'liquid', quantity: 120, unit: 'mL', expiry: '2023-11-05', storage: '冰箱' },
+            { id: 4, name: '硫酸铜', cas: '7758-99-8', type: 'solid', quantity: 85, unit: 'g', expiry: '2024-08-18', storage: '室温' }
+        ];
+        
+        // 打开取用试剂模态框
+        takeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const reagentId = parseInt(btn.getAttribute('data-id'));
+                const reagent = reagents.find(r => r.id === reagentId);
+                
+                if (reagent) {
+                    takeReagentIdInput.value = reagent.id;
+                    takeReagentNameSpan.textContent = reagent.name;
+                    takeCurrentQuantitySpan.textContent = `${reagent.quantity} ${reagent.unit}`;
+                    takeQuantityInput.value = '';
+                    takePurposeInput.value = '';
+                    takePersonInput.value = '';
+                    
+                    takeReagentModal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            });
+        });
+        
+        // 确认取用试剂
+        document.getElementById('confirm-take-btn').addEventListener('click', () => {
+            const reagentId = parseInt(takeReagentIdInput.value);
+            const takeQuantity = parseFloat(takeQuantityInput.value);
+            const takePurpose = takePurposeInput.value.trim();
+            const takePerson = takePersonInput.value.trim();
+            
+            if (!takeQuantity || takeQuantity <= 0) {
+                alert('请输入有效的取用数量');
+                return;
+            }
+            
+            if (!takePurpose) {
+                alert('请输入取用目的');
+                return;
+            }
+            
+            if (!takePerson) {
+                alert('请输入取用人员');
+                return;
+            }
+            
+            // 在实际应用中，这里会发送请求到服务器
+            // 这里仅做前端演示
+            const reagent = reagents.find(r => r.id === reagentId);
+            if (reagent) {
+                if (takeQuantity > reagent.quantity) {
+                    alert('取用数量不能大于当前剩余量');
+                    return;
+                }
+                
+                reagent.quantity -= takeQuantity;
+                reagent.quantity = Math.round(reagent.quantity * 100) / 100; // 保留两位小数
+                
+                // 更新界面显示
+// 更新界面显示
+                const row = document.querySelector(`.take-btn[data-id="${reagentId}"]`).closest('tr');
+                if (row) {
+                    const quantityCell = row.querySelector('td:nth-child(4)');
+                    const quantityValue = quantityCell.querySelector('span:first-child');
+                    const progressBar = quantityCell.querySelector('.bg-gray-200 .bg-success, .bg-gray-200 .bg-warning, .bg-gray-200 .bg-danger');
+                    
+                    if (quantityValue && progressBar) {
+                        quantityValue.textContent = reagent.quantity;
+                        
+                        // 更新进度条
+                        const percentage = Math.min(100, Math.max(0, (reagent.quantity / (reagent.quantity + takeQuantity)) * 100));
+                        progressBar.style.width = `${percentage}%`;
+                        
+                        // 根据剩余量改变进度条颜色
+                        progressBar.className = 'h-2 rounded-full';
+                        if (percentage < 30) {
+                            progressBar.classList.add('bg-danger');
+                        } else if (percentage < 60) {
+                            progressBar.classList.add('bg-warning');
+                        } else {
+                            progressBar.classList.add('bg-success');
+                        }
+                    }
+                }
+                
+                // 关闭模态框并显示成功消息
+                closeModal(takeReagentModal);
+                alert('试剂取用成功！');
+            });
+        });
+        
+        // 打开删除确认模态框
+        deleteBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const reagentId = parseInt(btn.getAttribute('data-id'));
+                const reagent = reagents.find(r => r.id === reagentId);
+                
+                if (reagent) {
+                    deleteReagentIdInput.value = reagent.id;
+                    deleteReagentNameSpan.textContent = reagent.name;
+                    deleteReasonInput.value = '';
+                    
+                    deleteConfirmModal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            });
+        });
+        
+        // 确认删除试剂
+        confirmDeleteBtn.addEventListener('click', () => {
+            const reagentId = parseInt(deleteReagentIdInput.value);
+            
+            // 在实际应用中，这里会发送请求到服务器
+            // 这里仅做前端演示
+            const reagentIndex = reagents.findIndex(r => r.id === reagentId);
+            if (reagentIndex !== -1) {
+                reagents.splice(reagentIndex, 1);
+                
+                // 从界面移除该行
+                const row = document.querySelector(`.delete-btn[data-id="${reagentId}"]`).closest('tr');
+                if (row) {
+                    row.remove();
+                }
+                
+                // 关闭模态框并显示成功消息
+                closeModal(deleteConfirmModal);
+                alert('试剂删除成功！');
+            }
+        });
+        
+        // 编辑试剂
+        editBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const reagentId = parseInt(btn.getAttribute('data-id'));
+                const reagent = reagents.find(r => r.id === reagentId);
+                
+                if (reagent) {
+                    modalTitle.textContent = '编辑试剂';
+                    reagentIdInput.value = reagent.id;
+                    
+                    // 填充表单数据（这里仅填充部分关键数据，实际应用中需要填充所有字段）
+                    document.getElementById('reagent-name').value = reagent.name;
+                    document.getElementById('cas-number').value = reagent.cas;
+                    document.getElementById('reagent-type').value = reagent.type;
+                    document.getElementById('reagent-quantity').value = reagent.quantity;
+                    document.getElementById('reagent-unit').value = reagent.unit;
+                    
+                    // 打开模态框
+                    addReagentModal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            });
+        });
+        
+        // 保存试剂（新增或编辑）
+        saveReagentBtn.addEventListener('click', () => {
+            // 获取表单数据
+            const reagentId = reagentIdInput.value ? parseInt(reagentIdInput.value) : null;
+            const name = document.getElementById('reagent-name').value.trim();
+            const cas = document.getElementById('cas-number').value.trim();
+            const type = document.getElementById('reagent-type').value;
+            const quantity = parseFloat(document.getElementById('reagent-quantity').value);
+            const unit = document.getElementById('reagent-unit').value;
+            const molecularWeight = parseFloat(document.getElementById('molecular-weight').value);
+            
+            // 表单验证
+            if (!name) {
+                alert('请输入试剂名称');
+                return;
+            }
+            
+            if (!cas) {
+                alert('请输入CAS号');
+                return;
+            }
+            
+            if (!type) {
+                alert('请选择试剂类型');
+                return;
+            }
+            
+            if (isNaN(quantity) || quantity < 0) {
+                alert('请输入有效的试剂量');
+                return;
+            }
+            
+            if (isNaN(molecularWeight) || molecularWeight <= 0) {
+                alert('请输入有效的分子量');
+                return;
+            }
+            
+            // 在实际应用中，这里会发送请求到服务器
+            // 这里仅做前端演示
+            if (reagentId) {
+                // 编辑现有试剂
+                const reagent = reagents.find(r => r.id === reagentId);
+                if (reagent) {
+                    reagent.name = name;
+                    reagent.cas = cas;
+                    reagent.type = type;
+                    reagent.quantity = quantity;
+                    reagent.unit = unit;
+                    
+                    // 更新界面显示
+                    const row = document.querySelector(`.edit-btn[data-id="${reagentId}"]`).closest('tr');
+                    if (row) {
+                        const nameCell = row.querySelector('td:first-child .text-sm.font-medium');
+                        const casCell = row.querySelector('td:nth-child(2)');
+                        const typeCell = row.querySelector('td:nth-child(3) span');
+                        const quantityValue = row.querySelector('td:nth-child(4) span:first-child');
+                        
+                        if (nameCell) nameCell.textContent = name;
+                        if (casCell) casCell.textContent = cas;
+                        if (typeCell) {
+                            typeCell.textContent = type === 'solid' ? '固体' : '液体';
+                            typeCell.className = type === 'solid' 
+                                ? 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800' 
+                                : 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800';
+                        }
+                        if (quantityValue) quantityValue.textContent = quantity;
+                    }
+                    
+                    alert('试剂更新成功！');
+                }
+            } else {
+                // 添加新试剂
+                const newId = Math.max(...reagents.map(r => r.id)) + 1;
+                const newReagent = {
+                    id: newId,
+                    name,
+                    cas,
+                    type,
+                    quantity,
+                    unit,
+                    expiry: '2024-12-31', // 示例数据
+                    storage: '室温' // 示例数据
+                };
+                
+                reagents.push(newReagent);
+                
+                // 在实际应用中，这里会重新获取试剂列表或在表格中添加新行
+                alert('新试剂添加成功！');
+            }
+            
+            // 关闭模态框
+            closeModal(addReagentModal);
+        });
+        
+        // 关闭模态框的通用函数
+        function closeModal(modal) {
+            modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+  </script>
+  <!-- [/JSMOD] s6t_试剂操作处理 -- 处理试剂的取用、删除和编辑操作，包括模态框数据填充、表单验证和界面更新 -->
+ </body>
+</html>

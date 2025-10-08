@@ -1,0 +1,104 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}工站管理{% endblock %}
+
+{% block main_content %}
+<nav style="--bs-breadcrumb-divider: '';" aria-label="breadcrumb">
+    <style>
+        /* 面包屑美化 */
+        nav[aria-label="breadcrumb"] .breadcrumb {
+            position: relative;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+        }
+        nav[aria-label="breadcrumb"] .breadcrumb-item a {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 8px;
+            color: #0d6efd;
+            text-decoration: none;
+            transition: background-color .25s ease, color .25s ease, transform .2s ease;
+            will-change: background-color, color, transform;
+        }
+        nav[aria-label="breadcrumb"] .breadcrumb-item a:hover {
+            background-color: #eff6ff;
+            transform: translateY(-1px);
+        }
+        nav[aria-label="breadcrumb"] .breadcrumb-item a.active {
+            background-color: #e7f1ff;
+            color: #0a58ca;
+        }
+        /* 选中指示器（可滑动下划线） */
+        nav[aria-label="breadcrumb"] .breadcrumb-indicator {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            height: 2px;
+            width: 0;
+            background-color: #0d6efd;
+            border-radius: 1px;
+            transition: transform .3s ease, width .3s ease;
+            will-change: transform, width;
+        }
+    </style>
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_manual' %}">人工备料</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_batching' %}">固液配料</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_reaction' %}">反应</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_glove_reaction' %}">手套箱固液配料与反应</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_filtration' %}">过滤分液</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_rotavap' %}">旋蒸</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_column' %}">过柱</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_tlc' %}">点板</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_gcms' %}">GCMS</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_hplc' %}">HPLC</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'admin_station_agv' %}">AGV</a></li>
+        <span class="breadcrumb-indicator"></span>
+    </ol>
+    <script>
+        (function() {
+            var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
+            if (!breadcrumb) return;
+            var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
+            var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
+
+            function moveIndicator(target) {
+                if (!target || !indicator) return;
+                // 使指示器与目标链接同宽并横向平移到对应位置
+                var left = target.offsetLeft;
+                var width = target.offsetWidth;
+                indicator.style.width = width + 'px';
+                indicator.style.transform = 'translateX(' + left + 'px)';
+            }
+
+            function setActive(target) {
+                links.forEach(function(a){ a.classList.remove('active'); });
+                target.classList.add('active');
+                moveIndicator(target);
+            }
+
+            // 初始化：默认激活第一个（或保持已有active）
+            var current = breadcrumb.querySelector('.breadcrumb-item a.active') || links[0];
+            if (current) setActive(current);
+
+            // 点击切换 active 与动画
+            links.forEach(function(a){
+                a.addEventListener('click', function(e){
+                    var href = (a.getAttribute('href') || '').trim();
+                    if (href === '' || href === '#' || href.toLowerCase().startsWith('javascript')) {
+                        e.preventDefault();
+                        setActive(a);
+                    }
+                    // 否则为有效链接，允许跳转
+                });
+            });
+
+            // 窗口尺寸变化时，更新指示器位置
+            window.addEventListener('resize', function(){
+                var activeA = breadcrumb.querySelector('.breadcrumb-item a.active');
+                if (activeA) moveIndicator(activeA);
+            });
+        })();
+    </script>
+</nav>
+{% endblock %}
