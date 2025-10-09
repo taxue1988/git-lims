@@ -23,6 +23,10 @@ from .models import Container, ContainerSpec, ContainerSlot, Station
 from .models import TestTube15, LaiyuPowder, JingtaiPowder, ReagentBottle150
 from .models import PreparationList, FillOperation, PreparationStation
 from .models import DataFile, MLAlgorithm, MLTask, MLTaskResult, DataProcessingLog
+from .models import Reagent, ReagentSpectrum, ReagentOperation, ReagentType, HazardType, SpectrumType
+from decimal import Decimal
+from datetime import datetime
+from django.core.exceptions import ValidationError
 
 User = get_user_model()
 # endregion
@@ -54,7 +58,7 @@ def login_view(request):
 
         # 根据用户角色重定向到不同页面
         if user.is_admin():
-            return redirect("admin_dashboard")
+            return redirect("admin_experiment_tasks")
         elif user.is_preparator():
             return redirect("preparator_tasks")
         else:
@@ -80,114 +84,158 @@ def logout_view(request):
 
 # endregion
 
-
-# region 管理员仪表板
+# region 管理端 - 工站管理子页
 @login_required
 @ensure_csrf_cookie
-def admin_dashboard(request):
+def admin_station_batching(request):
     """
-    管理员仪表板 - 增强版
+    管理端 - 工站管理 - 固液配料子页面
+    继承父模板并默认高亮“固液配料”。
     """
-    if not request.user.is_admin():
-        return redirect("user_task_management")
-
-    # 获取所有任务（管理员仪表板统计期望覆盖全部状态，用于顶部8项汇总和用户统计）
-    qs = Task.objects.select_related("created_by").order_by("-created_at")
-
-    # 基础统计
-    total_tasks = qs.count()
-    pending_tasks = qs.filter(status=TaskStatus.PENDING).count()
-    approved_tasks = qs.filter(status=TaskStatus.APPROVED).count()
-    scheduled_tasks = qs.filter(status=TaskStatus.SCHEDULED).count()
-    in_progress_tasks = qs.filter(status=TaskStatus.IN_PROGRESS).count()
-    completed_tasks = qs.filter(status=TaskStatus.COMPLETED).count()
-    rejected_tasks = qs.filter(status=TaskStatus.REJECTED).count()
-    cancelled_tasks = qs.filter(status=TaskStatus.CANCELLED).count()
-
-    # 用户维度统计（完整口径，覆盖全部状态）
-    user_stats = (
-        qs.values("created_by__username")
-        .annotate(
-            total=Count("id"),
-            draft=Count("id", filter=Q(status=TaskStatus.DRAFT)),
-            pending=Count("id", filter=Q(status=TaskStatus.PENDING)),
-            approved=Count("id", filter=Q(status=TaskStatus.APPROVED)),
-            scheduled=Count("id", filter=Q(status=TaskStatus.SCHEDULED)),
-            in_progress=Count("id", filter=Q(status=TaskStatus.IN_PROGRESS)),
-            completed=Count("id", filter=Q(status=TaskStatus.COMPLETED)),
-            rejected=Count("id", filter=Q(status=TaskStatus.REJECTED)),
-            cancelled=Count("id", filter=Q(status=TaskStatus.CANCELLED)),
-        )
-        .order_by("-total")
-    )
-
-    # 时间维度统计（最近7天）
-    today = timezone.now().date()
-    week_ago = today - timedelta(days=7)
-    daily_stats = (
-        qs.filter(created_at__date__gte=week_ago)
-        .values("created_at__date")
-        .annotate(count=Count("id"))
-        .order_by("created_at__date")
-    )
-
-    # 工站使用统计
-    station_stats = {
-        "solid_liquid": Task.objects.filter(
-            stations__solidLiquid__enabled=True
-        ).count(),
-        "glovebox": Task.objects.filter(stations__glovebox__enabled=True).count(),
-        "reaction": Task.objects.filter(stations__reaction__enabled=True).count(),
-        "gcms": Task.objects.filter(stations__gcms__enabled=True).count(),
-        "evaporation": Task.objects.filter(stations__evaporation__enabled=True).count(),
-        "tlc": Task.objects.filter(stations__tlc__enabled=True).count(),
-    }
-
-    # 处理效率统计 - 简化版本，避免复杂的字段计算
-    completed_rejected_tasks = qs.filter(
-        status__in=[TaskStatus.COMPLETED, TaskStatus.REJECTED]
-    )
-    avg_processing_time = None
-    if completed_rejected_tasks.exists():
-        # 这里可以添加更复杂的处理时间计算逻辑
-        # 暂时返回一个简单的统计
-        avg_processing_time = completed_rejected_tasks.count()
-
-    # 分页处理
-    page_num = request.GET.get("page") or "1"
-    try:
-        page_num_int = int(page_num)
-    except Exception:
-        page_num_int = 1
-    paginator = Paginator(qs, 10)
-    page_obj = paginator.get_page(page_num_int)
-
-    return render(
-        request,
-        "admin/admin_dashboard.html",
-        {
-            "page_obj": page_obj,
-            "paginator": paginator,
-            "tasks": page_obj.object_list,
-            # 基础统计数据
-            "total_tasks": total_tasks,
-            "pending_tasks": pending_tasks,
-            "approved_tasks": approved_tasks,
-            "scheduled_tasks": scheduled_tasks,
-            "in_progress_tasks": in_progress_tasks,
-            "completed_tasks": completed_tasks,
-            "rejected_tasks": rejected_tasks,
-            "cancelled_tasks": cancelled_tasks,
-            # 新增统计数据
-            "user_stats": user_stats,
-            "daily_stats": daily_stats,
-            "station_stats": station_stats,
-            "avg_processing_time": avg_processing_time,
-        },
-    )
-
+    return render(request, "admin/station_management/固液配料.html")
 
 # endregion
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_manual(request):
+    """
+    管理端 - 工站管理 - 人工备料子页面（只读展示备料区/回料区位置与转移仓信息）
+    """
+    preparation_stations = PreparationStation.objects.all()
+
+    def _pos_index(s):
+        try:
+            return int((s.position or "").split("_")[-1])
+        except Exception:
+            return 0
+
+    prep_stations = list(sorted(
+        preparation_stations.filter(area_type="preparation"), key=_pos_index
+    ))
+    return_stations = list(sorted(
+        preparation_stations.filter(area_type="return"), key=_pos_index
+    ))
+
+    # 保证各区域至少显示 12 个位置：不足则补充占位项（只读显示为空闲）
+    def pad_placeholders(stations, area_label):
+        count = len(stations)
+        if count >= 12:
+            return stations[:12]
+        placeholders = []
+        for i in range(count + 1, 12 + 1):
+            placeholders.append({
+                "position_name": f"{area_label} 预留 {i}",
+                "get_expected_material_kind_display": "",
+                "is_occupied": False,
+                "current_container": None,
+                "placed_at": None,
+                "placed_by": None,
+            })
+        return stations + placeholders
+
+    prep_stations = pad_placeholders(prep_stations, "备料区")
+    return_stations = pad_placeholders(return_stations, "回料区")
+
+    context = {
+        "prep_stations": prep_stations,
+        "return_stations": return_stations,
+    }
+
+    return render(request, "admin/station_management/人工备料.html", context)
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_reaction(request):
+    """
+    管理端 - 工站管理 - 反应子页面（只读占位版本）
+    """
+    return render(request, "admin/station_management/反应.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_glove_reaction(request):
+    """
+    管理端 - 工站管理 - 手套箱固液配料与反应 子页面
+    """
+    return render(request, "admin/station_management/手套箱固液配料与反应.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_filtration(request):
+    """
+    管理端 - 工站管理 - 过滤分液 子页面
+    """
+    return render(request, "admin/station_management/过滤分液.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_rotavap(request):
+    """
+    管理端 - 工站管理 - 旋蒸 子页面
+    """
+    return render(request, "admin/station_management/旋蒸.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_column(request):
+    """
+    管理端 - 工站管理 - 过柱 子页面
+    """
+    return render(request, "admin/station_management/过柱.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_tlc(request):
+    """
+    管理端 - 工站管理 - 点板 子页面
+    """
+    return render(request, "admin/station_management/点板.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_gcms(request):
+    """
+    管理端 - 工站管理 - GCMS 子页面
+    """
+    return render(request, "admin/station_management/GCMS.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_hplc(request):
+    """
+    管理端 - 工站管理 - HPLC 子页面
+    """
+    return render(request, "admin/station_management/HPLC.html")
+
+
+@login_required
+@ensure_csrf_cookie
+def admin_station_agv(request):
+    """
+    管理端 - 工站管理 - AGV 子页面
+    """
+    return render(request, "admin/station_management/AGV.html")
+
+
+# 管理端 - 数据统计总览页面
+@login_required
+@ensure_csrf_cookie
+def admin_overview(request):
+    """
+    管理端 - 数据统计总览（大屏）
+    """
+    return render(request, "admin/overview.html")
+
 
 
 # region 普通用户仪表板
@@ -198,7 +246,7 @@ def user_task_management(request):
     普通用户仪表板 - 合并本地存储和数据库数据
     """
     if request.user.is_admin():
-        return redirect("admin_dashboard")
+        return redirect("admin_experiment_tasks")
 
     # 添加详细的调试信息
     print("=== 用户仪表板调试信息 ===")
@@ -288,7 +336,7 @@ def task_edit(request):
     任务编辑页面
     """
     if request.user.is_admin():
-        return redirect("admin_dashboard")
+        return redirect("admin_experiment_tasks")
 
     return render(request, "user/task_edit.html")
 
@@ -1084,151 +1132,6 @@ def admin_user_management(request):
 
     return render(request, "admin/user_management.html", context)
 
-
-@login_required
-@ensure_csrf_cookie
-def admin_material_requirements(request):
-    """
-    物料需求管理模块（占位页）
-    """
-    if not request.user.is_admin():
-        return redirect("user_task_management")
-
-    # 统计口径：仅统计"已通过"的实验任务所需物料
-    tasks = Task.objects.filter(status=TaskStatus.APPROVED)
-
-    def to_int(value, default=0):
-        try:
-            v = int(float(value))
-            return v if v >= 0 else default
-        except Exception:
-            return default
-
-    def monitor_count(params: dict) -> int:
-        if not isinstance(params, dict):
-            return 0
-        duration = to_int(params.get("duration"))
-        interval = to_int(params.get("samplingInterval"))
-        if duration <= 0 or interval <= 0:
-            return 0
-        return max(0, duration // interval)
-
-    total_test_tube = 0
-    total_powder_tube = 0
-    total_reagent_items = 0
-    total_tip_1ml = 0
-    total_tip_5ml = 0
-    total_tip_10ml = 0
-    total_small_filter = 0
-    total_mixing_vial = 0
-    total_sample_vial = 0
-
-    for t in tasks:
-        stations = t.stations or {}
-        # 基础：每个任务需要1根试管
-        total_test_tube += 1
-
-        # 固液配料工站
-        solid = 0
-        liquid = 0
-        try:
-            sl = stations.get("solidLiquid") or {}
-            reagents = sl.get("reagents") or []
-            for r in reagents:
-                if (r or {}).get("type") == "solid":
-                    solid += 1
-                elif (r or {}).get("type") == "liquid":
-                    liquid += 1
-        except Exception:
-            pass
-
-        # 手套箱配料
-        try:
-            gb = stations.get("glovebox") or {}
-            gb_reagents = gb.get("reagents") or []
-            for r in gb_reagents:
-                if (r or {}).get("type") == "solid":
-                    solid += 1
-                elif (r or {}).get("type") == "liquid":
-                    liquid += 1
-        except Exception:
-            pass
-
-        total_powder_tube += solid
-        total_reagent_items += solid + liquid
-        # 每种液体 1 根 1mL 枪头（配料）
-        total_tip_1ml += liquid
-
-        # 反应监测
-        try:
-            reaction = (stations.get("reaction") or {}).get("params") or {}
-            m = monitor_count(reaction)
-            total_tip_1ml += m * 2  # 两根枪头
-            total_mixing_vial += m
-            total_small_filter += m
-            total_sample_vial += m
-        except Exception:
-            pass
-
-        # 手套箱反应监测
-        try:
-            gb_params = (stations.get("glovebox") or {}).get("params") or {}
-            m = monitor_count(gb_params)
-            total_tip_1ml += m * 2
-            total_mixing_vial += m
-            total_small_filter += m
-            total_sample_vial += m
-        except Exception:
-            pass
-
-        # 旋蒸一次需要1根5mL枪头
-        try:
-            evap = stations.get("evaporation") or {}
-            if evap.get("enabled"):
-                total_tip_5ml += 1
-        except Exception:
-            pass
-
-        # 10mL 枪头暂无使用场景，保留占位
-        total_tip_10ml += 0
-
-    context = {
-        "mat_stats": {
-            "test_tube": total_test_tube,
-            "powder_tube": total_powder_tube,
-            "reagent_item": total_reagent_items,
-            "tip_1ml": total_tip_1ml,
-            "tip_5ml": total_tip_5ml,
-            "tip_10ml": total_tip_10ml,
-            "small_filter": total_small_filter,
-            "mixing_vial": total_mixing_vial,
-            "sample_vial": total_sample_vial,
-        }
-    }
-    return render(request, "admin/material_requirements.html", context)
-
-
-@login_required
-@ensure_csrf_cookie
-def admin_equipment_management(request):
-    """
-    设备管理模块
-    """
-    if not request.user.is_admin():
-        return redirect("user_task_management")
-
-    # 设备统计（这里需要根据实际的设备模型来调整）
-    # 暂时使用模拟数据
-    context = {
-        "total_equipment": 25,
-        "available_equipment": 18,
-        "in_use_equipment": 5,
-        "maintenance_equipment": 2,
-    }
-
-    return render(request, "admin/equipment_management.html", context)
-
-
 # endregion
 
 
@@ -1714,7 +1617,7 @@ def user_analysis_train(request):
     数据建模分析页面
     """
     if request.user.is_admin():
-        return redirect('admin_dashboard')
+        return redirect('admin_experiment_tasks')
 
     print("analysis_train")
     return render(request, 'user/data_analysis/analysis_train.html')
@@ -1728,7 +1631,7 @@ def ml_data_analysis(request):
     数据解析页面
     """
     if request.user.is_admin():
-        return redirect('admin_dashboard')
+        return redirect('admin_experiment_tasks')
     
     return render(request, 'user/data_analysis/ml_data_analysis.html')
 
@@ -1740,7 +1643,7 @@ def ml_model_creation(request):
     模型创建页面
     """
     if request.user.is_admin():
-        return redirect('admin_dashboard')
+        return redirect('admin_experiment_tasks')
     
     return render(request, 'user/data_analysis/ml_model_creation.html')
 
@@ -1752,7 +1655,7 @@ def ml_task_management(request):
     任务管理页面
     """
     if request.user.is_admin():
-        return redirect('admin_dashboard')
+        return redirect('admin_experiment_tasks')
     
     return render(request, 'user/data_analysis/ml_task_management.html')
 
@@ -1764,7 +1667,7 @@ def ml_task_detail(request, task_id):
     任务详情页面
     """
     if request.user.is_admin():
-        return redirect('admin_dashboard')
+        return redirect('admin_experiment_tasks')
     
     try:
         task = MLTask.objects.get(id=task_id, user=request.user)
@@ -4240,6 +4143,584 @@ def preparator_container_management(request):
 def preparator_material_management(request):
     """获取备料员物料管理"""
     return render(request, "preparator/material_management.html")
+
+
+@login_required
+@require_http_methods(["GET"])
+def preparator_reagents_library(request):
+    """备料员试剂库页面"""
+    return render(request, "preparator/reagents_library.html")
+
+
+# region 试剂库 API
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["GET"])
+def api_reagents_stats(request: HttpRequest):
+    """试剂统计卡片（支持筛选同步变化）"""
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+
+    # 筛选条件
+    q = Reagent.objects.all()
+    name_kw = (request.GET.get("name") or "").strip()
+    cas_kw = (request.GET.get("cas") or "").strip()
+    formula_kw = (request.GET.get("formula") or "").strip()
+    q_kw = (request.GET.get("q") or "").strip()
+    rtype = (request.GET.get("type") or "").strip()  # solid|liquid
+    hazard = (request.GET.get("hazard") or "").strip()  # general/...
+    # 统计不应用“card”筛选，避免点击某卡后其余卡片数字受限
+    if name_kw:
+        q = q.filter(name__icontains=name_kw)
+    if cas_kw:
+        q = q.filter(cas__icontains=cas_kw)
+    if formula_kw:
+        q = q.filter(formula__icontains=formula_kw)
+    if q_kw:
+        from django.db.models import Q
+        q = q.filter(Q(name__icontains=q_kw) | Q(cas__icontains=q_kw) | Q(formula__icontains=q_kw))
+    if rtype in (ReagentType.SOLID, ReagentType.LIQUID):
+        q = q.filter(reagent_type=rtype)
+    if hazard in dict(HazardType.choices):
+        q = q.filter(hazard_type=hazard)
+    today = timezone.now().date()
+
+    total = q.count()
+    liquid = q.filter(reagent_type=ReagentType.LIQUID).count()
+    solid = q.filter(reagent_type=ReagentType.SOLID).count()
+    hazardous = q.exclude(hazard_type=HazardType.GENERAL).count()
+    # 缺料与过期：以查询遍历判断（数量通常不大；若需要可转为DB表达式）
+    low_stock = 0
+    expiring = 0
+    for r in q.only("id", "quantity", "warning_threshold", "expiry_date"):
+        try:
+            if r.quantity is not None and r.warning_threshold is not None and r.quantity <= r.warning_threshold:
+                low_stock += 1
+        except Exception:
+            pass
+        try:
+            if r.expiry_date and today > r.expiry_date:
+                expiring += 1
+        except Exception:
+            pass
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "stats": {
+                "total": total,
+                "liquid": liquid,
+                "solid": solid,
+                "hazardous": hazardous,
+                "lowStock": low_stock,
+                "expiring": expiring,
+            },
+        }
+    )
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["GET"])
+def api_reagents_list(request: HttpRequest):
+    """试剂列表，支持分页/搜索/筛选"""
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+
+    q = Reagent.objects.all().order_by("-updated_at")
+    name_kw = (request.GET.get("name") or "").strip()
+    cas_kw = (request.GET.get("cas") or "").strip()
+    formula_kw = (request.GET.get("formula") or "").strip()
+    q_kw = (request.GET.get("q") or "").strip()
+    rtype = (request.GET.get("type") or "").strip()
+    hazard = (request.GET.get("hazard") or "").strip()
+    card = (request.GET.get("card") or "").strip()
+    if name_kw:
+        q = q.filter(name__icontains=name_kw)
+    if cas_kw:
+        q = q.filter(cas__icontains=cas_kw)
+    if formula_kw:
+        q = q.filter(formula__icontains=formula_kw)
+    if q_kw:
+        from django.db.models import Q
+        q = q.filter(Q(name__icontains=q_kw) | Q(cas__icontains=q_kw) | Q(formula__icontains=q_kw))
+    if rtype in (ReagentType.SOLID, ReagentType.LIQUID):
+        q = q.filter(reagent_type=rtype)
+    if hazard in dict(HazardType.choices):
+        q = q.filter(hazard_type=hazard)
+    # 卡片点击筛选复用
+    from django.db.models import F
+    today = timezone.now().date()
+    if card == "liquid":
+        q = q.filter(reagent_type=ReagentType.LIQUID)
+    elif card == "solid":
+        q = q.filter(reagent_type=ReagentType.SOLID)
+    elif card == "hazardous":
+        q = q.exclude(hazard_type=HazardType.GENERAL)
+    elif card == "lowStock":
+        q = q.filter(quantity__lte=F('warning_threshold'))
+    elif card == "expiring":
+        q = q.filter(expiry_date__lt=today)
+
+    page_num = request.GET.get("page") or "1"
+    page_size = request.GET.get("page_size") or "10"
+    try:
+        page_num = int(page_num)
+    except Exception:
+        page_num = 1
+    try:
+        page_size = max(1, min(100, int(page_size)))
+    except Exception:
+        page_size = 10
+
+    paginator = Paginator(q, page_size)
+    page_obj = paginator.get_page(page_num)
+
+    rows = []
+    for r in page_obj.object_list:
+        rows.append(
+            {
+                "id": r.id,
+                "name": r.name,
+                "cas": r.cas,
+                "formula": r.formula,
+                "type": r.reagent_type,
+                "quantity": float(r.quantity or 0),
+                "unit": r.unit,
+                "expiry": r.expiry_date.isoformat() if r.expiry_date else None,
+                "storage_env": r.storage_env,
+                "storage_location": r.storage_location,
+            }
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "items": rows,
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number,
+            "total": paginator.count,
+        }
+    )
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["POST"])
+def api_reagent_create(request: HttpRequest):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "message": "无效的JSON"}, status=400)
+
+    required = [
+        "name",
+        "cas",
+        "reagent_type",
+        "quantity",
+        "unit",
+        "molecular_weight",
+        "density",
+        "smiles",
+        "formula",
+        "hazard_type",
+        "warning_threshold",
+        "expiry_date",
+        "storage_env",
+        "storage_location",
+    ]
+    for k in required:
+        if k not in payload:
+            return JsonResponse({"ok": False, "message": f"缺少字段: {k}"}, status=400)
+
+    try:
+        # 显式解析数值与日期，避免类型不兼容导致500
+        def dec(v, default="0"):
+            if v in (None, ""): return Decimal(default)
+            return Decimal(str(v))
+        qty = dec(payload.get("quantity"), "0")
+        mw = dec(payload.get("molecular_weight"), "0")
+        dens = dec(payload.get("density"), "0")
+        warn = dec(payload.get("warning_threshold"), "0")
+        mp = payload.get("melting_point")
+        bp = payload.get("boiling_point")
+        fp = payload.get("flash_point")
+        ait = payload.get("autoignition_temp")
+        dct = payload.get("decomposition_temp")
+        vp = payload.get("vapor_pressure")
+        ph = payload.get("ph_value")
+        ps = payload.get("particle_size")
+        vis = payload.get("viscosity")
+        ri = payload.get("refractive_index")
+        logp = payload.get("logp")
+        # 可选数值字段转Decimal（若提供）
+        opt_dec = lambda x: (Decimal(str(x)) if x not in (None, "") else None)
+        mp = opt_dec(mp)
+        bp = opt_dec(bp)
+        fp = opt_dec(fp)
+        ait = opt_dec(ait)
+        dct = opt_dec(dct)
+        vp = opt_dec(vp)
+        ph = opt_dec(ph)
+        ps = opt_dec(ps)
+        vis = opt_dec(vis)
+        ri = opt_dec(ri)
+        logp = opt_dec(logp)
+        # 日期解析
+        expiry_str = payload.get("expiry_date")
+        expiry = None
+        if expiry_str:
+            try:
+                expiry = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+            except Exception:
+                return JsonResponse({"ok": False, "message": "有效期格式应为 YYYY-MM-DD"}, status=400)
+
+        r = Reagent(
+            name=(payload.get("name") or "").strip(),
+            cas=(payload.get("cas") or "").strip(),
+            reagent_type=(payload.get("reagent_type") or "").strip(),
+            quantity=qty,
+            unit=(payload.get("unit") or "").strip(),
+            molecular_weight=mw,
+            density=dens,
+            smiles=(payload.get("smiles") or "").strip(),
+            formula=(payload.get("formula") or "").strip(),
+            hazard_type=(payload.get("hazard_type") or HazardType.GENERAL),
+            warning_threshold=warn,
+            expiry_date=expiry,
+            storage_env=(payload.get("storage_env") or "").strip(),
+            storage_location=(payload.get("storage_location") or "").strip(),
+            chinese_aliases=payload.get("chinese_aliases") or [],
+            english_names=payload.get("english_names") or [],
+            color=(payload.get("color") or "").strip(),
+            odor=(payload.get("odor") or "").strip(),
+            melting_point=mp,
+            boiling_point=bp,
+            flash_point=fp,
+            autoignition_temp=ait,
+            decomposition_temp=dct,
+            vapor_pressure=vp,
+            explosion_limit=(payload.get("explosion_limit") or "").strip(),
+            ph_value=ph,
+            particle_size=ps,
+            viscosity=vis,
+            refractive_index=ri,
+            water_solubility=(payload.get("water_solubility") or "").strip(),
+            logp=logp,
+            is_controlled=bool(payload.get("is_controlled") or False),
+            is_narcotic=bool(payload.get("is_narcotic") or False),
+            disposal_notes=(payload.get("disposal_notes") or "").strip(),
+        )
+        r.full_clean()
+        r.save()
+        ReagentOperation.objects.create(
+            reagent=r,
+            operation_type=ReagentOperation.Type.CREATE,
+            amount=r.quantity,
+            unit=r.unit,
+            before_quantity=None,
+            after_quantity=r.quantity,
+            operated_by=request.user,
+        )
+        return JsonResponse({"ok": True, "id": r.id})
+    except ValidationError as e:
+        return JsonResponse({"ok": False, "message": str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse({"ok": False, "message": f"创建失败: {str(e)}"}, status=500)
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["PUT", "PATCH"])
+def api_reagent_update(request: HttpRequest, reagent_id: int):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        reagent = Reagent.objects.get(id=reagent_id)
+    except Reagent.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "试剂不存在"}, status=404)
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "message": "无效的JSON"}, status=400)
+
+    # 赋值并进行必要的类型转换
+    try:
+        if "name" in payload: reagent.name = (payload.get("name") or "").strip()
+        if "cas" in payload: reagent.cas = (payload.get("cas") or "").strip()
+        if "reagent_type" in payload: reagent.reagent_type = (payload.get("reagent_type") or "").strip()
+        if "quantity" in payload: reagent.quantity = Decimal(str(payload.get("quantity")))
+        if "unit" in payload: reagent.unit = (payload.get("unit") or "").strip()
+        if "molecular_weight" in payload: reagent.molecular_weight = Decimal(str(payload.get("molecular_weight")))
+        if "density" in payload: reagent.density = Decimal(str(payload.get("density")))
+        if "smiles" in payload: reagent.smiles = (payload.get("smiles") or "").strip()
+        if "formula" in payload: reagent.formula = (payload.get("formula") or "").strip()
+        if "hazard_type" in payload: reagent.hazard_type = (payload.get("hazard_type") or HazardType.GENERAL)
+        if "warning_threshold" in payload: reagent.warning_threshold = Decimal(str(payload.get("warning_threshold")))
+        if "expiry_date" in payload:
+            expiry_str = payload.get("expiry_date")
+            reagent.expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date() if expiry_str else None
+        if "storage_env" in payload: reagent.storage_env = (payload.get("storage_env") or "").strip()
+        if "storage_location" in payload: reagent.storage_location = (payload.get("storage_location") or "").strip()
+        for k in ("chinese_aliases","english_names"):
+            if k in payload: setattr(reagent, k, payload.get(k) or [])
+        for k in ("color","odor","explosion_limit","water_solubility","disposal_notes"):
+            if k in payload: setattr(reagent, k, (payload.get(k) or "").strip())
+        # 可选Decimal
+        def set_opt_dec(field):
+            if field in payload:
+                v = payload.get(field)
+                setattr(reagent, field, (Decimal(str(v)) if v not in (None, "") else None))
+        for f in ("melting_point","boiling_point","flash_point","autoignition_temp","decomposition_temp","vapor_pressure","ph_value","particle_size","viscosity","refractive_index","logp"):
+            set_opt_dec(f)
+        if "is_controlled" in payload: reagent.is_controlled = bool(payload.get("is_controlled"))
+        if "is_narcotic" in payload: reagent.is_narcotic = bool(payload.get("is_narcotic"))
+    except ValueError as e:
+        return JsonResponse({"ok": False, "message": f"字段格式错误: {str(e)}"}, status=400)
+
+    try:
+        before = reagent.quantity
+        reagent.full_clean()
+        reagent.save()
+        # 记录编辑
+        ReagentOperation.objects.create(
+            reagent=reagent,
+            operation_type=ReagentOperation.Type.UPDATE,
+            amount=None,
+            unit=reagent.unit,
+            before_quantity=before,
+            after_quantity=reagent.quantity,
+            operated_by=request.user,
+        )
+        return JsonResponse({"ok": True})
+    except ValidationError as e:
+        return JsonResponse({"ok": False, "message": str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def api_reagent_delete(request: HttpRequest, reagent_id: int):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        reagent = Reagent.objects.get(id=reagent_id)
+    except Reagent.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "试剂不存在"}, status=404)
+    ReagentOperation.objects.create(
+        reagent=reagent,
+        operation_type=ReagentOperation.Type.DELETE,
+        amount=None,
+        unit=reagent.unit,
+        before_quantity=reagent.quantity,
+        after_quantity=None,
+        operated_by=request.user,
+    )
+    reagent.delete()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["POST"])
+def api_reagent_take(request: HttpRequest, reagent_id: int):
+    """试剂取用，减少库存并记录操作日志"""
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        reagent = Reagent.objects.get(id=reagent_id)
+    except Reagent.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "试剂不存在"}, status=404)
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "message": "无效的JSON"}, status=400)
+    try:
+        amount = float(payload.get("amount"))
+    except Exception:
+        return JsonResponse({"ok": False, "message": "取用数量无效"}, status=400)
+    purpose = (payload.get("purpose") or "").strip()
+    # 取用人员在后端根据登录用户记录
+    try:
+        reagent.take(amount=amount, user=request.user, purpose=purpose)
+        return JsonResponse({"ok": True, "quantity": float(reagent.quantity)})
+    except ValidationError as e:
+        return JsonResponse({"ok": False, "message": str(e)}, status=400)
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["GET"])
+def api_reagent_detail(request: HttpRequest, reagent_id: int):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        r = Reagent.objects.get(id=reagent_id)
+    except Reagent.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "试剂不存在"}, status=404)
+    data = {
+        "id": r.id,
+        "name": r.name,
+        "cas": r.cas,
+        "type": r.reagent_type,
+        "quantity": float(r.quantity or 0),
+        "unit": r.unit,
+        "molecular_weight": float(r.molecular_weight) if r.molecular_weight is not None else None,
+        "density": float(r.density) if r.density is not None else None,
+        "smiles": r.smiles,
+        "formula": r.formula,
+        "hazard_type": r.hazard_type,
+        "warning_threshold": float(r.warning_threshold) if r.warning_threshold is not None else None,
+        "expiry": r.expiry_date.isoformat() if r.expiry_date else None,
+        "storage_env": r.storage_env,
+        "storage_location": r.storage_location,
+        # 选填/可选数值
+        "chinese_aliases": r.chinese_aliases or [],
+        "english_names": r.english_names or [],
+        "color": r.color or "",
+        "odor": r.odor or "",
+        "melting_point": float(r.melting_point) if r.melting_point is not None else None,
+        "boiling_point": float(r.boiling_point) if r.boiling_point is not None else None,
+        "flash_point": float(r.flash_point) if r.flash_point is not None else None,
+        "autoignition_temp": float(r.autoignition_temp) if r.autoignition_temp is not None else None,
+        "decomposition_temp": float(r.decomposition_temp) if r.decomposition_temp is not None else None,
+        "vapor_pressure": float(r.vapor_pressure) if r.vapor_pressure is not None else None,
+        "explosion_limit": r.explosion_limit or "",
+        "ph_value": float(r.ph_value) if r.ph_value is not None else None,
+        "particle_size": float(r.particle_size) if r.particle_size is not None else None,
+        "viscosity": float(r.viscosity) if r.viscosity is not None else None,
+        "refractive_index": float(r.refractive_index) if r.refractive_index is not None else None,
+        "water_solubility": r.water_solubility or "",
+        "logp": float(r.logp) if r.logp is not None else None,
+        "is_controlled": bool(r.is_controlled),
+        "is_narcotic": bool(r.is_narcotic),
+        "disposal_notes": r.disposal_notes or "",
+        # flags
+        "low_stock": r.is_low_stock(),
+        "expiring": r.is_expiring(0),
+    }
+    return JsonResponse({"ok": True, "reagent": data})
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["GET"])
+def api_reagent_spectra(request: HttpRequest, reagent_id: int):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        Reagent.objects.get(id=reagent_id)
+    except Reagent.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "试剂不存在"}, status=404)
+    qs = ReagentSpectrum.objects.filter(reagent_id=reagent_id).order_by("-uploaded_at")
+    items = []
+    for s in qs:
+        items.append(
+            {
+                "id": s.id,
+                "type": s.spectrum_type,
+                "original_filename": s.original_filename,
+                "content_type": s.content_type,
+                "file_size": int(s.file_size or 0),
+                "conditions": s.conditions,
+                "uploaded_at": s.uploaded_at.isoformat(),
+            }
+        )
+    return JsonResponse({"ok": True, "items": items})
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["POST"])
+def api_reagent_spectrum_upload(request: HttpRequest, reagent_id: int):
+    """上传单个图谱文件到数据库（二进制，不超过20MB）"""
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        Reagent.objects.get(id=reagent_id)
+    except Reagent.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "试剂不存在"}, status=404)
+
+    spectrum_type = (request.POST.get("type") or "").strip()
+    conditions = (request.POST.get("conditions") or "").strip()
+    f = request.FILES.get("file")
+    if not f:
+        return JsonResponse({"ok": False, "message": "未选择文件"}, status=400)
+    size = getattr(f, "size", None)
+    if size is None:
+        return JsonResponse({"ok": False, "message": "无法获取文件大小"}, status=400)
+    if size > 20 * 1024 * 1024:
+        return JsonResponse({"ok": False, "message": "文件不能超过20MB"}, status=400)
+
+    content = f.read()
+    rs = ReagentSpectrum(
+        reagent_id=reagent_id,
+        spectrum_type=spectrum_type if spectrum_type in dict(SpectrumType.choices) else SpectrumType.SPECTRA,
+        original_filename=getattr(f, "name", ""),
+        content_type=getattr(f, "content_type", "application/octet-stream"),
+        file_size=size,
+        binary_content=content,
+        conditions=conditions,
+    )
+    try:
+        rs.full_clean()
+        rs.save()
+        return JsonResponse({"ok": True, "id": rs.id})
+    except ValidationError as e:
+        return JsonResponse({"ok": False, "message": str(e)}, status=400)
+
+
+@login_required
+@ensure_csrf_cookie
+@require_http_methods(["POST", "PUT", "PATCH"])
+def api_reagent_spectrum_update(request: HttpRequest, spectrum_id: int):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        rs = ReagentSpectrum.objects.get(id=spectrum_id)
+    except ReagentSpectrum.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "图谱不存在"}, status=404)
+    conditions = (request.POST.get("conditions") or request.GET.get("conditions") or "").strip()
+    if conditions:
+        rs.conditions = conditions
+        rs.save(update_fields=["conditions"])
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def api_reagent_spectrum_delete(request: HttpRequest, spectrum_id: int):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        rs = ReagentSpectrum.objects.get(id=spectrum_id)
+    except ReagentSpectrum.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "图谱不存在"}, status=404)
+    rs.delete()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_reagent_spectrum_download(request: HttpRequest, spectrum_id: int):
+    if not request.user.is_preparator():
+        return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
+    try:
+        rs = ReagentSpectrum.objects.get(id=spectrum_id)
+    except ReagentSpectrum.DoesNotExist:
+        return JsonResponse({"ok": False, "message": "图谱不存在"}, status=404)
+    if not rs.binary_content:
+        return JsonResponse({"ok": False, "message": "无二进制内容"}, status=404)
+    resp = HttpResponse(rs.binary_content, content_type=rs.content_type or "application/octet-stream")
+    filename = rs.original_filename or f"spectrum_{rs.id}"
+    resp["Content-Disposition"] = f"attachment; filename=\"{filename}\""
+    return resp
+
+
+# endregion
 
 
 @login_required

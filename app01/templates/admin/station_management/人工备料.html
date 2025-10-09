@@ -1,0 +1,134 @@
+{% extends 'admin/station_management.html' %}
+
+{% block title %}人工备料 - 工站管理{% endblock %}
+
+{% block main_content %}
+{{ block.super }}
+
+<div class="card mt-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#prepArea" aria-expanded="true" aria-controls="prepArea" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-boxes"></i> 备料区（只读）</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="prepArea">
+    <div class="card-body">
+        <div class="row">
+            {% for station in prep_stations|slice:":12" %}
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card {% if station.is_occupied %}border-success{% else %}border-light{% endif %}">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">{{ station.position_name }}</h5>
+                        <p class="card-text text-muted small">{{ station.get_expected_material_kind_display }}</p>
+                        <div class="current-container-info mb-3">
+                            {% if station.is_occupied and station.current_container %}
+                                <div class="alert alert-success py-2 mb-2">
+                                    <i class="fas fa-check-circle"></i>
+                                    <strong>当前转移仓：</strong><br>
+                                    <span class="container-name">{{ station.current_container.name }}</span><br>
+                                    <small class="text-muted">{{ station.current_container.spec.name }}</small>
+                                </div>
+                                <div class="text-muted small">
+                                    <i class="fas fa-clock"></i> 放置时间：{{ station.placed_at|date:"Y-m-d H:i" }}<br>
+                                    <i class="fas fa-user"></i> 操作人：{{ station.placed_by.username }}
+                                </div>
+                            {% else %}
+                                <div class="alert alert-light py-2 mb-2">
+                                    <i class="fas fa-circle"></i>
+                                    <span class="text-muted">位置空闲</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <!-- 只读：不提供按钮 -->
+                    </div>
+                </div>
+            </div>
+            {% if forloop.counter|divisibleby:6 %}
+            <div class="w-100 d-none d-lg-block"></div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#returnArea" aria-expanded="true" aria-controls="returnArea" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-undo"></i> 回料区（只读）</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="returnArea">
+    <div class="card-body">
+        <div class="row">
+            {% for station in return_stations|slice:":12" %}
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card {% if station.is_occupied %}border-success{% else %}border-light{% endif %}">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-warning">{{ station.position_name }}</h5>
+                        <p class="card-text text-muted small">{{ station.get_expected_material_kind_display }}</p>
+                        <div class="current-container-info mb-3">
+                            {% if station.is_occupied and station.current_container %}
+                                <div class="alert alert-success py-2 mb-2">
+                                    <i class="fas fa-check-circle"></i>
+                                    <strong>当前转移仓：</strong><br>
+                                    <span class="container-name">{{ station.current_container.name }}</span><br>
+                                    <small class="text-muted">{{ station.current_container.spec.name }}</small>
+                                </div>
+                                <div class="text-muted small">
+                                    <i class="fas fa-clock"></i> 放置时间：{{ station.placed_at|date:"Y-m-d H:i" }}<br>
+                                    <i class="fas fa-user"></i> 操作人：{{ station.placed_by.username }}
+                                </div>
+                            {% else %}
+                                <div class="alert alert-light py-2 mb-2">
+                                    <i class="fas fa-circle"></i>
+                                    <span class="text-muted">位置空闲</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <!-- 只读：不提供按钮 -->
+                    </div>
+                </div>
+            </div>
+            {% if forloop.counter|divisibleby:6 %}
+            <div class="w-100 d-none d-lg-block"></div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<style>
+.station-card { transition: all 0.3s ease; border-width: 2px; }
+/* 悬浮不移动/不投影，参考固液配料 */
+.station-card:hover { transform: none !important; box-shadow: none !important; }
+.station-card.border-success { border-color: #28a745 !important; background-color: #f8fff9; }
+.station-card.border-light { border-color: #dee2e6 !important; }
+.current-container-info .alert { margin-bottom: 0.5rem; }
+.container-name { font-weight: bold; color: #155724; }
+.collapse-icon { transition: transform 0.3s ease; }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // 折叠箭头旋转，参考固液配料
+    var collapseHeaders = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    collapseHeaders.forEach(function(header){
+        header.addEventListener('click', function(){
+            var icon = this.querySelector('.collapse-icon');
+            var target = document.querySelector(this.getAttribute('data-bs-target'));
+            setTimeout(function(){
+                if (target && target.classList.contains('show')) {
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                } else {
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                }
+            }, 50);
+        });
+    });
+});
+</script>
+{% endblock %}
+
+

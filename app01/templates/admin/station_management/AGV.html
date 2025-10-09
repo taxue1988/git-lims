@@ -1,0 +1,303 @@
+{% extends 'admin/station_management.html' %}
+
+{% block title %}AGV - 工站管理{% endblock %}
+
+{% block main_content %}
+{{ block.super }}
+
+<!-- AGV状态卡片 -->
+<div class="card mb-4" id="agvStatusCard">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center" 
+         data-bs-toggle="collapse" data-bs-target="#agvStatusContent" 
+         aria-expanded="true" aria-controls="agvStatusContent" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-robot"></i> AGV 状态</h4>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-light text-dark me-2">实时监控</span>
+            <i class="fas fa-chevron-down collapse-icon"></i>
+        </div>
+    </div>
+    <div class="collapse show" id="agvStatusContent">
+        <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="fas fa-map-marker-alt text-primary me-3 fa-lg"></i>
+                    <div>
+                        <h6 class="mb-1 text-muted">当前位置</h6>
+                        <p class="mb-0 fw-bold">待机区</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="fas fa-play-circle text-success me-3 fa-lg"></i>
+                    <div>
+                        <h6 class="mb-1 text-muted">运行状态</h6>
+                        <p class="mb-0 fw-bold text-success">空闲</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="fas fa-battery-three-quarters text-warning me-3 fa-lg"></i>
+                    <div>
+                        <h6 class="mb-1 text-muted">电量状态</h6>
+                        <p class="mb-0 fw-bold">85%</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="progress mb-2" style="height: 8px;">
+                    <div class="progress-bar bg-warning" role="progressbar" style="width: 85%" aria-valuenow="85" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <small class="text-muted">最后更新：<span id="lastUpdate">刚刚</span></small>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<!-- 当前仓位卡片 -->
+<div class="card mt-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center" 
+         data-bs-toggle="collapse" data-bs-target="#currentContainers" 
+         aria-expanded="true" aria-controls="currentContainers" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-boxes"></i> 当前仓位（12）</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="currentContainers">
+        <div class="card-body">
+            <div class="row">
+                {% for _ in "123456789012"|make_list %}
+                <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                    <div class="card h-100 station-card border-light">
+                        <div class="card-body text-center">
+                            <h5 class="card-title text-primary">仓位 {{ forloop.counter }}</h5>
+                            <p class="card-text text-muted small">转移仓</p>
+                            <div class="current-container-info mb-2">
+                                <div class="alert alert-light py-2 mb-0">
+                                    <i class="fas fa-circle"></i>
+                                    <span class="text-muted">位置空闲</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% if forloop.counter|divisibleby:6 %}
+                <div class="w-100 d-none d-lg-block"></div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 转运任务列表卡片 -->
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center" 
+         data-bs-toggle="collapse" data-bs-target="#transportTasks" 
+         aria-expanded="true" aria-controls="transportTasks" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-tasks"></i> 转运任务列表</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="transportTasks">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>任务ID</th>
+                            <th>起始位置</th>
+                            <th>目标位置</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                                暂无转运任务
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // 自动高亮AGV标签
+    var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
+    if (!breadcrumb) return;
+    var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
+    var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
+    var target = null;
+    for (var i = 0; i < links.length; i++) {
+        if (links[i].textContent.trim() === 'AGV') { target = links[i]; break; }
+    }
+    if (target) {
+        links.forEach(function(a){ a.classList.remove('active'); });
+        target.classList.add('active');
+        if (indicator) {
+            indicator.style.width = target.offsetWidth + 'px';
+            indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
+        }
+    }
+
+    // 卡片折叠动画
+    var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    collapseElements.forEach(function(element) {
+        element.addEventListener('click', function() {
+            var icon = this.querySelector('.collapse-icon');
+            var target = document.querySelector(this.getAttribute('data-bs-target'));
+            
+            // 延迟切换图标，等待Bootstrap动画完成
+            setTimeout(function() {
+                if (target.classList.contains('show')) {
+                    icon.style.transform = 'rotate(0deg)';
+                } else {
+                    icon.style.transform = 'rotate(180deg)';
+                }
+            }, 50);
+        });
+    });
+
+    // AGV状态更新
+    function updateAGVStatus() {
+        var lastUpdateElement = document.getElementById('lastUpdate');
+        if (lastUpdateElement) {
+            var now = new Date();
+            var timeString = now.toLocaleTimeString('zh-CN', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            lastUpdateElement.textContent = timeString;
+        }
+    }
+
+    // 每30秒更新一次状态时间
+    setInterval(updateAGVStatus, 30000);
+});
+</script>
+
+<style>
+.station-card, .position-card { 
+    transition: all .3s ease; 
+    border-width: 2px; 
+}
+.station-card:hover, .position-card:hover { 
+    transform: translateY(-2px); 
+    box-shadow: 0 4px 8px rgba(0,0,0,.1); 
+}
+
+/* 当鼠标悬浮在card-header上时，防止整个卡片移动 */
+.card-header:hover ~ .card-body .station-card,
+.card-header:hover ~ .card-body .position-card {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* 为card-header添加悬浮时的样式，防止影响父级卡片 */
+.card-header[data-bs-toggle="collapse"]:hover {
+    cursor: pointer;
+}
+
+/* 防止card-header悬浮时影响整个卡片 */
+.card-header[data-bs-toggle="collapse"] {
+    transition: none;
+}
+
+.card-header[data-bs-toggle="collapse"]:hover {
+    transform: none !important;
+    /* 保持原有的背景颜色，不继承父元素 */
+    background-color: var(--bs-primary) !important;
+}
+
+/* 为不同类型的card-header设置悬浮时的背景颜色 */
+.card-header.bg-primary:hover {
+    background-color: var(--bs-primary) !important;
+}
+
+.card-header.bg-warning:hover {
+    background-color: var(--bs-warning) !important;
+}
+
+.card-header.bg-info:hover {
+    background-color: var(--bs-info) !important;
+}
+.station-card.border-light, .position-card.border-light { 
+    border-color: #dee2e6 !important; 
+}
+.current-container-info .alert { 
+    margin-bottom: .5rem; 
+}
+
+.collapse-icon {
+    transition: transform 0.3s ease;
+}
+
+/* 移除之前的悬浮效果 */
+
+.position-status {
+    margin-top: 8px;
+}
+
+.position-card .card-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.alert-primary {
+    background-color: #e7f1ff;
+    border-color: #b3d7ff;
+    color: #0a58ca;
+}
+
+/* AGV状态卡片特殊样式 */
+.card-header.bg-success {
+    background: linear-gradient(135deg, #28a745, #20c997) !important;
+}
+
+.card-header.bg-success:hover {
+    background: linear-gradient(135deg, #218838, #1ea085) !important;
+}
+
+#agvStatusCard {
+    border-left: 4px solid #28a745;
+    box-shadow: 0 2px 10px rgba(40, 167, 69, 0.1);
+}
+
+#agvStatusCard .card-header {
+    transition: background 0.3s ease;
+}
+
+#agvStatusCard .progress {
+    background-color: #e9ecef;
+}
+
+#agvStatusCard .progress-bar {
+    transition: width 0.6s ease;
+}
+
+/* 状态图标动画 */
+.fa-robot {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+</style>
+{% endblock %}
