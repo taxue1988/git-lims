@@ -27,7 +27,8 @@ from .models import Reagent, ReagentSpectrum, ReagentOperation, ReagentType, Haz
 from decimal import Decimal
 from datetime import datetime
 from django.core.exceptions import ValidationError
-
+# 精简并修正模型导入：去除不存在的模型，保留实际使用的模型
+from .models import TaskStatusManager, BayesianOptTask, BOIteration, BOTrial
 User = get_user_model()
 # endregion
 
@@ -326,7 +327,681 @@ def user_task_management(request):
 
 # endregion
 
+@login_required
+@ensure_csrf_cookie
+def bo_home(request):
+    """
+    贝叶斯优化主页（三步流程入口）
+    """
+    if request.user.is_admin():
+        return redirect('admin_dashboard')
 
+    return render(request, 'user/Bayes/bo_home.html')
+
+
+@login_required
+@ensure_csrf_cookie
+def bo_task_center(request):
+    """
+    贝叶斯优化任务中心
+    """
+    if request.user.is_admin():
+        return redirect('admin_dashboard')
+
+    return render(request, 'user/Bayes/bo_task_center.html')
+
+
+# ==================== 贝叶斯优化 API ====================
+
+@login_required
+@require_http_methods(["GET"])
+def api_bo_tasks_list(request: HttpRequest):
+    qs = BayesianOptTask.objects.filter(created_by=request.user).order_by('-updated_at')
+    data = [{
+        'id': t.id,
+        'task_name': t.task_name,
+        'task_type': t.task_type,
+        'objective_name': t.objective_name,
+        'direction': t.direction,
+        'per_round_suggest': t.per_round_suggest,
+        'current_round': t.current_round,
+        'created_at': t.created_at.strftime('%Y-%m-%d %H:%M'),
+        'updated_at': t.updated_at.strftime('%Y-%m-%d %H:%M'),
+        'is_active': t.is_active,
+    } for t in qs]
+    return JsonResponse({'ok': True, 'tasks': data})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_bo_tasks_create(request: HttpRequest):
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'message': '无效JSON'}, status=400)
+
+    task_name = (body.get('task_name') or '').strip()
+    objective_name = (body.get('objective_name') or '').strip()
+    direction = (body.get('direction') or 'maximize').strip()
+    per_round_suggest = int(body.get('per_round_suggest') or 3)
+    variable_type = (body.get('variable_type') or 'continuous').strip()
+
+    if not task_name or not objective_name:
+        return JsonResponse({'ok': False, 'message': '缺少任务名称或优化目标'}, status=400)
+
+    obj = BayesianOptTask.objects.create(
+        created_by=request.user,
+        task_name=task_name,
+        task_type=variable_type,
+        objective_name=objective_name,
+        direction=direction,
+        per_round_suggest=per_round_suggest,
+        parameter_space=body.get('parameter_space') or {},
+    )
+    return JsonResponse({'ok': True, 'task_id': obj.id})
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_bo_tasks_detail(request: HttpRequest, bo_task_id: int):
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+
+    iterations = []
+    for it in t.iterations.order_by('round_index'):
+        trials = [{'id': tr.id, 'params': tr.params, 'objective': tr.objective} for tr in it.trials.all()]
+        iterations.append({
+            'id': it.id,
+            'round_index': it.round_index,
+            'suggestions': it.suggestions,
+            'best_objective': it.best_objective,
+            'best_params': it.best_params,
+            'trials': trials,
+        })
+
+    data = {
+        'id': t.id,
+        'task_name': t.task_name,
+        'task_type': t.task_type,
+        'objective_name': t.objective_name,
+        'direction': t.direction,
+        'per_round_suggest': t.per_round_suggest,
+        'current_round': t.current_round,
+        'parameter_space': t.parameter_space,
+        'iterations': iterations,
+    }
+    return JsonResponse({'ok': True, 'task': data})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_bo_tasks_delete(request: HttpRequest, bo_task_id: int):
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+    t.delete()
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_bo_set_parameter_space(request: HttpRequest, bo_task_id: int):
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'message': '无效JSON'}, status=400)
+
+    t.parameter_space = body.get('parameter_space') or {}
+    t.save(update_fields=['parameter_space', 'updated_at'])
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_bo_upload_csv(request: HttpRequest, bo_task_id: int):
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+
+    f = request.FILES.get('file')
+    if not f:
+        return JsonResponse({'ok': False, 'message': '缺少文件'}, status=400)
+
+    # 解析CSV（首行为表头），将其作为历史观测（创建一轮round_index=0的virtual轮，或直接导入到当前轮之前）
+    import csv, io
+    # 一次性读取字节，避免多次 read() 导致内容为空
+    raw_bytes = f.read()
+    content = None
+    # 依次尝试更健壮的解码方案
+    for enc in ('utf-8-sig', 'utf-8', 'gbk', 'latin-1'):
+        try:
+            content = raw_bytes.decode(enc)
+            break
+        except Exception:
+            continue
+    if content is None:
+        return JsonResponse({'ok': False, 'message': '文件编码不支持，请使用UTF-8/GBK'}, status=400)
+
+    # 自动分隔符探测（若失败则用逗号）
+    try:
+        dialect = csv.Sniffer().sniff(content.splitlines()[0] + '\n' + (content.splitlines()[1] if len(content.splitlines())>1 else ''))
+        reader = csv.DictReader(io.StringIO(content), dialect=dialect)
+    except Exception:
+        reader = csv.DictReader(io.StringIO(content))
+    rows = list(reader)
+    if not rows:
+        return JsonResponse({'ok': False, 'message': 'CSV为空'}, status=400)
+
+    # 推断参数列（除目标列外）；目标列名以任务objective_name为准
+    obj_col = t.objective_name
+    header = reader.fieldnames or []
+
+    # 若参数空间为空，基于CSV推断参数空间：
+    # 数值列：优先使用第2/3行作为[min,max]；若不可用则回退为全列[min,max]
+    # 非数值列：分类choices（去空、去重）
+    if not t.parameter_space:
+        param_space = {}
+        for col in header:
+            if col == obj_col:
+                # 即使文件没有目标列，我们也不把它作为参数列
+                continue
+            vals = [r.get(col) for r in rows]
+            # 严格连续判定：仅当数据总行数恰为2，且第二、第三行均为数值且第2<第3
+            def to_float_safe(x):
+                try:
+                    return float(x)
+                except Exception:
+                    return None
+            # 连续判定（按列）：该列非空数据条数必须恰为2，且两个都是数值，且按原出现顺序第一个 < 第二个
+            non_empty = []
+            for idx, r in enumerate(rows):
+                v = r.get(col)
+                if v not in (None, ''):
+                    non_empty.append((idx, v))
+            if len(non_empty) == 2:
+                v_first = to_float_safe(non_empty[0][1])
+                v_second = to_float_safe(non_empty[1][1])
+                if v_first is not None and v_second is not None and v_first < v_second:
+                    param_space[col] = { 'type': 'continuous', 'bounds': [v_first, v_second] }
+                    continue
+            # 其他情况一律离散（支持中文/文本或数值混合）
+            uniq = []
+            seen = set()
+            for v in vals:
+                if v in (None, ''):
+                    continue
+                s = str(v)
+                if s not in seen:
+                    seen.add(s)
+                    uniq.append(s)
+            # 尝试将纯数值字符串转成数字，其余保留字符串
+            mixed = []
+            for s in uniq:
+                try:
+                    n = float(s)
+                    # 保留整数为int
+                    mixed.append(int(n) if n.is_integer() else n)
+                except Exception:
+                    mixed.append(s)
+            param_space[col] = { 'type': 'discrete', 'choices': mixed }
+        t.parameter_space = param_space
+        t.save(update_fields=['parameter_space', 'updated_at'])
+
+    # 将CSV作为历史观测导入：创建一个特殊轮次 0（若不存在）
+    it0, _ = BOIteration.objects.get_or_create(task=t, round_index=0, defaults={'suggestions': []})
+    created = 0
+    for r in rows:
+        # 仅以CSV中的列作为参数
+        params = { k: r.get(k) for k in header if k != obj_col }
+        # 尝试将数值参数转换为float/int
+        for name, spec in (t.parameter_space or {}).items():
+            if name in params and params[name] is not None:
+                if (spec.get('type') == 'continuous'):
+                    try: params[name] = float(params[name])
+                    except Exception: pass
+                elif (spec.get('type') == 'discrete'):
+                    try: params[name] = int(float(params[name]))
+                    except Exception: pass
+        try:
+            # 如果CSV没有目标列，则目标为空
+            objective = r.get(obj_col) if obj_col in r else None
+            objective = float(objective) if objective not in (None, '') else None
+        except Exception:
+            objective = None
+        BOTrial.objects.create(iteration=it0, params={k:v for k,v in params.items() if k!=obj_col}, objective=objective, source_row=r)
+        created += 1
+
+    # 返回表头与数据行，便于前端渲染表格（目标列放最后）
+    columns = [c for c in header if c != obj_col] + [obj_col]
+    data_rows = []
+    for r in rows:
+        row = []
+        for c in columns:
+            # 若目标列不存在，追加空值
+            row.append(r.get(c) if c in r else '')
+        data_rows.append(row)
+    return JsonResponse({'ok': True, 'created': created, 'columns': columns, 'rows': data_rows})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_bo_start_iteration(request: HttpRequest, bo_task_id: int):
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+
+    next_round = (t.current_round or 0) + 1
+    # 使用 scikit-optimize 根据历史观测生成建议
+    try:
+        from skopt import Optimizer
+        from skopt.space import Real, Integer, Categorical
+    except Exception:
+        return JsonResponse({'ok': False, 'message': '服务器未安装scikit-optimize，请先安装scikit-optimize'}, status=500)
+
+    # 构建搜索空间（按固定顺序）
+    param_defs = t.parameter_space or {}
+    if not isinstance(param_defs, dict) or not param_defs:
+        return JsonResponse({'ok': False, 'message': '请先在步骤二配置参数空间'}, status=400)
+
+    param_names = list(param_defs.keys())
+    sk_space = []
+    for name in param_names:
+        spec = param_defs.get(name) or {}
+        ptype = (spec.get('type') or 'continuous').lower()
+        # 统一类型：将 categorical 视为离散choices
+        if ptype == 'categorical':
+            ptype = 'discrete'
+        if ptype == 'continuous':
+            bounds = spec.get('bounds')
+            if not (isinstance(bounds, (list, tuple)) and len(bounds) == 2):
+                return JsonResponse({'ok': False, 'message': f'参数 {name} 连续型需要 bounds=[min,max]'}, status=400)
+            lo, hi = bounds[0], bounds[1]
+            try:
+                sk_space.append(Real(float(lo), float(hi), prior='uniform', name=name))
+            except Exception:
+                return JsonResponse({'ok': False, 'message': f'参数 {name} 连续型边界无效'}, status=400)
+        elif ptype == 'discrete':
+            # 支持两种格式：
+            # 1) 离散边界：bounds=[lo,hi] → Integer
+            # 2) 离散枚举：choices=[...] → Categorical
+            if 'choices' in spec and spec.get('choices') is not None:
+                choices = spec.get('choices') or []
+                if not choices:
+                    return JsonResponse({'ok': False, 'message': f'参数 {name} 的离散choices为空'}, status=400)
+                sk_space.append(Categorical(choices, name=name))
+            else:
+                bounds = spec.get('bounds')
+                if not (isinstance(bounds, (list, tuple)) and len(bounds) == 2):
+                    return JsonResponse({'ok': False, 'message': f'参数 {name} 离散型需要 bounds=[min,max] 或 choices 列表'}, status=400)
+                lo, hi = int(float(bounds[0])), int(float(bounds[1]))
+                sk_space.append(Integer(lo, hi, name=name))
+        else:
+            return JsonResponse({'ok': False, 'message': f'未知参数类型: {ptype}'}, status=400)
+
+    # 汇总历史观测（所有已存在轮次的 trials）并进行严格清洗与类型校正
+    def _coerce_value(ptype: str, spec: dict, v):
+        if v is None:
+            return None
+        try:
+            if ptype == 'categorical':
+                # 统一按离散处理
+                ptype = 'discrete'
+            if ptype == 'continuous':
+                vv = float(v)
+                return vv
+            if ptype == 'discrete':
+                if 'choices' in (spec or {}):
+                    # choices 可为文本或数值，保持原样（若可转成数值就转为最贴近的类型）
+                    try:
+                        nv = float(v)
+                        return int(nv) if nv.is_integer() else nv
+                    except Exception:
+                        return v
+                else:
+                    return int(float(v))
+            if ptype == 'categorical':
+                return v
+        except Exception:
+            return None
+        return v
+
+    X = []
+    y = []
+    total_trials = 0
+    skipped_trials = 0
+    for it in t.iterations.order_by('round_index'):
+        for tr in it.trials.all():
+            total_trials += 1
+            if tr.objective is None:
+                skipped_trials += 1
+                continue
+            row = []
+            valid = True
+            for name in param_names:
+                spec = param_defs.get(name) or {}
+                ptype = (spec.get('type') or 'continuous').lower()
+                vv = _coerce_value(ptype, spec, tr.params.get(name))
+                if vv is None:
+                    valid = False
+                    break
+                row.append(vv)
+            if not valid:
+                skipped_trials += 1
+                continue
+            X.append(row)
+            y.append(float(tr.objective) * (-1.0 if t.direction == 'maximize' else 1.0))
+
+    # 初始化优化器并灌入历史数据
+    # 为避免每轮相同，使用任务与轮次派生的随机种子；并尽量使用更稳健的初始化/采集优化器
+    derived_seed = int((t.id * 1009 + next_round * 97) % (2**32 - 1))
+    try:
+        optimizer = Optimizer(
+            sk_space,
+            base_estimator='GP',
+            acq_func='EI',
+            random_state=derived_seed,
+            acq_optimizer='sampling',
+            initial_point_generator='lhs',
+            # 增加更多探索性，特别是在优化初期
+            n_initial_points=max(10, len(X) + 5) if len(X) < 20 else None
+        )
+    except Exception:
+        # 兼容旧版本skopt参数
+        optimizer = Optimizer(sk_space, base_estimator='GP', acq_func='EI', random_state=derived_seed)
+
+    if X:
+        try:
+            optimizer.tell(X, y)
+        except Exception as e:
+            # 历史数据若整体失败，忽略但记录
+            print(f"[BO] optimizer.tell failed: {e}; used={len(X)}, skipped={skipped_trials}/{total_trials}")
+
+    # 生成建议
+    num = max(1, t.per_round_suggest)
+    # 建立历史参数集合用于去重（改进浮点数精度处理）
+    def _tuple_from_params(params_dict: dict):
+        result = []
+        for n in param_names:
+            val = params_dict.get(n)
+            # 对连续参数进行精度处理，避免浮点数精度问题
+            if isinstance(val, float):
+                # 保留4位小数精度进行去重判断
+                result.append(round(val, 4))
+            else:
+                result.append(val)
+        return tuple(result)
+
+    existing_param_tuples = set()
+    for it in t.iterations.order_by('round_index'):
+        # 已有观测
+        for tr in it.trials.all():
+            existing_param_tuples.add(_tuple_from_params({n: tr.params.get(n) for n in param_names}))
+        # 已下发但未提交的建议也纳入去重
+        try:
+            for sug in (it.suggestions or []):
+                if isinstance(sug, dict):
+                    existing_param_tuples.add(_tuple_from_params({n: sug.get(n) for n in param_names}))
+        except Exception:
+            pass
+
+    suggestions = []
+    tried = 0
+    max_tries = max(50, num * 10)
+    # 首先尝试批量请求
+    try:
+        batch = optimizer.ask(n_points=num)
+    except Exception:
+        batch = [optimizer.ask() for _ in range(num)]
+
+    def _json_safe_value(v):
+        try:
+            # 兼容 numpy 标量（int64/float64/str_ 等）
+            if hasattr(v, 'item'):
+                return v.item()
+        except Exception:
+            pass
+        # 基本类型直接返回
+        if isinstance(v, (int, float, str, bool)) or v is None:
+            return v
+        # 其他类型尽量转为字符串，确保可序列化
+        try:
+            return float(v)
+        except Exception:
+            try:
+                return int(v)
+            except Exception:
+                return str(v)
+
+    def _build_params_from_row(row_vals):
+        params = {}
+        for i, name in enumerate(param_names):
+            spec = param_defs.get(name) or {}
+            ptype = (spec.get('type') or 'continuous').lower()
+            raw = row_vals[i]
+            # 按类型做温和转换，再做 JSON 安全化
+            try:
+                if ptype == 'continuous':
+                    val = float(raw)
+                elif ptype == 'discrete' and 'choices' not in spec:
+                    val = int(float(raw))
+                else:
+                    val = raw
+            except Exception:
+                val = raw
+            params[name] = _json_safe_value(val)
+        return params
+
+    for row in batch:
+        params = _build_params_from_row(row)
+        tup = _tuple_from_params(params)
+        if tup not in existing_param_tuples:
+            suggestions.append(params)
+            existing_param_tuples.add(tup)
+
+    # 若仍不足，继续单点采样直至达到数量或触发上限
+    while len(suggestions) < num and tried < max_tries:
+        tried += 1
+        try:
+            row = optimizer.ask()
+        except Exception:
+            row = [optimizer.space.transform([optimizer.space.rvs(random_state=derived_seed + tried)])[0][i] if hasattr(optimizer, 'space') else None for i in range(len(param_names))]
+        params = _build_params_from_row(row)
+        tup = _tuple_from_params(params)
+        if tup in existing_param_tuples:
+            continue
+        suggestions.append(params)
+        existing_param_tuples.add(tup)
+
+    # 确保 suggestions 完全 JSON 可序列化
+    def _json_safe(obj):
+        if isinstance(obj, dict):
+            return {k: _json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_json_safe(v) for v in obj]
+        if isinstance(obj, tuple):
+            return [_json_safe(v) for v in obj]
+        return _json_safe_value(obj)
+
+    safe_suggestions = _json_safe(suggestions)
+
+    it = BOIteration.objects.create(task=t, round_index=next_round, suggestions=safe_suggestions)
+    t.current_round = next_round
+    t.save(update_fields=['current_round', 'updated_at'])
+
+    return JsonResponse({
+        'ok': True,
+        'iteration_id': it.id,
+        'round_index': next_round,
+        'suggestions': safe_suggestions,
+        'history_used': len(X),
+        'history_skipped': skipped_trials,
+        'optimization_info': {
+            'total_trials': total_trials,
+            'valid_trials': len(X),
+            'direction': t.direction,
+            'acquisition_function': 'EI',
+            # 基于每轮推荐数量的相对阈值：探索阈值=2×per_round_suggest
+            'exploration_phase': len(X) < (t.per_round_suggest * 2),
+            'thresholds': {
+                'exploration': t.per_round_suggest * 2
+            }
+        }
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_bo_submit_observation(request: HttpRequest, iteration_id: int):
+    try:
+        it = BOIteration.objects.select_related('task').get(id=iteration_id, task__created_by=request.user)
+    except BOIteration.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '轮次不存在'}, status=404)
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'message': '无效JSON'}, status=400)
+
+    records = body.get('records') or []  # [{params: {...}, objective: 0.9}]
+    created = 0
+    for r in records:
+        params = r.get('params') or {}
+        obj = r.get('objective')
+        BOTrial.objects.create(iteration=it, params=params, objective=obj)
+        created += 1
+
+    # 更新最优记录与图表缓存（占位：简单从 trials 计算最佳）
+    trials = list(it.trials.all())
+    if trials:
+        if it.task.direction == 'maximize':
+            best = max(trials, key=lambda x: (x.objective is not None, x.objective))
+        else:
+            best = min(trials, key=lambda x: (x.objective is not None, x.objective))
+        it.best_objective = best.objective
+        it.best_params = best.params
+        # 占位图表：散点与收敛可由前端按 trials 生成，此处保留空
+        it.save(update_fields=['best_objective', 'best_params', 'updated_at'])
+
+    return JsonResponse({'ok': True, 'created': created})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_bo_upsert_history(request: HttpRequest, bo_task_id: int):
+    """将前端表格历史数据（params+objective）批量写入到轮次0，便于用户手动录入或在CSV基础上调整后保存。"""
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'message': '无效JSON'}, status=400)
+    records = body.get('records') or []  # [{ params:{}, objective: number|null }]
+
+    it0, _ = BOIteration.objects.get_or_create(task=t, round_index=0, defaults={'suggestions': []})
+    # 改为追加：保留既有轮0历史，仅追加新记录
+    for r in records:
+        params = r.get('params') or {}
+        obj = r.get('objective')
+        # 基于空间进行基本类型转换
+        for name, spec in (t.parameter_space or {}).items():
+            if name in params and params[name] is not None:
+                if (spec.get('type') == 'continuous'):
+                    try: params[name] = float(params[name])
+                    except Exception: pass
+                elif (spec.get('type') == 'discrete'):
+                    try: params[name] = int(float(params[name]))
+                    except Exception: pass
+        BOTrial.objects.create(iteration=it0, params=params, objective=(None if obj in (None, '') else float(obj)))
+
+    return JsonResponse({'ok': True, 'count': len(records)})
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_bo_history(request: HttpRequest, bo_task_id: int):
+    """返回轮次0历史数据为列式表格（参数列 + 目标列在最后），便于渲染为多列表格。"""
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+
+    it0 = t.iterations.filter(round_index=0).first()
+    param_names = list((t.parameter_space or {}).keys())
+    obj_col = t.objective_name
+    columns = param_names + [obj_col]
+    rows = []
+    if it0:
+        for tr in it0.trials.all():
+            row = []
+            for name in param_names:
+                row.append(tr.params.get(name))
+            row.append(tr.objective)
+            rows.append(row)
+    return JsonResponse({'ok': True, 'columns': columns, 'rows': rows})
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_bo_download_iteration(request: HttpRequest, iteration_id: int):
+    try:
+        it = BOIteration.objects.select_related('task').get(id=iteration_id, task__created_by=request.user)
+    except BOIteration.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '轮次不存在'}, status=404)
+
+    # 生成CSV
+    import csv
+    from io import StringIO
+    sio = StringIO()
+    writer = csv.writer(sio)
+    # 表头按参数空间顺序
+    param_names = list((it.task.parameter_space or {}).keys())
+    header = param_names + ['objective']
+    writer.writerow(header)
+    for tr in it.trials.all():
+        row = [tr.params.get(name) for name in param_names] + [tr.objective]
+        writer.writerow(row)
+    resp = HttpResponse(sio.getvalue(), content_type='text/csv; charset=utf-8')
+    resp['Content-Disposition'] = f'attachment; filename="bo_iteration_{it.id}.csv"'
+    return resp
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_bo_download_all(request: HttpRequest, bo_task_id: int):
+    try:
+        t = BayesianOptTask.objects.get(id=bo_task_id, created_by=request.user)
+    except BayesianOptTask.DoesNotExist:
+        return JsonResponse({'ok': False, 'message': '任务不存在'}, status=404)
+    import csv
+    from io import StringIO
+    sio = StringIO()
+    writer = csv.writer(sio)
+    # 汇总全部轮次（排除轮0）
+    param_names = list((t.parameter_space or {}).keys())
+    rows = []
+    for it in t.iterations.order_by('round_index'):
+        if it.round_index == 0:
+            continue
+        for tr in it.trials.all():
+            rows.append((it.round_index, tr))
+    header = ['round_index'] + param_names + ['objective']
+    writer.writerow(header)
+    for round_index, tr in rows:
+        row = [round_index] + [tr.params.get(name) for name in param_names] + [tr.objective]
+        writer.writerow(row)
+    resp = HttpResponse(sio.getvalue(), content_type='text/csv; charset=utf-8')
+    resp['Content-Disposition'] = f'attachment; filename="bo_task_{t.id}_all.csv"'
+    return resp
 
 # region 任务管理（用户端：编辑/创建/更新）
 @login_required
