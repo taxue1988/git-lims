@@ -667,6 +667,10 @@
             method: 'POST', headers: { 'X-CSRFToken': getCSRFToken() }
         }).then(r=>r.json()).then(resp=>{
             if (resp.ok) {
+                // 成功开始第一轮后，隐藏按钮
+                const btnStart = document.getElementById('btn-start-iter');
+                if (btnStart) btnStart.style.display = 'none';
+
                 g.iterId = resp.iteration_id; 
                 g.suggestions = resp.suggestions || [];
                 g.currentRound = resp.round_index;
@@ -742,6 +746,12 @@
                 
                 // 渲染所有轮次卡片
                 renderAllIterations();
+
+                // 如果已经有轮次，则隐藏“开始第一轮”按钮
+                if (g.iterations.length > 0) {
+                    const btnStart = document.getElementById('btn-start-iter');
+                    if (btnStart) btnStart.style.display = 'none';
+                }
             }
         }).catch(()=>{});
     }
