@@ -68,7 +68,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- 参数与历史数据区域 -->
             <div class="row g-3">
                 <div class="col-12">
@@ -147,12 +147,12 @@
 
 {% block extra_js %}
 {% load static %}
-<script src="{% static 'plugins/echarts/echarts.min.js' %}"></script>
+<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
 <script>
-    let g = { 
-        boTaskId: null, 
-        iterId: null, 
-        suggestions: [], 
+    let g = {
+        boTaskId: null,
+        iterId: null,
+        suggestions: [],
         objectiveName: '',
         currentRound: 0,
         iterations: [], // 存储所有轮次数据
@@ -183,23 +183,23 @@
         document.getElementById('btn-save-history').addEventListener('click', saveHistory);
         document.getElementById('btn-infer-space').addEventListener('click', inferSpaceFromCsv);
         document.getElementById('btn-save-space').addEventListener('click', saveParamSpace);
-        
+
         // 监听参数空间编辑器的输入变化
         document.addEventListener('input', function(e) {
             if (e.target.closest('#space-body')) {
                 g.paramSpaceDirty = true;
             }
         });
-        
+
         document.getElementById('btn-go-step3').addEventListener('click', function(){
             if (!g.boTaskId) return showToast('请先创建任务', 'warning');
-            
+
             // 检查参数空间是否已保存
             if (g.paramSpaceDirty) {
                 showToast('请先点击"保存参数空间"按钮保存参数设置后再进入步骤三', 'warning');
                 return;
             }
-            
+
             // 强校验参数空间
             const check = validateParamSpaceCurrent();
             if (!check.ok){
@@ -374,7 +374,7 @@
         return raw;
     }
 
-    
+
 
     // 历史加载与任务详情
     function getQueryParam(key) {
@@ -671,10 +671,10 @@
                 const btnStart = document.getElementById('btn-start-iter');
                 if (btnStart) btnStart.style.display = 'none';
 
-                g.iterId = resp.iteration_id; 
+                g.iterId = resp.iteration_id;
                 g.suggestions = resp.suggestions || [];
                 g.currentRound = resp.round_index;
-                
+
                 // 将新的轮次数据添加到全局数组中
                 const newIteration = {
                     id: resp.iteration_id,
@@ -683,18 +683,18 @@
                     trials: []
                 };
                 g.iterations.push(newIteration);
-                
+
                 // 创建新的轮次卡片
                 createIterationCard(resp.round_index, g.iterId, g.suggestions);
-                
+
                 // 不再将建议写入历史表格，避免与轮0历史混淆
-                
+
                 updateDownloadAllHref();
-                
+
                 // 显示优化信息
                 const optInfo = resp.optimization_info || {};
                 const isExploration = optInfo.exploration_phase;
-                const message = isExploration ? 
+                const message = isExploration ?
                     `已生成第${resp.round_index}轮建议（探索阶段，共${optInfo.valid_trials}个历史观测点）` :
                     `已生成第${resp.round_index}轮建议（开发阶段，共${optInfo.valid_trials}个历史观测点）`;
                 showToast(message, 'success');
@@ -705,16 +705,16 @@
     // 从轮次卡片中开始新一轮推荐
     function startIterationFromCard(currentIterationId) {
         if (!g.boTaskId) return showToast('请先创建任务', 'warning');
-        
+
         // 检查当前轮次是否已完成
         const currentIteration = g.iterations.find(iter => iter.id === currentIterationId);
         if (!currentIteration) {
             showToast('当前轮次数据不存在', 'error');
             return;
         }
-        
+
         // 检查当前轮次是否已完成
-        const isCompleted = currentIteration.trials && currentIteration.trials.length > 0 && 
+        const isCompleted = currentIteration.trials && currentIteration.trials.length > 0 &&
                            currentIteration.trials.every(t => t.objective !== null);
         if (!isCompleted) {
             showToast('请先完成当前轮次的观测提交', 'warning');
@@ -731,7 +731,7 @@
             showToast('下一轮已存在，请在最新一轮继续操作', 'warning');
             return;
         }
-        
+
         // 开始新一轮推荐
         startIteration();
     }
@@ -743,7 +743,7 @@
                 const task = resp.task;
                 g.currentRound = task.current_round || 0;
                 g.iterations = task.iterations || [];
-                
+
                 // 渲染所有轮次卡片
                 renderAllIterations();
 
@@ -755,35 +755,35 @@
             }
         }).catch(()=>{});
     }
-    
+
     // 渲染所有轮次卡片
     function renderAllIterations() {
         const container = document.getElementById('iterations-container');
         container.innerHTML = '';
-        
+
         // 按轮次排序，确保第一轮在最上面
         const sortedIterations = g.iterations.sort((a, b) => a.round_index - b.round_index);
-        
+
         sortedIterations.forEach(iteration => {
             createIterationCard(iteration.round_index, iteration.id, iteration.suggestions || [], iteration.trials || []);
         });
-        
+
         // 延迟刷新所有图表，确保DOM元素已创建
         setTimeout(() => {
             refreshAllCharts();
         }, 300);
     }
-    
+
     // 创建单个轮次卡片
     function createIterationCard(roundIndex, iterationId, suggestions, trials = []) {
         const container = document.getElementById('iterations-container');
         const card = document.createElement('div');
         card.className = 'card border';
         card.id = `iteration-card-${iterationId}`;
-        
+
         const isCompleted = trials.length > 0 && trials.every(t => t.objective !== null);
         const isCurrentRound = roundIndex === g.currentRound;
-        
+
         card.innerHTML = `
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h6 class="mb-0">
@@ -832,10 +832,10 @@
                                         <td class="text-center">${idx + 1}</td>
                                         <td><code>${escapeHtml(JSON.stringify(suggestion))}</code></td>
                                         <td>
-                                            ${isCompleted ? 
+                                            ${isCompleted ?
                                                 `<span class="text-success">${trials[idx]?.objective || '-'}</span>` :
-                                                `<input class="form-control" type="number" step="any" style="min-width: 260px;" 
-                                                       data-iteration-id="${iterationId}" data-suggestion-index="${idx}" 
+                                                `<input class="form-control" type="number" step="any" style="min-width: 260px;"
+                                                       data-iteration-id="${iterationId}" data-suggestion-index="${idx}"
                                                        placeholder="输入${escapeHtml(g.objectiveName || '目标值')}">`
                                             }
                                         </td>
@@ -845,7 +845,7 @@
                     </table>
                     </div>
                 </div>
-                
+
                 <!-- 图表区域 -->
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -863,20 +863,20 @@
                 </div>
             </div>
         `;
-        
+
         container.appendChild(card);
-        
+
         // 延迟渲染图表，确保DOM元素已创建
         setTimeout(() => {
             renderIterationCharts(iterationId, roundIndex);
         }, 100);
     }
-    
+
     // 提交轮次观测
     function submitIterationObservation(iterationId) {
         const inputs = document.querySelectorAll(`input[data-iteration-id="${iterationId}"]`);
         const records = [];
-        
+
         // 找到对应的轮次数据
         const iteration = g.iterations.find(iter => iter.id === iterationId);
         if (!iteration) {
@@ -884,7 +884,7 @@
             showToast('轮次数据不存在，请刷新页面重试', 'error');
             return;
         }
-        
+
         inputs.forEach(input => {
             const suggestionIndex = parseInt(input.getAttribute('data-suggestion-index'));
             const objective = input.value.trim();
@@ -898,12 +898,12 @@
                 }
             }
         });
-        
+
         if (records.length === 0) {
             showToast('请至少填写一个目标值', 'warning');
             return;
         }
-        
+
         fetch(`/api/bo/iterations/${iterationId}/submit-observation/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -918,19 +918,19 @@
             }
         }).catch(()=>showToast('网络错误', 'danger'));
     }
-    
+
     // 渲染轮次图表
     function renderIterationCharts(iterationId, roundIndex) {
         // 获取累积数据（从第1轮到当前轮）
         fetch(`/api/bo/tasks/${g.boTaskId}/`).then(r=>r.json()).then(resp=>{
             if (!(resp && resp.ok)) return;
-            
+
             const task = resp.task;
             const allPoints = [];
             const convergenceData = [];
             let bestValue = null;
             const maximize = task.direction === 'maximize';
-            
+
             // 收集所有轮次的累积数据
             for (let i = 1; i <= roundIndex; i++) {
                 const iteration = (task.iterations || []).find(iter => iter.round_index === i);
@@ -943,13 +943,13 @@
                                 round: i,
                                 trial: trialIdx + 1
                             });
-                            
+
                             // 更新最佳值
                             if (bestValue === null) {
                                 bestValue = trial.objective;
                             } else {
-                                bestValue = maximize ? 
-                                    Math.max(bestValue, trial.objective) : 
+                                bestValue = maximize ?
+                                    Math.max(bestValue, trial.objective) :
                                     Math.min(bestValue, trial.objective);
                             }
                             convergenceData.push(bestValue);
@@ -957,7 +957,7 @@
                     });
                 }
             }
-            
+
             // 渲染散点图
             const scatterDom = document.getElementById(`chart-scatter-${iterationId}`);
             if (scatterDom) {
@@ -981,7 +981,7 @@
                     }
                 });
             }
-            
+
             // 渲染收敛图
             const convDom = document.getElementById(`chart-conv-${iterationId}`);
             if (convDom) {
