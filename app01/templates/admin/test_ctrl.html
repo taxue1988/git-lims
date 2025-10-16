@@ -31,28 +31,30 @@
     document.addEventListener('DOMContentLoaded', function() {
         const sendCommandBtn = document.getElementById('sendCommandBtn');
         const commandResult = document.getElementById('commandResult');
-        
+
+        const chatSocket = new WebSocket(
+            'ws://'
+            + window.location.host
+            + '/ws/test/'
+        );
+
+        chatSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
         sendCommandBtn.addEventListener('click', function() {
-            // 显示发送中状态
-            sendCommandBtn.disabled = true;
-            sendCommandBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 发送中...';
-            
-            // 模拟发送指令
+            chatSocket.send(JSON.stringify({
+                'message': 'hello'
+            }));
+
+            // Update UI
+            commandResult.classList.remove('d-none');
+            commandResult.classList.add('alert-success');
+            commandResult.textContent = '指令已发送！';
+
             setTimeout(function() {
-                // 恢复按钮状态
-                sendCommandBtn.disabled = false;
-                sendCommandBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>发送指令';
-                
-                // 显示结果
-                commandResult.classList.remove('d-none');
-                commandResult.classList.add('alert-success');
-                commandResult.textContent = '指令已成功发送！';
-                
-                // 3秒后隐藏结果
-                setTimeout(function() {
-                    commandResult.classList.add('d-none');
-                }, 3000);
-            }, 1500);
+                commandResult.classList.add('d-none');
+            }, 3000);
         });
     });
 </script>
