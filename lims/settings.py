@@ -75,6 +75,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'lims.wsgi.application'
+ASGI_APPLICATION = 'lims.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 
 # Database
