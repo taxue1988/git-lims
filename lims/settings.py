@@ -36,6 +36,7 @@ REGISTRATION_ENABLED = False
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -74,6 +75,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'lims.wsgi.application'
+ASGI_APPLICATION = 'lims.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 
 # Database
