@@ -33,22 +33,6 @@ User = get_user_model()
 # endregion
 
 
-# region 测试控制功能
-@login_required
-@ensure_csrf_cookie
-def admin_test_ctrl(request):
-    """
-    测试控制页面
-    """
-    if not request.user.is_admin():
-        return redirect('login')
-    
-    return render(request, 'admin/test_ctrl.html')
-
-
-# endregion
-
-
 # region 认证与注销
 def login_view(request):
     """
