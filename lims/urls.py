@@ -18,7 +18,6 @@ urlpatterns = [
     path('admin/station-management/hplc/', views.admin_station_hplc, name='admin_station_hplc'),
     path('admin/station-management/agv/', views.admin_station_agv, name='admin_station_agv'),
     path('admin/station-management/batching/', views.admin_station_batching, name='admin_station_batching'),
-    path('admin/test-ctrl/', views.admin_test_ctrl, name='admin_test_ctrl'),
 
     # ==================== Django Admin ====================
     path('admin/', admin.site.urls),
