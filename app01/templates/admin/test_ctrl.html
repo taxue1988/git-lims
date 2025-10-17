@@ -1,0 +1,61 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}测试{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">测试控制面板</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-center mb-4">
+                        <button id="sendCommandBtn" class="btn btn-primary btn-lg">
+                            <i class="fas fa-paper-plane me-2"></i>发送指令
+                        </button>
+                    </div>
+                    <div id="commandResult" class="alert alert-info d-none" role="alert">
+                        指令已发送！
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sendCommandBtn = document.getElementById('sendCommandBtn');
+        const commandResult = document.getElementById('commandResult');
+
+        const chatSocket = new WebSocket(
+            'ws://'
+            + window.location.host
+            + '/ws/test/'
+        );
+
+        chatSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
+        sendCommandBtn.addEventListener('click', function() {
+            chatSocket.send(JSON.stringify({
+                'message': 'hello'
+            }));
+
+            // Update UI
+            commandResult.classList.remove('d-none');
+            commandResult.classList.add('alert-success');
+            commandResult.textContent = '指令已发送！';
+
+            setTimeout(function() {
+                commandResult.classList.add('d-none');
+            }, 3000);
+        });
+    });
+</script>
+{% endblock %}
