@@ -99,7 +99,7 @@ else:
             'ENGINE': 'django.db.backends.mysql',
             'NAME': 'lims',
             'USER': 'root',
-            'PASSWORD': 'root123456',
+            'PASSWORD': 'root123',
             'HOST': '127.0.0.1',
             'PORT': '3306',
         }
