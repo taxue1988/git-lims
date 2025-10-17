@@ -36,7 +36,6 @@ REGISTRATION_ENABLED = False
 # Application definition
 
 INSTALLED_APPS = [
-    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -75,28 +74,36 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'lims.wsgi.application'
-ASGI_APPLICATION = 'lims.asgi.application'
-
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
 
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'lims',
-        'USER': 'root',
-        'PASSWORD': 'root123',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
+if os.getenv('DJANGO_ENV') == 'production':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'git_lims_db',
+            'USER': 'git_lims_user',
+            'PASSWORD': '6202380a*#',
+            'HOST': '127.0.0.1',
+            'PORT': '3306',
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'lims',
+            'USER': 'root',
+            'PASSWORD': 'root123',
+            'HOST': '127.0.0.1',
+            'PORT': '3306',
+        }
+    }
 
 # DATABASES = {
 #     'default': {
@@ -159,18 +166,6 @@ AUTH_USER_MODEL = 'app01.User'
 # 登录URL设置
 LOGIN_URL = '/'
 LOGIN_REDIRECT_URL = '/dashboard/admin/'
-
-# ASGI configuration for Channels
-ASGI_APPLICATION = 'lims.asgi.application'
-
-# Channel layers configuration
-# Using in-memory for development. For production, use Redis.
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
-
 
 # 安全设置
 if not DEBUG:
