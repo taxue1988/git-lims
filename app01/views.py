@@ -238,6 +238,20 @@ def admin_overview(request):
     return render(request, "admin/overview.html")
 
 
+@login_required
+@ensure_csrf_cookie
+def admin_test_ctrl(request):
+    """
+    管理端 - 测试控制面板
+    """
+    # 若非管理员则跳转到用户任务页，保持与其他管理页一致的权限控制
+    if not hasattr(request.user, 'is_admin') or not request.user.is_admin():
+        return redirect("user_task_management")
+
+    return render(request, "admin/test_ctrl.html")
+
+
+
 
 # region 普通用户仪表板
 @login_required
