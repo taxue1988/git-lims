@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 STATIC_ROOT = BASE_DIR / 'git_lims_static'
 
@@ -30,12 +30,15 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost,62.234.51.178').split(',')
 
+CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1', 'http://localhost', 'http://62.234.51.178']
+
 # 关闭用户注册功能
 REGISTRATION_ENABLED = False
 
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -74,6 +77,15 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'lims.wsgi.application'
+ASGI_APPLICATION = 'lims.asgi.application'
+
+# Channels
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
 
 
 # Database
