@@ -38,6 +38,7 @@ REGISTRATION_ENABLED = False
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'channels',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -109,9 +110,9 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'lims',
+            'NAME': 'lims5',
             'USER': 'root',
-            'PASSWORD': 'root123',
+            'PASSWORD': 'root123456',
             'HOST': '127.0.0.1',
             'PORT': '3306',
         }

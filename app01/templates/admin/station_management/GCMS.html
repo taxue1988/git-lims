@@ -21,19 +21,19 @@
             <div class="row">
                 <div class="col-md-4">
                     <div class="d-flex align-items-center mb-3">
-                        <i class="fas fa-hand-rock text-success me-3 fa-lg"></i>
+                        <i id="armStatusIcon" class="fas fa-hand-rock text-secondary me-3 fa-lg"></i>
                         <div>
                             <h6 class="mb-1 text-muted">机械臂</h6>
-                            <p class="mb-0 fw-bold text-success">正常</p>
+                            <p id="armStatus" class="mb-0 fw-bold text-secondary">连接中...</p>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="d-flex align-items-center mb-3">
-                        <i class="fas fa-vial text-primary me-3 fa-lg"></i>
+                        <i id="gcmsStatusIcon" class="fas fa-vial text-secondary me-3 fa-lg"></i>
                         <div>
                             <h6 class="mb-1 text-muted">GCMS</h6>
-                            <p class="mb-0 fw-bold text-primary">待机</p>
+                            <p id="gcmsStatus" class="mb-0 fw-bold text-secondary">连接中...</p>
                         </div>
                     </div>
                 </div>
@@ -66,6 +66,66 @@
                         </div>
                         <span class="badge bg-success" id="completedAnalysis">0</span>
                     </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="alert alert-light py-2 mb-0 d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <i id="connectionStatusIcon" class="fas fa-wifi text-danger me-2"></i>
+                            <span class="text-muted">连接状态</span>
+                        </div>
+                        <span class="badge bg-danger" id="connectionStatus">离线</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 控制按钮区域 -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button id="refreshStatusBtn" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-sync-alt me-1"></i>刷新状态
+                        </button>
+                        <button id="getArmStatusBtn" class="btn btn-outline-info btn-sm">
+                            <i class="fas fa-hand-rock me-1"></i>机械臂状态
+                        </button>
+                        <button id="moveTowerBtn" class="btn btn-outline-warning btn-sm">
+                            <i class="fas fa-arrows-alt me-1"></i>移动塔位置
+                        </button>
+                        <button id="getInstrumentInfoBtn" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-info-circle me-1"></i>仪器信息
+                        </button>
+                        <div class="input-group" style="width: 200px;">
+                            <input type="number" id="bottleNumInput" class="form-control form-control-sm" 
+                                   placeholder="瓶号" min="1" max="100" value="1">
+                            <button id="startAnalysisBtn" class="btn btn-success btn-sm">
+                                <i class="fas fa-play me-1"></i>开始分析
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 实时日志卡片 -->
+<div class="card mt-4">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse" data-bs-target="#gcmsLogs"
+         aria-expanded="true" aria-controls="gcmsLogs" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-terminal"></i> 实时日志</h4>
+        <div class="d-flex align-items-center">
+            <button id="clearLogsBtn" class="btn btn-outline-light btn-sm me-2" onclick="event.stopPropagation();">
+                <i class="fas fa-trash"></i> 清空
+            </button>
+            <i class="fas fa-chevron-down collapse-icon"></i>
+        </div>
+    </div>
+    <div class="collapse show" id="gcmsLogs">
+        <div class="card-body p-0">
+            <div id="logContainer" class="log-container" style="height: 300px; overflow-y: auto; background-color: #1e1e1e; color: #ffffff; font-family: 'Courier New', monospace; font-size: 12px; padding: 10px;">
+                <div class="log-entry text-info">
+                    <span class="timestamp">[系统]</span> 等待连接到 GCMS Worker...
                 </div>
             </div>
         </div>
@@ -139,6 +199,89 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const logContainer = document.getElementById('logContainer');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const connectionStatusIcon = document.getElementById('connectionStatusIcon');
+    const armStatus = document.getElementById('armStatus');
+    const gcmsStatus = document.getElementById('gcmsStatus');
+
+    function addLog(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry text-${type}`;
+        logEntry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+        logContainer.appendChild(logEntry);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    const socket = new WebSocket('ws://' + window.location.host + '/ws/gcms/');
+
+    socket.onopen = function(e) {
+        addLog('成功连接到 WebSocket 服务器', 'success');
+        connectionStatus.textContent = '在线';
+        connectionStatus.className = 'badge bg-success';
+        connectionStatusIcon.className = 'fas fa-wifi text-success me-2';
+        // 请求初始状态
+        sendMessage('get_status');
+    };
+
+    socket.onclose = function(e) {
+        addLog('WebSocket 连接已断开', 'danger');
+        connectionStatus.textContent = '离线';
+        connectionStatus.className = 'badge bg-danger';
+        connectionStatusIcon.className = 'fas fa-wifi text-danger me-2';
+    };
+
+    socket.onerror = function(e) {
+        addLog('WebSocket 连接发生错误', 'danger');
+    };
+
+    socket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        const message = data.message;
+        const sender = data.sender;
+
+        addLog(`收到消息: ${JSON.stringify(message)}`, 'primary');
+
+        if (sender === 'worker') {
+            if (message.type === 'worker_connected') {
+                gcmsStatus.textContent = message.status;
+                armStatus.textContent = '待获取';
+            } else if (message.type === 'status_update') {
+                gcmsStatus.textContent = message.status;
+            } else if (message.type === 'arm_status') {
+                armStatus.textContent = message.status;
+            }
+        }
+    };
+
+    function sendMessage(command) {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({'message': command}));
+            addLog(`发送指令: ${command}`, 'info');
+        } else {
+            addLog('WebSocket 未连接，无法发送指令', 'warning');
+        }
+    }
+
+    document.getElementById('refreshStatusBtn').addEventListener('click', () => sendMessage('get_status'));
+    document.getElementById('getArmStatusBtn').addEventListener('click', () => sendMessage('get_arm_status'));
+    document.getElementById('moveTowerBtn').addEventListener('click', () => sendMessage('move_tower'));
+    document.getElementById('getInstrumentInfoBtn').addEventListener('click', () => sendMessage('get_instrument_info'));
+    document.getElementById('startAnalysisBtn').addEventListener('click', () => {
+        const bottleNum = document.getElementById('bottleNumInput').value;
+        if (bottleNum) {
+            sendMessage(`start_analysis_${bottleNum}`);
+        }
+    });
+    document.getElementById('clearLogsBtn').addEventListener('click', () => {
+        logContainer.innerHTML = '';
+        addLog('日志已清空', 'info');
+    });
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // 面包屑高亮“GCMS”
