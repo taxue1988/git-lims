@@ -45,12 +45,8 @@ class GCMS_module:
         self.instrument_control.get_run_status()  # 读取运行状态
         self.instrument_control.get_run_mode()  # 读取运行模式
         self.instrument_control.get_laboratory()  # 读取实验室
-        # self.instrument_control.get_tower_position(0, 2)  # 读取塔位置
         self.instrument_control.move_tower_to_position(0, 1)  # 执行Tower转到指定位置的指令
-        # self.instrument_control.get_sequence_info('2024 Nov 07 0803_default.sequence.xml')  # 读取序列信息
         # # # # 启动序列文件采集
-        # self.instrument_control.start_data_acquisition('2024 Nov 07 0803_default.sequence.xml', 0, True)
-        # self.instrument_control.get_sequence_result_info('2024 Nov 07 0803_default.sequence.xml')  # 采集执行结果信息
         self.instrument_control.get_sequence_info('2024 Dec 04 1403_default.sequence.xml')  # 读取序列信息
         # # # 启动序列文件采集
         self.instrument_control.start_data_acquisition('2024 Dec 04 1403_default.sequence.xml', 0, True)

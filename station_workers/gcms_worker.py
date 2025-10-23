@@ -220,9 +220,15 @@ class GcmsWorker:
                     "message": f"开始分析瓶号 {bottle_num} 的样品",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
-
-            
-            self.send_response(start_info)
+                self.send_response(start_info)
+            else:
+                error_info = {
+                    "type": "analysis_error",
+                    "bottle_num": bottle_num,
+                    "message": "GCMS模块未就绪，无法开始分析。",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                }
+                self.send_response(error_info)
             
         except Exception as e:
             error_info = {
@@ -233,22 +239,45 @@ class GcmsWorker:
             self.send_response(error_info)
     
     def run_analysis(self, bottle_num):
-        """在后台线程中运行分析"""
-        try:
-            self.current_status = "分析中"
-            
-            # 发送分析开始通知
+        """在后台线程中运行分析，并发送详细进度"""
+        def send_progress(stage, message):
             progress_info = {
                 "type": "analysis_progress",
                 "bottle_num": bottle_num,
-                "stage": "开始分析",
-                "message": f"正在分析瓶号 {bottle_num}",
+                "stage": stage,
+                "message": message,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             self.send_response(progress_info)
+
+        try:
+            self.current_status = "分析中"
+            send_progress("任务开始", f"开始分析瓶号 {bottle_num}")
+
+            # 实际的分析流程，分解自 self.gcms_module.start(bottle_num)
+            send_progress("设备准备", "移动GCMS塔...")
+            self.gcms_module.gc_move_to_tower()
+            time.sleep(1) # 模拟操作耗时
+
+            send_progress("机械臂操作", f"机械臂夹取 {bottle_num} 号瓶至GCMS")
+            self.gcms_module.kb_to_gcms(bottle_num)
+            time.sleep(1)
+
+            send_progress("仪器分析", "GCMS开始执行分析序列...")
+            self.gcms_module.gc_action_conb()
+            time.sleep(5)
+
+            send_progress("等待分析完成", "GCMS运行中，请稍候...")
+            while self.gcms_module.instrument_control.get_run_mode() != '"NotRun"':
+                time.sleep(10)
             
-            # 执行实际的分析流程
-            self.gcms_module.start(bottle_num)
+            send_progress("设备复位", "分析完成，准备复位设备")
+            time.sleep(5)
+            self.gcms_module.gc_move_to_tower()
+            time.sleep(2)
+
+            send_progress("机械臂操作", f"机械臂取回 {bottle_num} 号瓶")
+            self.gcms_module.gc_drop(bottle_num)
             
             # 发送分析完成通知
             complete_info = {
@@ -258,9 +287,8 @@ class GcmsWorker:
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             self.send_response(complete_info)
-            
             self.current_status = "就绪"
-            
+
         except Exception as e:
             error_info = {
                 "type": "analysis_error",

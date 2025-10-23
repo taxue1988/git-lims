@@ -151,14 +151,14 @@
         <div class="card-body">
             <div class="row">
                 <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-                    <div class="card h-100 position-card border-light">
+                    <div class="card h-100 position-card border-light" id="position-1-card">
                         <div class="card-body text-center">
                             <h5 class="card-title text-primary">仓位 1</h5>
                             <p class="card-text text-muted small">GCMS 工站</p>
                             <div class="position-status">
-                                <div class="alert alert-light py-2 mb-0">
-                                    <i class="fas fa-circle"></i>
-                                    <span class="text-muted">位置空闲</span>
+                                <div id="position-1-status-alert" class="alert alert-light py-2 mb-0">
+                                    <i id="position-1-status-icon" class="fas fa-circle text-success"></i>
+                                    <span id="position-1-status-text" class="text-muted">位置空闲</span>
                                 </div>
                             </div>
                         </div>
@@ -175,28 +175,64 @@
          data-bs-toggle="collapse" data-bs-target="#gcmsTasks"
          aria-expanded="true" aria-controls="gcmsTasks" style="cursor: pointer;">
         <h4 class="mb-0"><i class="fas fa-tasks"></i> GCMS 分析任务列表</h4>
-        <i class="fas fa-chevron-down collapse-icon"></i>
+        <div class="d-flex align-items-center">
+            <button class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+                <i class="fas fa-plus-circle me-1"></i> 创建分析任务
+            </button>
+            <i class="fas fa-chevron-down collapse-icon ms-3"></i>
+        </div>
     </div>
     <div class="collapse show" id="gcmsTasks">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover" id="tasksTable">
                     <thead class="table-light">
                         <tr>
-                            <th>实验任务ID</th>
+                            <th>任务ID</th>
                             <th>实验名称</th>
+                            <th>样品瓶号</th>
                             <th>创建时间</th>
+                            <th>状态</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td colspan="3" class="text-center text-muted py-4">
+                        <tr id="no-tasks-row">
+                            <td colspan="6" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-2x mb-2"></i><br>
-                                暂无任务
+                                暂无任务，请点击右上角创建
                             </td>
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建任务 Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1" aria-labelledby="createTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createTaskModalLabel">创建新的分析任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createTaskForm">
+                    <div class="mb-3">
+                        <label for="experimentName" class="form-label">实验名称</label>
+                        <input type="text" class="form-control" id="experimentName" placeholder="例如：样品批次A-01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bottleNum" class="form-label">样品瓶号 (0-33)</label>
+                        <input type="number" class="form-control" id="bottleNum" min="0" max="33" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveTaskBtn">创建任务</button>
             </div>
         </div>
     </div>
@@ -284,6 +320,322 @@ document.addEventListener('DOMContentLoaded', function () {
         logContainer.innerHTML = '';
         addLog('日志已清空', 'info');
     });
+
+    // --- New Task Management Logic ---
+    const saveTaskBtn = document.getElementById('saveTaskBtn');
+    const createTaskForm = document.getElementById('createTaskForm');
+    const tasksTableBody = document.querySelector('#tasksTable tbody');
+    const noTasksRow = document.getElementById('no-tasks-row');
+    const createTaskModalEl = document.getElementById('createTaskModal');
+    const createTaskModal = new bootstrap.Modal(createTaskModalEl);
+    let taskIdCounter = 0;
+    let tasks = []; // Central state for tasks
+    let isWorkerBusy = false;
+    let isPositionManuallyOccupied = false;
+
+    // On page load, check if any task is in a running state and lock the worker
+    function initializeWorkerStatus() {
+        const isAnyTaskRunning = tasks.some(t => t.statusText !== '待运行' && t.statusText !== '排队中' && t.statusText !== '已完成' && t.statusText !== '失败');
+        if (isAnyTaskRunning) {
+            isWorkerBusy = true;
+            console.log('Worker status initialized to BUSY due to a running task on load.');
+        } else {
+            isWorkerBusy = false;
+            console.log('Worker status initialized to IDLE.');
+        }
+    }
+
+    // Position Status Elements
+    const pos1Card = document.getElementById('position-1-card');
+    const pos1Alert = document.getElementById('position-1-status-alert');
+    const pos1Icon = document.getElementById('position-1-status-icon');
+    const pos1Text = document.getElementById('position-1-status-text');
+
+    function updatePositionStatus(status) {
+        // idle, running, complete, error, manual_occupied
+        if (!pos1Alert) return;
+
+        switch (status) {
+            case 'running':
+                isWorkerBusy = true;
+                isPositionManuallyOccupied = false;
+                pos1Alert.className = 'alert alert-info py-2 mb-0';
+                pos1Icon.className = 'fas fa-spinner fa-spin text-primary';
+                pos1Text.textContent = '运行中';
+                break;
+            case 'error':
+                isWorkerBusy = false;
+                pos1Alert.className = 'alert alert-danger py-2 mb-0';
+                pos1Icon.className = 'fas fa-exclamation-triangle text-danger';
+                pos1Text.textContent = '运行失败';
+                break;
+            case 'manual_occupied':
+                isPositionManuallyOccupied = true;
+                pos1Alert.className = 'alert alert-warning py-2 mb-0';
+                pos1Icon.className = 'fas fa-hand-paper text-warning';
+                pos1Text.textContent = '手动占用';
+                break;
+            case 'idle':
+            case 'complete':
+            default:
+                isWorkerBusy = false;
+                isPositionManuallyOccupied = false;
+                pos1Alert.className = 'alert alert-light py-2 mb-0';
+                pos1Icon.className = 'fas fa-check-circle text-success';
+                pos1Text.textContent = '位置空闲';
+                break;
+        }
+    }
+
+    pos1Card.addEventListener('click', () => {
+        if (!isWorkerBusy) {
+            if (isPositionManuallyOccupied) {
+                updatePositionStatus('idle');
+            } else {
+                updatePositionStatus('manual_occupied');
+            }
+        }
+    });
+
+    function saveTasks() {
+        localStorage.setItem('gcmsTasks', JSON.stringify(tasks));
+    }
+
+    function renderTasks() {
+        tasksTableBody.innerHTML = ''; // Clear the table
+
+        let pendingCount = 0;
+        let completedCount = 0;
+
+        if (tasks.length === 0) {
+            tasksTableBody.innerHTML = `<tr id="no-tasks-row">
+                            <td colspan="6" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                                暂无任务，请点击右上角创建
+                            </td>
+                        </tr>`;
+        } else {
+             tasks.forEach(task => {
+                if (task.statusText === '已完成') {
+                    completedCount++;
+                } else {
+                    pendingCount++;
+                }
+
+                const newRow = document.createElement('tr');
+                newRow.id = task.id;
+                newRow.innerHTML = `
+                    <td>${task.displayId}</td>
+                    <td>${task.name}</td>
+                    <td>${task.bottleNum}</td>
+                    <td>${task.time}</td>
+                    <td><span class="badge ${task.statusClass}">${task.statusText}</span></td>
+                    <td>
+                        <button class="btn btn-success btn-sm run-btn" data-bottle-num="${task.bottleNum}" data-task-id="${task.id}" ${task.runButtonDisabled ? 'disabled' : ''}>
+                            ${task.runButtonHTML}
+                        </button>
+                        <button class="btn btn-danger btn-sm delete-btn" data-task-id="${task.id}">
+                            <i class="fas fa-trash"></i> 删除
+                        </button>
+                    </td>
+                `;
+                tasksTableBody.appendChild(newRow);
+            });
+        }
+
+        // Update counters
+        document.getElementById('pendingAnalysis').textContent = pendingCount;
+        document.getElementById('completedAnalysis').textContent = completedCount;
+    }
+
+    function loadTasks() {
+        const savedTasks = localStorage.getItem('gcmsTasks');
+        if (savedTasks) {
+            tasks = JSON.parse(savedTasks);
+            // Restore counter to avoid duplicate IDs
+            taskIdCounter = tasks.length > 0 ? Math.max(...tasks.map(t => t.displayId)) : 0;
+            renderTasks();
+        }
+    }
+
+    // Load tasks from localStorage when the page loads
+    loadTasks();
+    initializeWorkerStatus(); // Set initial worker status based on loaded tasks
+
+    function runNextTaskInQueue() {
+        if (isWorkerBusy) {
+            console.log('Queue check: Aborted, worker is busy.');
+            return;
+        }
+        if (isPositionManuallyOccupied) {
+            console.log('Queue check: Aborted, position is manually occupied.');
+            return;
+        }
+
+        const nextTask = tasks.find(t => t.statusText === '排队中');
+
+        if (nextTask) {
+            console.log(`Queue check: Found next task ${nextTask.id}, preparing to run.`);
+            isWorkerBusy = true; // Set busy flag immediately
+            sendMessage(`start_analysis_${nextTask.bottleNum}`);
+            
+            // Visually update the task to show it's being sent
+            nextTask.statusText = '请求运行';
+            nextTask.statusClass = 'bg-info';
+            nextTask.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
+            saveTasks();
+            renderTasks();
+        } else {
+            console.log('Queue check: No tasks in queue.');
+        }
+    }
+
+    saveTaskBtn.addEventListener('click', () => {
+        const experimentName = document.getElementById('experimentName').value.trim();
+        const bottleNumInput = document.getElementById('bottleNum');
+        const bottleNum = bottleNumInput.value;
+
+        if (!experimentName || bottleNum === '') {
+            alert('请填写所有字段');
+            return;
+        }
+
+        if (parseInt(bottleNum) < 0 || parseInt(bottleNum) > 33) {
+            alert('样品瓶号必须在 0 到 33 之间');
+            return;
+        }
+
+        taskIdCounter++;
+        const taskId = `task-${taskIdCounter}`;
+        const currentTime = new Date().toLocaleTimeString();
+
+        const newTask = {
+            id: taskId,
+            displayId: taskIdCounter,
+            name: experimentName,
+            bottleNum: bottleNum,
+            time: currentTime,
+            statusText: '待运行',
+            statusClass: 'bg-secondary',
+            runButtonHTML: '<i class="fas fa-play"></i> 运行',
+            runButtonDisabled: false
+        };
+        
+        tasks.push(newTask);
+        saveTasks();
+        renderTasks();
+
+        createTaskForm.reset();
+        createTaskModal.hide();
+    });
+
+    tasksTableBody.addEventListener('click', function(event) {
+        const target = event.target.closest('button');
+        if (!target) return;
+
+        const taskId = target.getAttribute('data-task-id');
+
+        if (target.classList.contains('run-btn')) {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            // Update task state to 'Queued'
+            task.statusText = '排队中';
+            task.statusClass = 'bg-primary';
+            task.runButtonHTML = '<i class="fas fa-clock"></i> 排队中';
+            task.runButtonDisabled = true;
+            saveTasks();
+            renderTasks();
+
+            // Try to run the next task
+            runNextTaskInQueue();
+
+        } else if (target.classList.contains('delete-btn')) {
+            const task = tasks.find(t => t.id === taskId);
+            if (task && (task.statusText !== '待运行' && task.statusText !== '排队中' && task.statusText !== '已完成' && task.statusText !== '失败')) {
+                 alert('无法删除正在运行或即将运行的任务。');
+                 return;
+            }
+            if (confirm('您确定要删除这个任务吗？')) {
+                tasks = tasks.filter(t => t.id !== taskId);
+                saveTasks();
+                renderTasks();
+            }
+        }
+    });
+
+    // Enhanced onmessage to update state array and handle queue
+    socket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        const message = data.message;
+        const sender = data.sender;
+
+        addLog(`收到消息: ${JSON.stringify(message)}`, 'primary');
+
+        if (sender !== 'worker') return;
+
+        const task = tasks.find(t => t.bottleNum == message.bottle_num && (t.statusText === '请求运行' || t.statusText === '排队中' || t.statusText.includes('运行中') || t.statusText === '任务开始' || t.statusText.includes('设备') || t.statusText.includes('机械臂') || t.statusText.includes('仪器')));
+
+        switch (message.type) {
+            case 'worker_connected':
+                gcmsStatus.textContent = message.status;
+                armStatus.textContent = '待获取';
+                break;
+            case 'status_update':
+                gcmsStatus.textContent = message.status;
+                gcmsRunMode.textContent = message.run_mode || '未知';
+                gcmsRunStatus.textContent = message.run_status || '未知';
+                break;
+            case 'arm_status':
+                armStatus.textContent = message.status;
+                break;
+            case 'analysis_started':
+                if (task) {
+                    task.statusText = '任务开始';
+                    task.statusClass = 'bg-info';
+                }
+                updatePositionStatus('running');
+                break;
+            case 'analysis_progress':
+                if (task) {
+                    task.statusText = message.stage;
+                    task.statusClass = 'bg-info text-dark';
+                }
+                updatePositionStatus('running');
+                break;
+            case 'analysis_complete':
+                if (task) {
+                    task.statusText = '已完成';
+                    task.statusClass = 'bg-success';
+                    task.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行';
+                    task.runButtonDisabled = false;
+                }
+                isWorkerBusy = false; // Explicitly unlock the worker
+                updatePositionStatus('complete');
+                runNextTaskInQueue(); // Check for next task
+                break;
+            case 'analysis_error':
+                if (task) {
+                    task.statusText = '失败';
+                    task.statusClass = 'bg-danger';
+                    task.runButtonHTML = '<i class="fas fa-redo"></i> 重试';
+                    task.runButtonDisabled = false;
+                }
+                isWorkerBusy = false; // Explicitly unlock the worker
+                updatePositionStatus('error');
+                runNextTaskInQueue(); // Check for next task
+                break;
+            default:
+                // Handle other message types if necessary
+                break;
+        }
+
+        // After any potential change, save and re-render
+        if (task) {
+            saveTasks();
+            renderTasks();
+        }
+    };
 });
 </script>
 <script>
