@@ -15,28 +15,49 @@ except ImportError:
     GCMS_module = None
 
 class GcmsWorker:
-    def __init__(self, server_url="ws://127.0.0.1:8000/ws/gcms/"):
+    def __init__(self, server_url="ws://192.168.58.8:8000/ws/gcms/"):
         self.server_url = server_url
         self.ws = None
         self.gcms_module = None
         self.is_connected = False
+        self.arm_is_connected = False
+        self.instrument_is_connected = False
         self.current_status = "离线"
-        
+
         # 初始化 GCMS 模块
         self.init_gcms_module()
-        
+
     def init_gcms_module(self):
-        """初始化 GCMS 模块"""
+        """初始化 GCMS 模块并独立检查其组件"""
         try:
             if GCMS_module:
                 self.gcms_module = GCMS_module()
-                self.current_status = "就绪"
-                print("GCMS 模块初始化成功")
+
+                # 独立检查机械臂连接
+                if self.gcms_module.check_arm_connection():
+                    self.arm_is_connected = True
+                    print("机械臂连接成功")
+                else:
+                    self.arm_is_connected = False
+                    print("错误：机械臂连接失败")
+
+                # 独立检查GCMS仪器连接
+                if self.gcms_module.check_instrument_connection():
+                    self.instrument_is_connected = True
+                    print("GCMS仪器连接成功")
+                else:
+                    self.instrument_is_connected = False
+                    print("错误：GCMS仪器连接失败")
+
+                self.current_status = "就绪"  # Worker本身是就绪的
+                print("GCMS 模块初始化完成")
+
             else:
-                print("GCMS 模块未找到，使用模拟模式")
-                self.current_status = "模拟模式"
+                print("GCMS 模块未找到，无法进行操作")
+                self.current_status = "模块未找到"
         except Exception as e:
             print(f"GCMS 模块初始化失败: {e}")
+            self.gcms_module = None
             self.current_status = "初始化失败"
     
     def on_message(self, ws, message):
@@ -75,37 +96,50 @@ class GcmsWorker:
     def handle_get_status(self):
         """获取 GCMS 整体状态"""
         try:
-            if self.gcms_module:
-                # 获取实际状态
-                try:
-                    run_status = self.gcms_module.instrument_control.get_run_status()
-                    run_mode = self.gcms_module.instrument_control.get_run_mode()
-                    
-                    status_info = {
-                        "type": "status_update",
-                        "status": "运行中" if run_mode != '"NotRun"' else "就绪",
-                        "run_status": run_status,
-                        "run_mode": run_mode,
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                except Exception as e:
+            # 检查模块是否加载，以及仪器在初始化时是否连接成功
+            if self.gcms_module and self.instrument_is_connected:
+                # 实时检查仪器连接
+                if self.gcms_module.check_instrument_connection():
+                    try:
+                        run_status = self.gcms_module.instrument_control.get_run_status()
+                        run_mode = self.gcms_module.instrument_control.get_run_mode()
+                        status_info = {
+                            "type": "status_update",
+                            "status": "运行中" if run_mode != '"NotRun"' else "就绪",
+                            "run_status": run_status,
+                            "run_mode": run_mode,
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                    except Exception as e:
+                        status_info = {
+                            "type": "status_update",
+                            "status": "连接失败",
+                            "error": f"获取仪器状态时出错: {str(e)}",
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                else:
+                    self.instrument_is_connected = False # 更新状态标志
                     status_info = {
                         "type": "status_update",
                         "status": "连接失败",
-                        "error": str(e),
+                        "error": "GCMS仪器通信中断",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                     }
             else:
-                # 模拟模式
                 status_info = {
                     "type": "status_update",
-                    "status": self.current_status,
-                    "run_status": "模拟状态",
-                    "run_mode": "模拟模式",
+                    "status": "连接失败",
+                    "error": "GCMS仪器未连接或模块初始化失败",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
-            
             self.send_response(status_info)
+        except Exception as e:
+            error_info = {
+                "type": "error",
+                "message": f"获取GCMS状态失败: {str(e)}",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            self.send_response(error_info)
             
         except Exception as e:
             error_info = {
@@ -118,33 +152,48 @@ class GcmsWorker:
     def handle_get_arm_status(self):
         """获取机械臂状态"""
         try:
-            if self.gcms_module:
-                try:
-                    b_value = self.gcms_module.get_b_status()
-                    arm_info = {
-                        "type": "arm_status",
-                        "b_value": b_value,
-                        "status": "正常",
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                except Exception as e:
+            # 检查模块是否加载，以及机械臂在初始化时是否连接成功
+            if self.gcms_module and self.arm_is_connected:
+                # 实时检查机械臂连接
+                if self.gcms_module.check_arm_connection():
+                    try:
+                        b_value = self.gcms_module.get_b_status()
+                        arm_info = {
+                            "type": "arm_status",
+                            "b_value": b_value,
+                            "status": "正常",
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                    except Exception as e:
+                        arm_info = {
+                            "type": "arm_status",
+                            "status": "连接失败",
+                            "error": f"获取机械臂状态时出错: {str(e)}",
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                else:
+                    self.arm_is_connected = False # 更新状态标志
                     arm_info = {
                         "type": "arm_status",
                         "status": "连接失败",
-                        "error": str(e),
+                        "error": "机械臂通信中断",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                     }
             else:
-                # 模拟模式
                 arm_info = {
                     "type": "arm_status",
-                    "b_value": 0,
-                    "status": "模拟模式",
+                    "status": "连接失败",
+                    "error": "机械臂未连接或模块初始化失败",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
-            
             self.send_response(arm_info)
-            
+        except Exception as e:
+            error_info = {
+                "type": "error",
+                "message": f"获取机械臂状态失败: {str(e)}",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            self.send_response(error_info)
         except Exception as e:
             error_info = {
                 "type": "error",
@@ -171,14 +220,7 @@ class GcmsWorker:
                     "message": f"开始分析瓶号 {bottle_num} 的样品",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
-            else:
-                # 模拟模式
-                start_info = {
-                    "type": "analysis_started",
-                    "bottle_num": bottle_num,
-                    "message": f"模拟模式：开始分析瓶号 {bottle_num} 的样品",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                }
+
             
             self.send_response(start_info)
             
@@ -246,13 +288,7 @@ class GcmsWorker:
                         "message": f"塔位置移动失败: {str(e)}",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                     }
-            else:
-                # 模拟模式
-                tower_info = {
-                    "type": "tower_moved",
-                    "message": "模拟模式：塔位置移动完成",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                }
+
             
             self.send_response(tower_info)
             
@@ -284,14 +320,7 @@ class GcmsWorker:
                         "message": f"获取仪器信息失败: {str(e)}",
                         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                     }
-            else:
-                # 模拟模式
-                instrument_info = {
-                    "type": "instrument_info",
-                    "model": "模拟 GCMS 设备",
-                    "laboratory": "模拟实验室",
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                }
+
             
             self.send_response(instrument_info)
             

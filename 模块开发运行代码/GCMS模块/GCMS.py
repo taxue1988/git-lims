@@ -11,6 +11,15 @@ class InstrumentControl:
     def __init__(self, base_url):
         self.base_url = base_url
 
+    def check_connection(self):
+        """检查与GCMS仪器的HTTP连接"""
+        try:
+            # get_status是一个轻量级的请求，适合用于心跳检查
+            self.get_status()
+            return True
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            return False
+
     def get_model(self):  # 读取仪器型号
         url = f"{self.base_url}/Instrument/model"
         with urllib.request.urlopen(url) as response:

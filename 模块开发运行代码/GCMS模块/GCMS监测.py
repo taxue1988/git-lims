@@ -13,6 +13,17 @@ class GCMS_module:
         b = self.gc_arm.get_B_value(0)
         return b
 
+    def check_arm_connection(self):
+        """暴露给外部的机械臂连接检查方法"""
+        return self.gc_arm.check_connection()
+
+    def check_instrument_connection(self):
+        """暴露给外部的GCMS仪器连接检查方法"""
+        return self.instrument_control.check_connection()
+
+    def check_arm_connection(self):
+        return self.gc_arm.check_connection()
+
     def kb_to_gcms(self, bottle_num):
         self.gc_arm.set_B_value(0, bottle_num)
         self.gc_arm.run_jbi('kb_to_gcms')

@@ -14,11 +14,25 @@ class EC66:
     def connect(self, ip):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
+            self.sock.settimeout(2)  # 设置2秒超时以防止长时间阻塞
             self.sock.connect((ip, 8055))
+            self.sock.settimeout(None) # 恢复默认设置
             self.able_servo(1)
         except Exception as e:
-            self.sock.close()
+            self.sock = None # 关键：连接失败时，将sock对象设为None
             print("反应_EC66初始化：失败！")
+
+    def check_connection(self):
+        """实时检查机械臂连接状态"""
+        if not self.sock:
+            return False
+        try:
+            # get_robot_mode 是一个轻量级的命令，适合用于心跳检查
+            # 如果此命令可以成功发送并收到响应，说明连接是活动的
+            is_success, _, _ = self.send_cmd('getRobotMode', {})
+            return is_success
+        except Exception:
+            return False
 
     def disconnect(self):
         try:

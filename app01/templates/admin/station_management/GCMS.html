@@ -39,6 +39,24 @@
                 </div>
                 <div class="col-md-4">
                     <div class="d-flex align-items-center mb-3">
+                        <i class="fas fa-cogs text-secondary me-3 fa-lg"></i>
+                        <div>
+                            <h6 class="mb-1 text-muted">运行模式</h6>
+                            <p id="gcmsRunMode" class="mb-0 fw-bold text-secondary">未知</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="fas fa-info-circle text-secondary me-3 fa-lg"></i>
+                        <div>
+                            <h6 class="mb-1 text-muted">运行状态</h6>
+                            <p id="gcmsRunStatus" class="mb-0 fw-bold text-secondary">未知</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center mb-3">
                         <i class="fas fa-clock text-secondary me-3 fa-lg"></i>
                         <div>
                             <h6 class="mb-1 text-muted">运行时间</h6>
@@ -85,22 +103,11 @@
                         <button id="refreshStatusBtn" class="btn btn-outline-primary btn-sm">
                             <i class="fas fa-sync-alt me-1"></i>刷新状态
                         </button>
-                        <button id="getArmStatusBtn" class="btn btn-outline-info btn-sm">
-                            <i class="fas fa-hand-rock me-1"></i>机械臂状态
-                        </button>
-                        <button id="moveTowerBtn" class="btn btn-outline-warning btn-sm">
-                            <i class="fas fa-arrows-alt me-1"></i>移动塔位置
-                        </button>
+
                         <button id="getInstrumentInfoBtn" class="btn btn-outline-secondary btn-sm">
                             <i class="fas fa-info-circle me-1"></i>仪器信息
                         </button>
-                        <div class="input-group" style="width: 200px;">
-                            <input type="number" id="bottleNumInput" class="form-control form-control-sm" 
-                                   placeholder="瓶号" min="1" max="100" value="1">
-                            <button id="startAnalysisBtn" class="btn btn-success btn-sm">
-                                <i class="fas fa-play me-1"></i>开始分析
-                            </button>
-                        </div>
+
                     </div>
                 </div>
             </div>
@@ -206,6 +213,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const connectionStatusIcon = document.getElementById('connectionStatusIcon');
     const armStatus = document.getElementById('armStatus');
     const gcmsStatus = document.getElementById('gcmsStatus');
+    const gcmsRunMode = document.getElementById('gcmsRunMode');
+    const gcmsRunStatus = document.getElementById('gcmsRunStatus');
 
     function addLog(message, type = 'info') {
         const timestamp = new Date().toLocaleTimeString();
@@ -225,6 +234,7 @@ document.addEventListener('DOMContentLoaded', function () {
         connectionStatusIcon.className = 'fas fa-wifi text-success me-2';
         // 请求初始状态
         sendMessage('get_status');
+        sendMessage('get_arm_status');
     };
 
     socket.onclose = function(e) {
@@ -251,6 +261,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 armStatus.textContent = '待获取';
             } else if (message.type === 'status_update') {
                 gcmsStatus.textContent = message.status;
+                gcmsRunMode.textContent = message.run_mode || '未知';
+                gcmsRunStatus.textContent = message.run_status || '未知';
             } else if (message.type === 'arm_status') {
                 armStatus.textContent = message.status;
             }
@@ -267,15 +279,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('refreshStatusBtn').addEventListener('click', () => sendMessage('get_status'));
-    document.getElementById('getArmStatusBtn').addEventListener('click', () => sendMessage('get_arm_status'));
-    document.getElementById('moveTowerBtn').addEventListener('click', () => sendMessage('move_tower'));
     document.getElementById('getInstrumentInfoBtn').addEventListener('click', () => sendMessage('get_instrument_info'));
-    document.getElementById('startAnalysisBtn').addEventListener('click', () => {
-        const bottleNum = document.getElementById('bottleNumInput').value;
-        if (bottleNum) {
-            sendMessage(`start_analysis_${bottleNum}`);
-        }
-    });
     document.getElementById('clearLogsBtn').addEventListener('click', () => {
         logContainer.innerHTML = '';
         addLog('日志已清空', 'info');
