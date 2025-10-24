@@ -77,9 +77,16 @@
                 moveIndicator(target);
             }
 
-            // 初始化：默认激活第一个（或保持已有active）
-            var current = breadcrumb.querySelector('.breadcrumb-item a.active') || links[0];
-            if (current) setActive(current);
+            // 初始化：根据当前URL激活对应链接
+            var currentPath = window.location.pathname;
+            var activeLink = Array.from(links).find(a => a.pathname === currentPath);
+            if (!activeLink) { // 如果完全匹配不到，尝试部分匹配
+                activeLink = Array.from(links).find(a => currentPath.startsWith(a.pathname));
+            }
+            if (!activeLink) { // 如果还是匹配不到，默认激活第一个
+                activeLink = links[0];
+            }
+            if (activeLink) setActive(activeLink);
 
             // 点击切换 active 与动画
             links.forEach(function(a){
