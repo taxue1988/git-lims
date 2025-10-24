@@ -193,12 +193,13 @@
                             <th>样品瓶号</th>
                             <th>创建时间</th>
                             <th>状态</th>
+                            <th>任务用时</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr id="no-tasks-row">
-                            <td colspan="6" class="text-center text-muted py-4">
+                            <td colspan="7" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-2x mb-2"></i><br>
                                 暂无任务，请点击右上角创建
                             </td>
@@ -244,6 +245,26 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // --- 全局变量定义 ---
+    let totalRuntimeInterval = null;
+    let tasks = []; // 任务的中心化状态管理
+    let taskIdCounter = 0;
+    let isWorkerBusy = false;
+    let isPositionManuallyOccupied = false;
+
+    // --- DOM 元素获取 ---
+
+    const saveTaskBtn = document.getElementById('saveTaskBtn');
+    const createTaskForm = document.getElementById('createTaskForm');
+    const tasksTableBody = document.querySelector('#tasksTable tbody');
+    const noTasksRow = document.getElementById('no-tasks-row');
+    const createTaskModalEl = document.getElementById('createTaskModal');
+    const createTaskModal = new bootstrap.Modal(createTaskModalEl);
+    const pos1Card = document.getElementById('position-1-card');
+    const pos1Alert = document.getElementById('position-1-status-alert');
+    const pos1Icon = document.getElementById('position-1-status-icon');
+    const pos1Text = document.getElementById('position-1-status-text');
+
     const logContainer = document.getElementById('logContainer');
     const connectionStatus = document.getElementById('connectionStatus');
     const connectionStatusIcon = document.getElementById('connectionStatusIcon');
@@ -284,26 +305,7 @@ document.addEventListener('DOMContentLoaded', function () {
         addLog('WebSocket 连接发生错误', 'danger');
     };
 
-    socket.onmessage = function(e) {
-        const data = JSON.parse(e.data);
-        const message = data.message;
-        const sender = data.sender;
 
-        addLog(`收到消息: ${JSON.stringify(message)}`, 'primary');
-
-        if (sender === 'worker') {
-            if (message.type === 'worker_connected') {
-                gcmsStatus.textContent = message.status;
-                armStatus.textContent = '待获取';
-            } else if (message.type === 'status_update') {
-                gcmsStatus.textContent = message.status;
-                gcmsRunMode.textContent = message.run_mode || '未知';
-                gcmsRunStatus.textContent = message.run_status || '未知';
-            } else if (message.type === 'arm_status') {
-                armStatus.textContent = message.status;
-            }
-        }
-    };
 
     function sendMessage(command) {
         if (socket.readyState === WebSocket.OPEN) {
@@ -322,16 +324,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // --- New Task Management Logic ---
-    const saveTaskBtn = document.getElementById('saveTaskBtn');
-    const createTaskForm = document.getElementById('createTaskForm');
-    const tasksTableBody = document.querySelector('#tasksTable tbody');
-    const noTasksRow = document.getElementById('no-tasks-row');
-    const createTaskModalEl = document.getElementById('createTaskModal');
-    const createTaskModal = new bootstrap.Modal(createTaskModalEl);
-    let taskIdCounter = 0;
-    let tasks = []; // Central state for tasks
-    let isWorkerBusy = false;
-    let isPositionManuallyOccupied = false;
 
     // On page load, check if any task is in a running state and lock the worker
     function initializeWorkerStatus() {
@@ -346,10 +338,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Position Status Elements
-    const pos1Card = document.getElementById('position-1-card');
-    const pos1Alert = document.getElementById('position-1-status-alert');
-    const pos1Icon = document.getElementById('position-1-status-icon');
-    const pos1Text = document.getElementById('position-1-status-text');
 
     function updatePositionStatus(status) {
         // idle, running, complete, error, manual_occupied
@@ -430,11 +418,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     <td>${task.bottleNum}</td>
                     <td>${task.time}</td>
                     <td><span class="badge ${task.statusClass}">${task.statusText}</span></td>
+                    <td>${task.duration || 'N/A'}</td>
                     <td>
-                        <button class="btn btn-success btn-sm run-btn" data-bottle-num="${task.bottleNum}" data-task-id="${task.id}" ${task.runButtonDisabled ? 'disabled' : ''}>
+                        <button class="btn btn-success btn-sm run-btn" onclick="handleRunTask('${task.id}')" ${task.runButtonDisabled ? 'disabled' : ''}>
                             ${task.runButtonHTML}
                         </button>
-                        <button class="btn btn-danger btn-sm delete-btn" data-task-id="${task.id}">
+                        <button class="btn btn-danger btn-sm delete-btn" onclick="handleDeleteTask('${task.id}')">
                             <i class="fas fa-trash"></i> 删除
                         </button>
                     </td>
@@ -458,9 +447,30 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Load tasks from localStorage when the page loads
-    loadTasks();
-    initializeWorkerStatus(); // Set initial worker status based on loaded tasks
+    // --- Initialization on page load ---
+    function initializeApp() {
+        loadTasks();
+        initializeWorkerStatus();
+
+        // Now that tasks are loaded, check if the runtime timer should be active
+        const isAnyTaskRunning = tasks.some(t => !['待运行', '排队中', '已完成', '失败'].includes(t.statusText));
+        
+        if (isAnyTaskRunning) {
+            // If any task is running, the master timer MUST be running.
+            if (!localStorage.getItem('gcmsTotalRuntimeStart')) {
+                addLog('警告：有任务在运行但未找到计时起点，将从现在开始计时。', 'warning');
+                // We set it here so startTotalRuntime can pick it up.
+                localStorage.setItem('gcmsTotalRuntimeStart', Date.now());
+            }
+            startTotalRuntime();
+            addLog('恢复总运行计时器。', 'info');
+        } else {
+            // If no tasks are running, ensure the timer is stopped and reset.
+            stopTotalRuntime();
+        }
+    }
+
+    initializeApp();
 
     function runNextTaskInQueue() {
         if (isWorkerBusy) {
@@ -518,7 +528,10 @@ document.addEventListener('DOMContentLoaded', function () {
             statusText: '待运行',
             statusClass: 'bg-secondary',
             runButtonHTML: '<i class="fas fa-play"></i> 运行',
-            runButtonDisabled: false
+            runButtonDisabled: false,
+            startTime: null, // Add startTime
+            endTime: null, // Add endTime
+            duration: '' // Add duration
         };
         
         tasks.push(newTask);
@@ -529,40 +542,43 @@ document.addEventListener('DOMContentLoaded', function () {
         createTaskModal.hide();
     });
 
-    tasksTableBody.addEventListener('click', function(event) {
-        const target = event.target.closest('button');
-        if (!target) return;
+    // --- Button Action Handlers ---
+    window.handleRunTask = function(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
 
-        const taskId = target.getAttribute('data-task-id');
+        task.statusText = '排队中';
+        task.statusClass = 'bg-primary';
+        task.runButtonHTML = '<i class="fas fa-clock"></i> 排队中';
+        task.runButtonDisabled = true;
+        saveTasks();
+        renderTasks();
+        runNextTaskInQueue();
+    }
 
-        if (target.classList.contains('run-btn')) {
+    window.handleDeleteTask = function(taskId) {
+        if (confirm('您确定要删除这个任务吗？')) {
             const task = tasks.find(t => t.id === taskId);
             if (!task) return;
 
-            // Update task state to 'Queued'
-            task.statusText = '排队中';
-            task.statusClass = 'bg-primary';
-            task.runButtonHTML = '<i class="fas fa-clock"></i> 排队中';
-            task.runButtonDisabled = true;
+            const isRunning = !['待运行', '排队中', '已完成', '失败'].includes(task.statusText);
+
+            tasks = tasks.filter(t => t.id !== taskId);
             saveTasks();
             renderTasks();
+            addLog(`删除了任务: ${task.name} (瓶号: ${task.bottleNum})`, 'info');
 
-            // Try to run the next task
-            runNextTaskInQueue();
-
-        } else if (target.classList.contains('delete-btn')) {
-            const task = tasks.find(t => t.id === taskId);
-            if (task && (task.statusText !== '待运行' && task.statusText !== '排队中' && task.statusText !== '已完成' && task.statusText !== '失败')) {
-                 alert('无法删除正在运行或即将运行的任务。');
-                 return;
-            }
-            if (confirm('您确定要删除这个任务吗？')) {
-                tasks = tasks.filter(t => t.id !== taskId);
-                saveTasks();
-                renderTasks();
+            if (isRunning) {
+                isWorkerBusy = false;
+                updatePositionStatus('idle');
+                stopTotalRuntime();
+                sendMessage('force_stop');
+                addLog('由于删除了正在运行的任务，已重置工位状态。', 'warning');
             }
         }
-    });
+    }
+
+
 
     // Enhanced onmessage to update state array and handle queue
     socket.onmessage = function(e) {
@@ -574,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (sender !== 'worker') return;
 
-        const task = tasks.find(t => t.bottleNum == message.bottle_num && (t.statusText === '请求运行' || t.statusText === '排队中' || t.statusText.includes('运行中') || t.statusText === '任务开始' || t.statusText.includes('设备') || t.statusText.includes('机械臂') || t.statusText.includes('仪器')));
+                const task = tasks.find(t => t.bottleNum == message.bottle_num && !['待运行', '排队中', '已完成', '失败'].includes(t.statusText));
 
         switch (message.type) {
             case 'worker_connected':
@@ -593,8 +609,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (task) {
                     task.statusText = '任务开始';
                     task.statusClass = 'bg-info';
+                    task.startTime = Date.now(); // 记录开始时间
                 }
                 updatePositionStatus('running');
+                startTotalRuntime(); // 启动总计时器
                 break;
             case 'analysis_progress':
                 if (task) {
@@ -609,10 +627,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     task.statusClass = 'bg-success';
                     task.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行';
                     task.runButtonDisabled = false;
+                    task.endTime = Date.now();
+                    if (task.startTime) {
+                        const durationSeconds = Math.round((task.endTime - task.startTime) / 1000);
+                        const minutes = Math.floor(durationSeconds / 60);
+                        const seconds = durationSeconds % 60;
+                        task.duration = `${minutes}分${seconds}秒`;
+                    }
                 }
                 isWorkerBusy = false; // Explicitly unlock the worker
                 updatePositionStatus('complete');
                 runNextTaskInQueue(); // Check for next task
+                stopTotalRuntime(); // Check if we should stop the main timer
                 break;
             case 'analysis_error':
                 if (task) {
@@ -620,10 +646,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     task.statusClass = 'bg-danger';
                     task.runButtonHTML = '<i class="fas fa-redo"></i> 重试';
                     task.runButtonDisabled = false;
+                    task.endTime = Date.now();
+                    if (task.startTime) {
+                        const durationSeconds = Math.round((task.endTime - task.startTime) / 1000);
+                        const minutes = Math.floor(durationSeconds / 60);
+                        const seconds = durationSeconds % 60;
+                        task.duration = `${minutes}分${seconds}秒`;
+                    }
                 }
                 isWorkerBusy = false; // Explicitly unlock the worker
                 updatePositionStatus('error');
                 runNextTaskInQueue(); // Check for next task
+                stopTotalRuntime(); // Check if we should stop the main timer
                 break;
             default:
                 // Handle other message types if necessary
@@ -636,28 +670,27 @@ document.addEventListener('DOMContentLoaded', function () {
             renderTasks();
         }
     };
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
+
     // 面包屑高亮“GCMS”
-    var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
-    if (breadcrumb) {
-        var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
-        var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
-        var target = null;
-        for (var i = 0; i < links.length; i++) {
-            if (links[i].textContent.trim() === 'GCMS') { target = links[i]; break; }
-        }
-        if (target) {
-            links.forEach(function(a){ a.classList.remove('active'); });
-            target.classList.add('active');
-            if (indicator) {
-                indicator.style.width = target.offsetWidth + 'px';
-                indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
+    setTimeout(function() {
+        var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
+        if (breadcrumb) {
+            var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
+            var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
+            var target = null;
+            for (var i = 0; i < links.length; i++) {
+                if (links[i].textContent.trim() === 'GCMS') { target = links[i]; break; }
+            }
+            if (target) {
+                links.forEach(function(a){ a.classList.remove('active'); });
+                target.classList.add('active');
+                if (indicator) {
+                    indicator.style.width = target.offsetWidth + 'px';
+                    indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
+                }
             }
         }
-    }
+    }, 100); // 延迟100毫秒执行，确保元素渲染完成
 
     // 卡片折叠图标旋转
     var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
@@ -675,21 +708,48 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // 运行时间示例计时器（每分钟+1 分）
-    var minutes = 0;
-    var hours = 0;
-    function updateRuntime() {
-        minutes += 1;
-        if (minutes >= 60) { hours += 1; minutes = 0; }
-        var m = minutes < 10 ? '0' + minutes : String(minutes);
-        var hoursEl = document.getElementById('runtimeHours');
-        var minutesEl = document.getElementById('runtimeMinutes');
-        if (hoursEl && minutesEl) {
-            hoursEl.textContent = String(hours);
-            minutesEl.textContent = m;
+    // --- 全局运行时间管理 ---
+
+    function updateTotalRuntimeDisplay() {
+        const startTime = localStorage.getItem('gcmsTotalRuntimeStart');
+        if (!startTime) {
+            document.getElementById('runtimeHours').textContent = '0';
+            document.getElementById('runtimeMinutes').textContent = '00';
+            return;
+        }
+
+        const diff = Date.now() - parseInt(startTime, 10);
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        
+        document.getElementById('runtimeHours').textContent = hours;
+        document.getElementById('runtimeMinutes').textContent = String(minutes).padStart(2, '0');
+    }
+
+    function startTotalRuntime() {
+        if (totalRuntimeInterval) return; // 已经在运行
+
+        if (!localStorage.getItem('gcmsTotalRuntimeStart')) {
+            localStorage.setItem('gcmsTotalRuntimeStart', Date.now());
+        }
+        
+        updateTotalRuntimeDisplay();
+        totalRuntimeInterval = setInterval(updateTotalRuntimeDisplay, 10000); // 每10秒更新一次以减少消耗
+    }
+
+    function stopTotalRuntime() {
+        // 仅当没有其他任务在运行时才停止
+        const isAnyTaskRunning = tasks.some(t => !['待运行', '排队中', '已完成', '失败'].includes(t.statusText));
+        if (!isAnyTaskRunning) {
+            clearInterval(totalRuntimeInterval);
+            totalRuntimeInterval = null;
+            localStorage.removeItem('gcmsTotalRuntimeStart');
+            updateTotalRuntimeDisplay(); // 重置为0
+            addLog('所有任务完成，总运行计时器已停止。', 'success');
         }
     }
-    setInterval(updateRuntime, 60000);
+
+
 });
 </script>
 
