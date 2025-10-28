@@ -19,24 +19,12 @@
                         <label for="messageContent">指令内容 (JSON格式)</label>
                         <textarea class="form-control" id="messageContent" rows="15">
 {
-  "command": "start_experiment",
+  "command": "gtcl_all",
   "payload": {
-    "tube_id": 15,
-    "materials": [
-      {
-        "type": "solid",
-        "location": 15,
-        "amount": 10.0,
-        "mode": "precision",
-        "bottle_height": "15ml"
-      },
-      {
-        "type": "liquid",
-        "location": 11,
-        "amount": 200,
-        "tip_location": 11
-      }
-    ]
+    "solids_list": [10.5, 0, 20.0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "liquids_list": [100, 0, 200, 0, 0, 0, 0, 0, 0, 0],
+    "bottle_15ml_pos": 1,
+    "start_tip_pos": 5
   }
 }
                         </textarea>
