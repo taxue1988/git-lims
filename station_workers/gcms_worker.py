@@ -14,6 +14,13 @@ except ImportError:
     print("警告: 无法导入 GCMS_module，将使用模拟模式")
     GCMS_module = None
 
+# 导入序列管理器
+try:
+    from .sequence_manager import get_sequence_file
+except Exception:
+    # 兼容直接运行
+    from sequence_manager import get_sequence_file
+
 class GcmsWorker:
     def __init__(self, server_url="ws://192.168.58.8:8000/ws/gcms/"):
         self.server_url = server_url
@@ -78,12 +85,24 @@ class GcmsWorker:
             elif command == "get_arm_status":
                 self.handle_get_arm_status()
             elif command.startswith("start_analysis_"):
-                bottle_num = int(command.split("_")[-1])
-                self.handle_start_analysis(bottle_num)
+                parts = command.split("_")
+                # 兼容旧格式: start_analysis_{bottle}
+                if len(parts) == 3:
+                    bottle_num = int(parts[-1])
+                    sequence_index = None
+                elif len(parts) >= 4:
+                    bottle_num = int(parts[-2])
+                    sequence_index = int(parts[-1])
+                else:
+                    self.send_response({'type': 'error', 'message': f"指令格式错误: {command}"})
+                    return
+                self.handle_start_analysis(bottle_num, sequence_index)
             elif command == "move_tower":
                 self.handle_move_tower()
             elif command == "get_instrument_info":
                 self.handle_get_instrument_info()
+            elif command == "get_sequence_list":
+                self.handle_get_sequence_list()
             else:
                 self.send_response({'type': 'error', 'message': f"未知指令: {command}"})
                 
@@ -202,14 +221,14 @@ class GcmsWorker:
             }
             self.send_response(error_info)
     
-    def handle_start_analysis(self, bottle_num):
-        """开始分析指定瓶号的样品"""
+    def handle_start_analysis(self, bottle_num, sequence_index=None):
+        """开始分析指定瓶号的样品，可选指定序列号"""
         try:
             if self.gcms_module:
                 # 在新线程中执行分析，避免阻塞 WebSocket 连接
                 analysis_thread = threading.Thread(
                     target=self.run_analysis,
-                    args=(bottle_num,)
+                    args=(bottle_num, sequence_index)
                 )
                 analysis_thread.daemon = True
                 analysis_thread.start()
@@ -217,6 +236,7 @@ class GcmsWorker:
                 start_info = {
                     "type": "analysis_started",
                     "bottle_num": bottle_num,
+                    "sequence_index": sequence_index,
                     "message": f"开始分析瓶号 {bottle_num} 的样品",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
@@ -225,6 +245,7 @@ class GcmsWorker:
                 error_info = {
                     "type": "analysis_error",
                     "bottle_num": bottle_num,
+                    "sequence_index": sequence_index,
                     "message": "GCMS模块未就绪，无法开始分析。",
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }
@@ -238,61 +259,72 @@ class GcmsWorker:
             }
             self.send_response(error_info)
     
-    def run_analysis(self, bottle_num):
-        """在后台线程中运行分析，并发送详细进度"""
+    def run_analysis(self, bottle_num, sequence_index=None):
+        """在后台线程中运行分析，并发送详细进度。若提供序列号则按映射运行对应序列文件。"""
         def send_progress(stage, message):
             progress_info = {
                 "type": "analysis_progress",
                 "bottle_num": bottle_num,
+                "sequence_index": sequence_index,
                 "stage": stage,
                 "message": message,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             self.send_response(progress_info)
-
+ 
         try:
             self.current_status = "分析中"
             send_progress("任务开始", f"开始分析瓶号 {bottle_num}")
-
+ 
             # 实际的分析流程，分解自 self.gcms_module.start(bottle_num)
             send_progress("设备准备", "移动GCMS塔...")
             self.gcms_module.gc_move_to_tower()
             time.sleep(1) # 模拟操作耗时
-
+ 
             send_progress("机械臂操作", f"机械臂夹取 {bottle_num} 号瓶至GCMS")
             self.gcms_module.kb_to_gcms(bottle_num)
             time.sleep(1)
-
+ 
             send_progress("仪器分析", "GCMS开始执行分析序列...")
-            self.gcms_module.gc_action_conb()
+            if sequence_index is not None:
+                seq_file = get_sequence_file(int(sequence_index))
+                if not seq_file:
+                    raise RuntimeError(f"未找到序列号 {sequence_index} 对应的序列文件")
+                # 调用底层仪器方法直接按文件启动
+                self.gcms_module.instrument_control.start_data_acquisition(seq_file, 0, True)
+            else:
+                # 兼容旧逻辑：调用预设序列
+                self.gcms_module.gc_action_conb()
             time.sleep(5)
-
+ 
             send_progress("等待分析完成", "GCMS运行中，请稍候...")
             while self.gcms_module.instrument_control.get_run_mode() != '"NotRun"':
                 time.sleep(10)
-            
+             
             send_progress("设备复位", "分析完成，准备复位设备")
             time.sleep(5)
             self.gcms_module.gc_move_to_tower()
             time.sleep(2)
-
+ 
             send_progress("机械臂操作", f"机械臂取回 {bottle_num} 号瓶")
             self.gcms_module.gc_drop(bottle_num)
-            
+             
             # 发送分析完成通知
             complete_info = {
                 "type": "analysis_complete",
                 "bottle_num": bottle_num,
+                "sequence_index": sequence_index,
                 "message": f"瓶号 {bottle_num} 分析完成",
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             self.send_response(complete_info)
             self.current_status = "就绪"
-
+ 
         except Exception as e:
             error_info = {
                 "type": "analysis_error",
                 "bottle_num": bottle_num,
+                "sequence_index": sequence_index,
                 "message": f"分析过程中出错: {str(e)}",
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -359,6 +391,35 @@ class GcmsWorker:
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             self.send_response(error_info)
+
+    def handle_get_sequence_list(self):
+        """获取序列清单"""
+        try:
+            # 构造 items 数组 [{index, name}, ...]
+            items = []
+            # 读取映射
+            mapping = {}
+            try:
+                # 内部加载，若失败则为空
+                from .sequence_manager import load_sequence_map  # 再次局部导入以避免循环
+            except Exception:
+                from sequence_manager import load_sequence_map
+            mapping = load_sequence_map() or {}
+            for k in sorted(mapping.keys()):
+                items.append({"index": k, "name": mapping[k]})
+
+            payload = {
+                "type": "sequence_list",
+                "items": items,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            self.send_response(payload)
+        except Exception as e:
+            self.send_response({
+                "type": "error",
+                "message": f"获取序列清单失败: {str(e)}",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            })
     
     def send_response(self, message):
         """发送响应消息到服务器"""
