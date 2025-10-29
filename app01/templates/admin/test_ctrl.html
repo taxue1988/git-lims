@@ -1,6 +1,6 @@
 {% extends 'admin_base.html' %}
 
-{% block title %}测试{% endblock %}
+{% block title %}定向指令控制台{% endblock %}
 
 {% block main_content %}
 <div class="container-fluid">
@@ -8,15 +8,33 @@
         <div class="col-12">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">测试控制面板</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">定向指令控制台</h6>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex justify-content-center mb-4">
+                    <div class="form-group">
+                        <label for="targetClientId">目标客户端ID (设备ID)</label>
+                        <input type="text" class="form-control" id="targetClientId" value="gypl_station_1">
+                    </div>
+                    <div class="form-group">
+                        <label for="messageContent">指令内容 (JSON格式)</label>
+                        <textarea class="form-control" id="messageContent" rows="15">
+{
+  "command": "gtcl_all",
+  "payload": {
+    "solids_list": [10.5, 0, 20.0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "liquids_list": [100, 0, 200, 0, 0, 0, 0, 0, 0, 0],
+    "bottle_15ml_pos": 1,
+    "start_tip_pos": 5
+  }
+}
+                        </textarea>
+                    </div>
+                    <div class="d-flex justify-content-center mt-4">
                         <button id="sendCommandBtn" class="btn btn-primary btn-lg">
-                            <i class="fas fa-paper-plane me-2"></i>发送指令
+                            <i class="fas fa-paper-plane me-2"></i>发送定向指令
                         </button>
                     </div>
-                    <div id="commandResult" class="alert alert-info d-none" role="alert">
+                    <div id="commandResult" class="alert alert-info d-none mt-4" role="alert">
                         指令已发送！
                     </div>
                 </div>
@@ -29,32 +47,69 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        const targetClientIdInput = document.getElementById('targetClientId');
+        const messageContentInput = document.getElementById('messageContent');
         const sendCommandBtn = document.getElementById('sendCommandBtn');
         const commandResult = document.getElementById('commandResult');
 
         const chatSocket = new WebSocket(
             'ws://'
             + window.location.host
-            + '/ws/test/'
+            + '/ws/test/web_client/' // 网页控制台的固定ID
         );
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            console.log('Message from server: ', data);
+            // 显示服务器的直接回复
+            commandResult.classList.remove('d-none');
+            commandResult.classList.remove('alert-success');
+            commandResult.classList.add('alert-info');
+            commandResult.textContent = '收到服务器回执: ' + data.message;
+        };
 
         chatSocket.onclose = function(e) {
             console.error('Chat socket closed unexpectedly');
+            commandResult.textContent = '错误: 与服务器的连接已断开。';
+            commandResult.classList.remove('d-none');
+            commandResult.classList.add('alert-danger');
         };
 
         sendCommandBtn.addEventListener('click', function() {
-            chatSocket.send(JSON.stringify({
-                'message': 'hello'
-            }));
+            const targetId = targetClientIdInput.value.trim();
+            const messageContent = messageContentInput.value.trim();
 
-            // Update UI
+            if (!targetId || !messageContent) {
+                alert('目标客户端ID和指令内容不能为空！');
+                return;
+            }
+
+            // 验证消息内容是否为有效的JSON
+            let messagePayload;
+            try {
+                messagePayload = JSON.parse(messageContent);
+            } catch (e) {
+                alert('指令内容不是有效的JSON格式！请检查语法。\n错误详情: ' + e.message);
+                return;
+            }
+
+            // 构造 'send_to_client' 指令，将解析后的JSON作为消息内容
+            const command = {
+                'command': 'send_to_client',
+                'target_client_id': targetId,
+                'message': messagePayload
+            };
+
+            chatSocket.send(JSON.stringify(command));
+
+            // 更新UI以提供反馈
             commandResult.classList.remove('d-none');
             commandResult.classList.add('alert-success');
-            commandResult.textContent = '指令已发送！';
+            commandResult.textContent = `已向服务器发送指令，目标: ${targetId}`;
 
             setTimeout(function() {
                 commandResult.classList.add('d-none');
-            }, 3000);
+            }, 5000);
         });
     });
 </script>
