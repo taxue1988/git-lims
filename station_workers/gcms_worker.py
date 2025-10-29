@@ -4,6 +4,8 @@ import threading
 import time
 import sys
 import os
+import shutil
+from datetime import datetime
 
 # 添加项目根目录到 Python 路径，以便导入 GCMS 模块
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '模块开发运行代码', 'GCMS模块'))
@@ -17,9 +19,12 @@ except ImportError:
 # 导入序列管理器
 try:
     from .sequence_manager import get_sequence_file
+    from .sequence_manager import get_result_csv_path
 except Exception:
     # 兼容直接运行
     from sequence_manager import get_sequence_file
+    from sequence_manager import get_result_csv_path
+import csv
 
 class GcmsWorker:
     def __init__(self, server_url="ws://192.168.58.8:8000/ws/gcms/"):
@@ -103,6 +108,28 @@ class GcmsWorker:
                 self.handle_get_instrument_info()
             elif command == "get_sequence_list":
                 self.handle_get_sequence_list()
+            elif command.startswith("get_result_"):
+                # 兼容 archive_id 中包含下划线：格式 get_result_{bottle}_{sequence}_{archiveId...}
+                payload = command[len("get_result_"):]
+                bottle_num = None
+                sequence_index = None
+                archive_id = None
+                try:
+                    parts = payload.split("_")
+                    if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+                        bottle_num = int(parts[0])
+                        sequence_index = int(parts[1])
+                        archive_id = "_".join(parts[2:]) if len(parts) > 2 else None
+                    elif len(parts) >= 1 and parts[0].isdigit():
+                        # 仅提供了 sequence（兼容旧格式 get_result_{sequence}）
+                        sequence_index = int(parts[0])
+                        archive_id = "_".join(parts[1:]) if len(parts) > 1 else None
+                    else:
+                        raise ValueError("格式不匹配")
+                except Exception:
+                    self.send_response({'type': 'error', 'message': f"指令格式错误: {command}"})
+                    return
+                self.handle_get_result(bottle_num, sequence_index, archive_id)
             else:
                 self.send_response({'type': 'error', 'message': f"未知指令: {command}"})
                 
@@ -309,11 +336,30 @@ class GcmsWorker:
             send_progress("机械臂操作", f"机械臂取回 {bottle_num} 号瓶")
             self.gcms_module.gc_drop(bottle_num)
              
+            # 等待结果文件生成并归档（最多等待 ~60s）
+            archive_id = None
+            try:
+                from .sequence_manager import get_result_csv_path as _find_result
+            except Exception:
+                from sequence_manager import get_result_csv_path as _find_result
+
+            max_waits = 30
+            for _ in range(max_waits):
+                path_try = _find_result(int(sequence_index)) if sequence_index is not None else None
+                if path_try and os.path.isfile(path_try):
+                    try:
+                        archive_id = self.archive_result(sequence_index)
+                    except Exception:
+                        archive_id = None
+                    break
+                time.sleep(2)
+
             # 发送分析完成通知
             complete_info = {
                 "type": "analysis_complete",
                 "bottle_num": bottle_num,
                 "sequence_index": sequence_index,
+                "archive_id": archive_id,
                 "message": f"瓶号 {bottle_num} 分析完成",
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -420,6 +466,113 @@ class GcmsWorker:
                 "message": f"获取序列清单失败: {str(e)}",
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             })
+
+    def handle_get_result(self, bottle_num, sequence_index, archive_id=None):
+        """读取对应序列的 tic_front.csv（或归档文件），返回裁剪后的 x/y 数据。"""
+        try:
+            path = None
+            if archive_id:
+                path = self.get_archive_file_path(archive_id)
+            if not path:
+                path = get_result_csv_path(int(sequence_index))
+            if not path:
+                # 返回详细提示，便于排查：包含用于解析的参数与基础路径（不含敏感数据名）
+                self.send_response({
+                    'type': 'analysis_result',
+                    'bottle_num': bottle_num,
+                    'sequence_index': sequence_index,
+                    'available': False,
+                    'message': '未找到结果文件 tic_front.csv',
+                    'debug': {
+                        'archive_id': archive_id,
+                        'note': '按参数表解析 data_path + data_name(.D)/tic_front.csv 与前缀匹配回退均未命中'
+                    }
+                })
+                return
+
+            x_vals = []
+            y_vals = []
+            try:
+                with open(path, 'r', newline='') as f:
+                    reader = csv.reader(f)
+                    # 跳过表头（若有）
+                    first = next(reader, None)
+                    # 如果首行两列均为数字，则视为数据行，否则跳过
+                    if first is not None:
+                        try:
+                            _x0 = float(first[0])
+                            _y0 = float(first[1])
+                            x_vals.append(_x0)
+                            y_vals.append(_y0)
+                        except Exception:
+                            pass
+                    for row in reader:
+                        if len(row) < 2:
+                            continue
+                        try:
+                            x = float(row[0])
+                            y = float(row[1])
+                            x_vals.append(x)
+                            y_vals.append(y)
+                        except Exception:
+                            continue
+            except Exception as e:
+                self.send_response({
+                    'type': 'analysis_result',
+                    'bottle_num': bottle_num,
+                    'sequence_index': sequence_index,
+                    'available': False,
+                    'message': f'读取CSV失败: {str(e)}'
+                })
+                return
+
+            # 限制数据量，简单抽样（如超过 8000 点则等距采样至 2000 点）
+            n = len(x_vals)
+            if n > 8000:
+                target = 2000
+                step = max(1, n // target)
+                x_vals = x_vals[::step]
+                y_vals = y_vals[::step]
+
+            self.send_response({
+                'type': 'analysis_result',
+                'bottle_num': bottle_num,
+                'sequence_index': sequence_index,
+                'available': True,
+                'series': {'x': x_vals, 'y': y_vals},
+                'archive_id': archive_id,
+                'path': path
+            })
+        except Exception as e:
+            self.send_response({
+                'type': 'error',
+                'message': f'获取结果失败: {str(e)}'
+            })
+
+    def _ensure_archive_dir(self):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        archive_dir = os.path.join(base_dir, 'results_archive')
+        os.makedirs(archive_dir, exist_ok=True)
+        return archive_dir
+
+    def archive_result(self, sequence_index):
+        """复制当前结果文件到归档目录，返回 archive_id（时间戳+序列）。"""
+        src = get_result_csv_path(int(sequence_index))
+        if not src or not os.path.isfile(src):
+            return None
+        archive_dir = self._ensure_archive_dir()
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        archive_id = f"{ts}_seq{sequence_index}"
+        dst = os.path.join(archive_dir, f"{archive_id}.csv")
+        shutil.copy2(src, dst)
+        return archive_id
+
+    def get_archive_file_path(self, archive_id):
+        if not archive_id:
+            return None
+        archive_dir = self._ensure_archive_dir()
+        candidate = os.path.join(archive_dir, f"{archive_id}.csv")
+        return candidate if os.path.isfile(candidate) else None
     
     def send_response(self, message):
         """发送响应消息到服务器"""

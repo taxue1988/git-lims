@@ -280,10 +280,36 @@
     </div>
 </div>
 
+<!-- 查看结果 Modal -->
+<div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header position-relative">
+                <h5 class="modal-title" id="resultModalLabel">分析结果</h5>
+                <div class="position-absolute start-50 translate-middle-x d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-primary btn-sm" id="downloadPngBtn">
+                        <i class="fas fa-download"></i> 导出 PNG
+                    </button>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resultLoading" class="text-muted">正在加载数据，请稍候...</div>
+                <canvas id="resultChart" style="width:100%; height:420px; display:none;"></canvas>
+                <div id="resultMessage" class="alert alert-warning mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+    </div>
+
 
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // --- 全局变量定义 ---
@@ -335,6 +361,8 @@ document.addEventListener('DOMContentLoaded', function () {
         // 请求初始状态
         sendMessage('get_status');
         sendMessage('get_arm_status');
+        // 预取序列清单，避免序列文件名为空
+        sendMessage('get_sequence_list');
     };
 
     socket.onclose = function(e) {
@@ -482,6 +510,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         <button class="btn btn-success btn-sm run-btn" onclick="handleRunTask('${task.id}')" ${task.runButtonDisabled ? 'disabled' : ''}>
                             ${task.runButtonHTML}
                         </button>
+                        <button id="viewResultBtn-${task.id}" class="btn btn-info btn-sm ms-1" onclick="handleViewResult('${task.id}')" ${task.statusText === '已完成' ? '' : 'disabled'}>
+                            <i class="fas fa-chart-line"></i> 查看结果
+                        </button>
                         <button class="btn btn-danger btn-sm delete-btn" onclick="handleDeleteTask('${task.id}')">
                             <i class="fas fa-trash"></i> 删除
                         </button>
@@ -601,6 +632,11 @@ document.addEventListener('DOMContentLoaded', function () {
         saveTasks();
         renderTasks();
 
+        // 若本地尚无序列清单或缺少该序列项，则请求一次以便回填
+        if (!sequenceMap || !sequenceMap[String(sequenceIndex)]) {
+            sendMessage('get_sequence_list');
+        }
+
         createTaskForm.reset();
         createTaskModal.hide();
     });
@@ -617,6 +653,147 @@ document.addEventListener('DOMContentLoaded', function () {
         saveTasks();
         renderTasks();
         runNextTaskInQueue();
+    }
+
+    // 查看结果按钮
+    const resultModalEl = document.getElementById('resultModal');
+    const resultModal = new bootstrap.Modal(resultModalEl);
+    const resultChartCanvas = document.getElementById('resultChart');
+    const resultLoading = document.getElementById('resultLoading');
+    const resultMessage = document.getElementById('resultMessage');
+    let resultChartInstance = null;
+    // 结果缓存：内存 + localStorage
+    const resultCache = {};
+    let activeResultTaskId = null;
+    const downloadPngBtn = document.getElementById('downloadPngBtn');
+
+    function showResultLoading(text) {
+        resultLoading.style.display = '';
+        resultLoading.textContent = text || '正在加载数据，请稍候...';
+        resultChartCanvas.style.display = 'none';
+        resultMessage.style.display = 'none';
+    }
+    function showResultMessage(text, level='warning') {
+        resultLoading.style.display = 'none';
+        resultChartCanvas.style.display = 'none';
+        resultMessage.style.display = '';
+        resultMessage.className = `alert alert-${level} mt-2`;
+        resultMessage.textContent = text || '无可显示的数据';
+    }
+    function renderResultChart(xArr, yArr, titleText) {
+        resultLoading.style.display = 'none';
+        resultMessage.style.display = 'none';
+        resultChartCanvas.style.display = '';
+        const ctx = resultChartCanvas.getContext('2d');
+        if (resultChartInstance) {
+            resultChartInstance.destroy();
+        }
+        resultChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: xArr,
+                datasets: [{
+                    label: 'GCMS色谱',
+                    data: yArr,
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    borderWidth: 1,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    title: { display: !!titleText, text: titleText || '' },
+                    tooltip: {
+                        callbacks: {
+                            title: function(items){ return items && items.length ? `时间: ${items[0].label}` : ''; },
+                            label: function(){ return ''; }
+                        }
+                    }
+                },
+                scales: {
+                    x: { title: { display: true, text: '时间' }, ticks: { autoSkip: true, maxTicksLimit: 12 } },
+                    y: { title: { display: true, text: '强度' }, beginAtZero: false, type: 'linear' }
+                }
+            }
+        });
+    }
+
+    function setViewResultButtonState(taskId, state, messageText){
+        const btn = document.getElementById(`viewResultBtn-${taskId}`);
+        if (!btn) return;
+        switch(state){
+            case 'loading':
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载中';
+                break;
+            case 'noresult':
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-exclamation-circle"></i> 无结果';
+                break;
+            case 'error':
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-times-circle"></i> 加载失败';
+                break;
+            default:
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-chart-line"></i> 查看结果';
+        }
+        if (messageText) btn.setAttribute('title', messageText);
+    }
+
+    function saveResultToCache(taskId, series){
+        try{
+            resultCache[taskId] = series;
+            localStorage.setItem(`gcmsResult_${taskId}`, JSON.stringify(series));
+        }catch(e){ }
+    }
+    function loadResultFromCache(taskId){
+        if (resultCache[taskId]) return resultCache[taskId];
+        try{
+            const s = localStorage.getItem(`gcmsResult_${taskId}`);
+            if (s){
+                const series = JSON.parse(s);
+                resultCache[taskId] = series;
+                return series;
+            }
+        }catch(e){ }
+        return null;
+    }
+
+    window.handleViewResult = function(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        resultModal.show();
+        activeResultTaskId = taskId;
+        const cached = loadResultFromCache(taskId);
+        if (cached && Array.isArray(cached.x) && Array.isArray(cached.y)){
+            renderResultChart(cached.x, cached.y, `序列 ${task.sequenceIndex} 结果（缓存）`);
+            setViewResultButtonState(taskId, '');
+            return;
+        }
+        showResultLoading('正在请求结果数据...');
+        setViewResultButtonState(taskId, 'loading');
+        if (task.archiveId){
+            sendMessage(`get_result_${task.bottleNum}_${task.sequenceIndex}_${task.archiveId}`);
+        } else {
+            sendMessage(`get_result_${task.bottleNum}_${task.sequenceIndex}`);
+        }
+    }
+
+    // 导出PNG
+    if (downloadPngBtn){
+        downloadPngBtn.addEventListener('click', function(){
+            if (!resultChartInstance) return;
+            const link = document.createElement('a');
+            link.href = resultChartInstance.toBase64Image();
+            link.download = `gcms_result_${Date.now()}.png`;
+            link.click();
+        });
     }
 
     window.handleDeleteTask = function(taskId) {
@@ -695,6 +872,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     task.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行';
                     task.runButtonDisabled = false;
                     task.endTime = Date.now();
+                    if (message.archive_id){
+                        task.archiveId = message.archive_id;
+                    }
                     if (task.startTime) {
                         const durationSeconds = Math.round((task.endTime - task.startTime) / 1000);
                         const minutes = Math.floor(durationSeconds / 60);
@@ -750,6 +930,29 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                     saveTasks();
                     renderTasks();
+                }
+                break;
+            case 'analysis_result':
+                if (!message.available) {
+                    showResultMessage(message.message || '未找到结果文件');
+                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'noresult', message.message);
+                } else if (message.series && Array.isArray(message.series.x) && Array.isArray(message.series.y)) {
+                    const x = message.series.x;
+                    const y = message.series.y;
+                    renderResultChart(x, y, `序列 ${message.sequence_index} 结果`);
+                    if (activeResultTaskId) {
+                        saveResultToCache(activeResultTaskId, {x, y});
+                        setViewResultButtonState(activeResultTaskId, '');
+                        // 若返回了归档ID，补充保存到任务，增强刷新后的可追溯
+                        const t = tasks.find(tt => tt.id === activeResultTaskId);
+                        if (t && message.archive_id) {
+                            t.archiveId = message.archive_id;
+                            saveTasks();
+                        }
+                    }
+                } else {
+                    showResultMessage('结果数据格式不正确');
+                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'error');
                 }
                 break;
             default:
