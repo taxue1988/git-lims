@@ -18,15 +18,22 @@
                     <div class="form-group">
                         <label for="messageContent">指令内容 (JSON格式)</label>
                         <textarea class="form-control" id="messageContent" rows="15">
-{
-  "command": "gtcl_all",
-  "payload": {
-    "solids_list": [10.5, 0, 20.0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    "liquids_list": [100, 0, 200, 0, 0, 0, 0, 0, 0, 0],
-    "bottle_15ml_pos": 1,
-    "start_tip_pos": 5
-  }
-}
+                            {
+                                "command": "gtcl_all",
+                                "payload": {
+                                  "solids_list": [10.5, 0, 20.0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                                  "liquids_list": [100, 0, 200, 0, 0, 0, 0, 0, 0, 0],
+                                  "bottle_15ml_pos": 1,
+                                  "start_tip_pos": [
+                                    0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+                                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+                                  ]
+                                }
+                              }
                         </textarea>
                     </div>
                     <div class="d-flex justify-content-center mt-4">
@@ -39,6 +46,16 @@
                     </div>
                 </div>
             </div>
+
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-success">实验结果 (重量列表)</h6>
+                </div>
+                <div class="card-body">
+                    <pre id="experimentResult" style="white-space: pre-wrap; word-wrap: break-word;">尚未收到实验结果...</pre>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
@@ -51,6 +68,7 @@
         const messageContentInput = document.getElementById('messageContent');
         const sendCommandBtn = document.getElementById('sendCommandBtn');
         const commandResult = document.getElementById('commandResult');
+        const experimentResult = document.getElementById('experimentResult'); // 获取新的结果显示区域
 
         const chatSocket = new WebSocket(
             'ws://'
@@ -61,11 +79,28 @@
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
             console.log('Message from server: ', data);
-            // 显示服务器的直接回复
-            commandResult.classList.remove('d-none');
-            commandResult.classList.remove('alert-success');
-            commandResult.classList.add('alert-info');
-            commandResult.textContent = '收到服务器回执: ' + data.message;
+
+            // 检查消息类型
+            if (data.command === 'gtcl_all_result' && data.status === 'success') {
+                // 这是从 gypl_station_1 返回的实验结果
+                const resultPayload = data.payload;
+                // 将结果格式化为易于阅读的 JSON 字符串并显示
+                experimentResult.textContent = '实验成功！收到结果：\n' + JSON.stringify(resultPayload, null, 2);
+            } else if (data.command === 'experiment_error') {
+                // 处理实验失败的情况
+                experimentResult.textContent = '实验失败！错误信息：\n' + JSON.stringify(data.payload, null, 2);
+            } else if (data.command === 'real_time_weights') {
+                // 这是从 gypl_station_1 返回的实时重量数据
+                const realTimeWeights = data.payload.real_time_weights;
+                // 将结果格式化为易于阅读的 JSON 字符串并显示
+                experimentResult.textContent = '收到实时重量数据：\n' + JSON.stringify(realTimeWeights, null, 2);
+            } else {
+                // 这是服务器的直接回执，例如 "指令已转发"
+                commandResult.classList.remove('d-none');
+                commandResult.classList.remove('alert-success');
+                commandResult.classList.add('alert-info');
+                commandResult.textContent = '收到服务器回执: ' + data.message;
+            }
         };
 
         chatSocket.onclose = function(e) {
