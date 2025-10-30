@@ -29,9 +29,24 @@ def _parse_line_to_kv(line: str) -> Optional[tuple]:
 
 
 def load_sequence_map() -> Dict[int, str]:
+    """返回 {序号: 序列文件名} 的映射。
+    优先从 CSV 参数表生成（唯一来源）；若 CSV 不可用或为空，回退到旧的 TXT。
+    """
     global _sequence_map
     if _sequence_map:
         return _sequence_map
+
+    # 1) 优先从 CSV 参数表加载
+    params = load_sequence_params_map()
+    if params:
+        mapping: Dict[int, str] = {}
+        for idx, triple in params.items():
+            seq_file = triple[0]
+            mapping[idx] = seq_file
+        _sequence_map = mapping
+        return _sequence_map
+
+    # 2) 回退：从旧 TXT 解析（兼容保留）
     path = os.path.normpath(_SEQUENCE_LIST_PATH)
     if not os.path.isfile(path):
         return {}
@@ -48,6 +63,9 @@ def load_sequence_map() -> Dict[int, str]:
 
 
 def get_sequence_file(index: int) -> Optional[str]:
+    """返回序列号对应的序列文件名（来自 CSV 参数表）。
+    若 CSV 缺失则回退至 TXT 结果。
+    """
     mapping = load_sequence_map()
     return mapping.get(index)
 
