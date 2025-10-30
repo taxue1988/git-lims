@@ -914,12 +914,15 @@
                     <div class="card-body">
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
-                                <label for="sequence-selector" class="form-label">选择预设序列</label>
+                                <label for="sequence-selector" class="form-label">选择预设序列号</label>
                                 <select class="form-select" id="sequence-selector">
-                                    <option value="">请选择序列</option>
-                                    <option value="test-20240705">test-20240705.sequence</option>
-                                    <option value="test-20240708">test-20240708.sequence</option>
+                                    <option value="">请选择序列号</option>
+                                    <!-- Options will be populated by JavaScript -->
                                 </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="sequence-filename" class="form-label">序列文件名称</label>
+                                <input type="text" class="form-control" id="sequence-filename" readonly>
                             </div>
                         </div>
 
@@ -973,6 +976,152 @@
     <script src="{% static 'js/jquery-3.7.1.js' %}"></script>
     <script src="{% static 'js/user-common.js' %}"></script>
     <script>$(document).ready(function () {
+    // GCMS序列数据
+    const gcmsSequenceData = [
+        {
+            id: "0",
+            fileName: "2024 Dec 04 1403_default.sequence.xml",
+            vialNumber: "16",
+            runTime: "5.25",
+            setTemp: "180",
+            rate: "40",
+            holdTime: "1",
+            splitRatio: "200:1",
+            splitFlow: "240",
+            solventDelay: "4.2",
+            methodFile: "demo.m",
+            dataName: "Test",
+            dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20241204"
+        },
+        {
+            id: "1",
+            fileName: "2024 Nov 08 1849_default.sequence.xml",
+            vialNumber: "16",
+            runTime: "5.25",
+            setTemp: "120",
+            rate: "40",
+            holdTime: "0.5",
+            splitRatio: "5:1",
+            splitFlow: "7.5",
+            solventDelay: "3.3",
+            methodFile: "自动测试.m",
+            dataName: "JC",
+            dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20241108"
+        },
+        {
+            id: "2",
+            fileName: "2024 Oct 16 1117_default.sequence.xml",
+            vialNumber: "16",
+            runTime: "5.25",
+            setTemp: "180",
+            rate: "40",
+            holdTime: "1",
+            splitRatio: "10:1",
+            splitFlow: "12",
+            solventDelay: "4.2",
+            methodFile: "new1016.m",
+            dataName: "28LBEA",
+            dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20241016"
+        },
+        {
+            id: "3",
+            fileName: "2025 Oct 30 1428_default.sequence.xml",
+            vialNumber: "16",
+            runTime: "24.25",
+            setTemp: "180",
+            rate: "40",
+            holdTime: "20",
+            splitRatio: "100:1",
+    splitFlow: "120",
+            solventDelay: "4.2",
+            methodFile: "20251013.m",
+            dataName: "Sample",
+            dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20251030"
+        }
+    ];
+
+    function initGcmsSequences() {
+        const selector = $('#sequence-selector');
+        selector.html('<option value="">请选择序列号</option>'); // 重置
+        gcmsSequenceData.forEach(seq => {
+            selector.append(`<option value="${seq.id}">${seq.id}</option>`);
+        });
+    }
+
+    initGcmsSequences();
+
+    $('#sequence-selector').on('change', function () {
+        const sequenceId = $(this).val();
+        const sequence = gcmsSequenceData.find(s => s.id === sequenceId);
+
+        if (sequence) {
+            $('#sequence-filename').val(sequence.fileName);
+
+            const details = `
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr><td class="fw-bold">样品瓶号</td><td>${sequence.vialNumber}</td></tr>
+                        <tr><td class="fw-bold">运行时间 (min)</td><td>${sequence.runTime}</td></tr>
+                        <tr><td class="fw-bold">设定升温温度 (°C)</td><td>${sequence.setTemp}</td></tr>
+                        <tr><td class="fw-bold">速率 (°C/min)</td><td>${sequence.rate}</td></tr>
+                        <tr><td class="fw-bold">保持时间 (min)</td><td>${sequence.holdTime}</td></tr>
+                        <tr><td class="fw-bold">分流比</td><td>${sequence.splitRatio}</td></tr>
+                        <tr><td class="fw-bold">分流流量 (mL/min)</td><td>${sequence.splitFlow}</td></tr>
+                        <tr><td class="fw-bold">溶剂延迟 (min)</td><td>${sequence.solventDelay}</td></tr>
+                        <tr><td class="fw-bold">方法文件</td><td>${sequence.methodFile}</td></tr>
+                        <tr><td class="fw-bold">数据名称</td><td>${sequence.dataName}</td></tr>
+                        <tr><td class="fw-bold">数据存储路径</td><td>${sequence.dataPath}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            `;
+            $('#sequence-details-content').html(details);
+            $('#sequence-details').show();
+        } else {
+            $('#sequence-filename').val('');
+            $('#sequence-details').hide();
+        }
+    });
+
+    // 在 GCMS 工站启用/禁用逻辑中，确保详情在禁用时隐藏
+    $('#gcms-station-enable').on('change', function () {
+        if ($(this).is(':checked')) {
+            $('#gcms-sequence-card').show();
+        } else {
+            $('#gcms-sequence-card').hide();
+            $('#sequence-details').hide(); // 确保这里隐藏详情
+        }
+    });
+
+    // 在编辑模式回填数据时
+    // 找到 `if (task.stations && task.stations.gcms && task.stations.gcms.enabled)`
+    // 将 `$('#sequence-selector').val(gp.sequence || '');` 修改为：
+    // `$('#sequence-selector').val(gp.sequenceId || '');`
+
+    // 在提交任务的逻辑中
+    // 找到 `const gcmsParams = gcmsEnabled ? { sequence: ... } : null;`
+    // 将其修改为：
+    // `const gcmsParams = gcmsEnabled ? { sequenceId: $('#sequence-selector').val() || null } : null;`
+
+    // 在生成摘要的逻辑中
+    // 找到 `const gcmsHtml = ...`
+    // 将其修改为：
+    /*
+    const gcmsHtml = task.stations.gcms.enabled && gcmsParams && gcmsParams.sequenceId ? (() => {
+        const seq = gcmsSequenceData.find(s => s.id === gcmsParams.sequenceId);
+        if (!seq) return '<div class="mb-3">序列信息未找到</div>';
+        return `
+            <div class="mb-3">
+                <ul class="list-group">
+                    <li class="list-group-item"><strong>序列号：</strong>${seq.id}</li>
+                    <li class="list-group-item"><strong>序列文件：</strong>${seq.fileName}</li>
+                    <li class="list-group-item"><strong>数据名称：</strong>${seq.dataName}</li>
+                </ul>
+            </div>
+        `;
+    })() : '';
+    */
             // 侧边栏导航切换功能
             $('.nav-link').on('click', function (e) {
                 e.preventDefault();
@@ -1465,116 +1614,6 @@
             }
 
             // 序列选择功能
-            $('#sequence-selector').on('change', function () {
-                const sequence = $(this).val();
-                if (sequence) {
-                    let details = '';
-
-                    // 根据选择的序列显示详细信息
-                    if (sequence === 'test-20240705') {
-                        details = `                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <tbody>
-                                <tr>
-                                    <td class="fw-bold">样品数量</td>
-                                    <td>1</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">运行时间</td>
-                                    <td>5.375min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">设定升温温度</td>
-                                    <td>250度</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">升温速率</td>
-                                    <td>40度/min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">保持时间</td>
-                                    <td>0.5min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">分流比</td>
-                                    <td>不分流</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">分流流量</td>
-                                    <td>0mL/min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">方法文件</td>
-                                    <td>test-fid.m</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">数据名称</td>
-                                    <td>test001</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">数据存储路径</td>
-                                    <td>D:\\20240705-FID</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                    } else if (sequence === 'test-20240708') {
-                        details = `                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <tbody>
-                                <tr>
-                                    <td class="fw-bold">样品数量</td>
-                                    <td>7</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">运行时间</td>
-                                    <td>5.375min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">设定升温温度</td>
-                                    <td>250度</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">升温速率</td>
-                                    <td>40度/min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">保持时间</td>
-                                    <td>0.5min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">分流比</td>
-                                    <td>不分流</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">分流流量</td>
-                                    <td>0mL/min</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">方法文件</td>
-                                    <td>test-fid.m</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">数据名称</td>
-                                    <td>测试</td>
-                                </tr>
-                                <tr>
-                                    <td class="fw-bold">数据存储路径</td>
-                                    <td>D:\\20240708</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                    }
-
-                    $('#sequence-details-content').html(details);
-                    $('#sequence-details').show();
-                } else {
-                    $('#sequence-details').hide();
-                }
-            });
 
             // 页面初始化
             // 默认隐藏所有内容区域，显示"实验信息"；如为编辑态则回填数据
