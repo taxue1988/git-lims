@@ -351,7 +351,8 @@ document.addEventListener('DOMContentLoaded', function () {
         logContainer.scrollTop = logContainer.scrollHeight;
     }
 
-    const socket = new WebSocket('ws://' + window.location.host + '/ws/gcms/');
+    const wsProto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const socket = new WebSocket(wsProto + window.location.host + '/ws/gcms/');
 
     socket.onopen = function(e) {
         addLog('成功连接到 WebSocket 服务器', 'success');
