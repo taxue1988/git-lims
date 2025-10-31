@@ -27,8 +27,13 @@ except Exception:
 import csv
 
 class GcmsWorker:
-    def __init__(self, server_url="ws://192.168.58.8:8000/ws/gcms/"):
-        self.server_url = server_url
+    def __init__(self, server_url=None):
+        # 优先级：入参 > 环境变量 GCMS_SERVER_URL > 默认公网地址（非TLS）
+        self.server_url = (
+            server_url
+            or os.environ.get("GCMS_SERVER_URL")
+            or "ws://62.234.51.178/ws/gcms/"
+        )
         self.ws = None
         self.gcms_module = None
         self.is_connected = False
@@ -628,8 +633,23 @@ class GcmsWorker:
         self.ws.run_forever()
 
 if __name__ == "__main__":
-    # 创建并启动 GCMS Worker
-    worker = GcmsWorker()
+    # 允许通过命令行参数指定服务器地址：--server-url 或 -s
+    # 例如：python gcms_worker.py -s ws://62.234.51.178/ws/gcms/
+    server_arg = None
+    try:
+        if "-s" in sys.argv:
+            idx = sys.argv.index("-s")
+            if idx + 1 < len(sys.argv):
+                server_arg = sys.argv[idx + 1]
+        elif "--server-url" in sys.argv:
+            idx = sys.argv.index("--server-url")
+            if idx + 1 < len(sys.argv):
+                server_arg = sys.argv[idx + 1]
+    except Exception:
+        server_arg = None
+
+    # 创建并启动 GCMS Worker（可被环境变量 GCMS_SERVER_URL 或命令行参数覆盖）
+    worker = GcmsWorker(server_url=server_arg)
     
     try:
         worker.start()
