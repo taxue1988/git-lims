@@ -623,8 +623,84 @@
                 </ul>
             ` : '';
 
+            // GCMS序列数据（与task_edit.html保持一致）
+            const gcmsSequenceData = [
+                {
+                    id: "0",
+                    fileName: "2024 Dec 04 1403_default.sequence.xml",
+                    vialNumber: "16",
+                    runTime: "5.25",
+                    setTemp: "180",
+                    rate: "40",
+                    holdTime: "1",
+                    splitRatio: "200:1",
+                    splitFlow: "240",
+                    solventDelay: "4.2",
+                    methodFile: "demo.m",
+                    dataName: "Test",
+                    dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20241204"
+                },
+                {
+                    id: "1",
+                    fileName: "2024 Nov 08 1849_default.sequence.xml",
+                    vialNumber: "16",
+                    runTime: "5.25",
+                    setTemp: "120",
+                    rate: "40",
+                    holdTime: "0.5",
+                    splitRatio: "5:1",
+                    splitFlow: "7.5",
+                    solventDelay: "3.3",
+                    methodFile: "自动测试.m",
+                    dataName: "JC",
+                    dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20241108"
+                },
+                {
+                    id: "2",
+                    fileName: "2024 Oct 16 1117_default.sequence.xml",
+                    vialNumber: "16",
+                    runTime: "5.25",
+                    setTemp: "180",
+                    rate: "40",
+                    holdTime: "1",
+                    splitRatio: "10:1",
+                    splitFlow: "12",
+                    solventDelay: "4.2",
+                    methodFile: "new1016.m",
+                    dataName: "28LBEA",
+                    dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20241016"
+                },
+                {
+                    id: "3",
+                    fileName: "2025 Oct 30 1428_default.sequence.xml",
+                    vialNumber: "16",
+                    runTime: "24.25",
+                    setTemp: "180",
+                    rate: "40",
+                    holdTime: "20",
+                    splitRatio: "100:1",
+                    splitFlow: "120",
+                    solventDelay: "4.2",
+                    methodFile: "20251013.m",
+                    dataName: "Sample",
+                    dataPath: "D:\\MassHunter\\GCMS\\1\\data\\20251030"
+                }
+            ];
+            
             const gcp = gcms.params || {};
-            const gcmsHtml = gcms.enabled ? `<div class="mb-3">序列：${gcp.sequence || '-'}</div>` : '';
+            let gcmsHtml = '';
+            if (gcms.enabled) {
+                const sequenceId = gcp.sequence || '';
+                const sequenceInfo = gcmsSequenceData.find(s => s.id === sequenceId);
+                if (sequenceInfo) {
+                    gcmsHtml = `<div class="mb-3">
+                        <strong>序列号：</strong>${sequenceInfo.id}<br>
+                        <strong>序列文件：</strong>${sequenceInfo.fileName}
+                    </div>`;
+                } else {
+                    gcmsHtml = `<div class="mb-3">序列号：${sequenceId || '-'}</div>`;
+                }
+            }
 
             const ep = evap.params || {};
             const evaporationHtml = evap.enabled ? `

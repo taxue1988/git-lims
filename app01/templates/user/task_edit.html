@@ -2143,9 +2143,20 @@
                     </ul>
                 ` : '';
 
-                const gcmsHtml = task.stations.gcms.enabled ? `
-                    <div class="mb-3">序列：${gcmsParams.sequence || '-'}</div>
-                ` : '';
+                const gcmsHtml = task.stations.gcms.enabled ? (() => {
+                    const sequenceId = gcmsParams.sequence || '';
+                    const sequenceInfo = gcmsSequenceData.find(s => s.id === sequenceId);
+                    if (sequenceInfo) {
+                        return `
+                    <div class="mb-3">
+                        <strong>序列号：</strong>${sequenceInfo.id}<br>
+                        <strong>序列文件：</strong>${sequenceInfo.fileName}
+                    </div>
+                `;
+                    } else {
+                        return `<div class="mb-3">序列号：${sequenceId || '-'}</div>`;
+                    }
+                })() : '';
 
                 const evaporationHtml = task.stations.evaporation.enabled ? `
                     <div class="mb-3">
