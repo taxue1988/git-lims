@@ -119,18 +119,21 @@ class GcmsConsumer(AsyncWebsocketConsumer):
 
     # Receive message from WebSocket
     async def receive(self, text_data):
-        # 不解析消息，直接转发入组
+        # 解析入站文本，透传 JSON 对象；若非 JSON，则包裹为 {"message": 原始文本}
+        try:
+            payload = json.loads(text_data)
+        except Exception:
+            payload = {"message": text_data}
+
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'chat_message',
-                'message': text_data
+                'message': payload
             }
         )
 
     # Receive message from room group
     async def chat_message(self, event):
-        message_to_send = {
-            'message': event['message'],
-        }
-        await self.send(text_data=json.dumps(message_to_send))
+        # 直接发送组内的 JSON 对象，避免再次包裹导致客户端收到转义字符串
+        await self.send(text_data=json.dumps(event['message']))
