@@ -32,7 +32,7 @@ class GcmsWorker:
         self.server_url = (
             server_url
             or os.environ.get("GCMS_SERVER_URL")
-            or "ws://62.234.51.178/ws/gcms/"
+            or "ws://192.168.58.8:8000/ws/gcms/"
         )
         self.ws = None
         self.gcms_module = None
