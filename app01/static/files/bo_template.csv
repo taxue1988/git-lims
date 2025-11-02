@@ -1,0 +1,13 @@
+base,ligand,solvent,concentration,temperature,time,sun
+KOAc,BrettPhos,DMAc,0.057,90,1,100
+KOPiv,PPhtBu2,BuCN,0.1,105,10,800
+CsOAc,tBPh-CPhos,BuOAc,0.153,120,,
+CsOPiv,PCy3 HBF4,p-Xylene,,,,
+,PPh3,,,,,
+,X-Phos,,,,,
+,P(fur)3,,,,,
+,PPh2Me,,,,,
+,GorlosPhos HBF4,,,,,
+,JackiePhos,,,,,
+,CgMe-PPh,,,,,
+,PPhMe2,,,,,

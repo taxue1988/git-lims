@@ -1399,3 +1399,102 @@ class DataProcessingLog(models.Model):
 
 
 # endregion
+# ==================== 贝叶斯优化相关模型 ====================
+
+class BayesianOptTask(models.Model):
+    """贝叶斯优化任务（面向普通用户）。"""
+    DIRECTION_CHOICES = (
+        ('maximize', '最大化'),
+        ('minimize', '最小化'),
+    )
+
+    TASK_TYPE_CHOICES = (
+        ('reaction', '化学反应优化'),
+        ('general', '通用优化'),
+    )
+
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bo_tasks', verbose_name='创建用户')
+    task_name = models.CharField(max_length=200, verbose_name='任务名称')
+    task_type = models.CharField(max_length=50, choices=TASK_TYPE_CHOICES, default='reaction', verbose_name='任务类型')
+
+    objective_name = models.CharField(max_length=100, verbose_name='优化目标名称')
+    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES, default='maximize', verbose_name='优化方向')
+    per_round_suggest = models.IntegerField(default=3, verbose_name='每轮推荐数量')
+
+    # 参数空间定义：{ paramName: { type: 'continuous|discrete|categorical', bounds: [...], choices: [...] } }
+    parameter_space = models.JSONField(default=dict, verbose_name='参数空间')
+
+    # 可选：用户上传的历史数据文件（解析后形成若干 trial）
+    data_file = models.ForeignKey(DataFile, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='历史CSV数据')
+
+    # 状态与元数据
+    current_round = models.IntegerField(default=0, verbose_name='当前轮次')
+    is_active = models.BooleanField(default=True, verbose_name='是否活跃')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'bo_task'
+        verbose_name = '贝叶斯优化任务'
+        verbose_name_plural = '贝叶斯优化任务'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['created_by', 'updated_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.task_name} (第{self.current_round}轮)"
+
+
+class BOIteration(models.Model):
+    """贝叶斯优化的单次迭代（轮）。"""
+    task = models.ForeignKey(BayesianOptTask, on_delete=models.CASCADE, related_name='iterations', verbose_name='所属任务')
+    round_index = models.IntegerField(verbose_name='轮次(从1开始)')
+
+    # 推荐参数集合（该轮建议实验点），如 [{paramA:..., paramB:...}, ...]
+    suggestions = models.JSONField(default=list, verbose_name='推荐参数集合')
+
+    # 该轮用户录入/上传的目标值与参数观测点
+    # trials 在子表中存储；此处可缓存聚合信息
+    best_objective = models.FloatField(null=True, blank=True, verbose_name='截至本轮最优目标值')
+    best_params = models.JSONField(null=True, blank=True, verbose_name='截至本轮对应参数')
+
+    # 图表数据缓存（便于前端快速渲染）：散点图、收敛曲线
+    scatter_chart = models.JSONField(null=True, blank=True, verbose_name='散点图数据缓存')
+    convergence_chart = models.JSONField(null=True, blank=True, verbose_name='收敛曲线数据缓存')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'bo_iteration'
+        verbose_name = '贝叶斯优化轮次'
+        verbose_name_plural = '贝叶斯优化轮次'
+        unique_together = ('task', 'round_index')
+        ordering = ['task_id', 'round_index']
+
+    def __str__(self):
+        return f"{self.task.task_name} - 第{self.round_index}轮"
+
+
+class BOTrial(models.Model):
+    """实验点（一次参数设置与对应的目标值）。"""
+    iteration = models.ForeignKey(BOIteration, on_delete=models.CASCADE, related_name='trials', verbose_name='所属轮次')
+    params = models.JSONField(default=dict, verbose_name='参数')
+    objective = models.FloatField(null=True, blank=True, verbose_name='目标值')
+
+    # 可选：源自CSV的原始行（便于追溯）
+    source_row = models.JSONField(null=True, blank=True, verbose_name='原始数据行')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    class Meta:
+        db_table = 'bo_trial'
+        verbose_name = '贝叶斯优化实验点'
+        verbose_name_plural = '贝叶斯优化实验点'
+        indexes = [
+            models.Index(fields=['iteration']),
+        ]
+
+    def __str__(self):
+        return f"Trial@{self.iteration.task.task_name}#R{self.iteration.round_index}"

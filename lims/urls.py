@@ -18,6 +18,7 @@ urlpatterns = [
     path('admin/station-management/hplc/', views.admin_station_hplc, name='admin_station_hplc'),
     path('admin/station-management/agv/', views.admin_station_agv, name='admin_station_agv'),
     path('admin/station-management/batching/', views.admin_station_batching, name='admin_station_batching'),
+    path('admin/test-ctrl/', views.admin_test_ctrl, name='admin_test_ctrl'),
 
     # ==================== Django Admin ====================
     path('admin/', admin.site.urls),
@@ -64,6 +65,10 @@ urlpatterns = [
     path('ml/task-management/', views.ml_task_management, name='ml_task_management'),
     path('ml/task/<int:task_id>/', views.ml_task_detail, name='ml_task_detail'),
 
+    # ==================== 贝叶斯优化页面（用户） ====================
+    path('bo/home/', views.bo_home, name='bo_home'),
+    path('bo/tasks/', views.bo_task_center, name='bo_task_center'),
+
     # ==================== 机器学习API路由 ====================
     
     # 数据文件管理API
@@ -93,6 +98,20 @@ urlpatterns = [
     path('api/ml/tasks/<int:task_id>/delete/', views.api_ml_tasks_delete, name='api_ml_tasks_delete'),
     path('api/ml/tasks/<int:task_id>/result/', views.api_ml_tasks_result, name='api_ml_tasks_result'),
     path('api/ml/tasks/<int:task_id>/progress/', views.api_ml_tasks_progress, name='api_ml_tasks_progress'),
+
+    # ==================== 贝叶斯优化 API ====================
+    path('api/bo/tasks/', views.api_bo_tasks_list, name='api_bo_tasks_list'),
+    path('api/bo/tasks/create/', views.api_bo_tasks_create, name='api_bo_tasks_create'),
+    path('api/bo/tasks/<int:bo_task_id>/', views.api_bo_tasks_detail, name='api_bo_tasks_detail'),
+    path('api/bo/tasks/<int:bo_task_id>/delete/', views.api_bo_tasks_delete, name='api_bo_tasks_delete'),
+    path('api/bo/tasks/<int:bo_task_id>/set-params/', views.api_bo_set_parameter_space, name='api_bo_set_parameter_space'),
+    path('api/bo/tasks/<int:bo_task_id>/upload-csv/', views.api_bo_upload_csv, name='api_bo_upload_csv'),
+    path('api/bo/tasks/<int:bo_task_id>/upsert-history/', views.api_bo_upsert_history, name='api_bo_upsert_history'),
+    path('api/bo/tasks/<int:bo_task_id>/history/', views.api_bo_history, name='api_bo_history'),
+    path('api/bo/tasks/<int:bo_task_id>/start-iteration/', views.api_bo_start_iteration, name='api_bo_start_iteration'),
+    path('api/bo/iterations/<int:iteration_id>/submit-observation/', views.api_bo_submit_observation, name='api_bo_submit_observation'),
+    path('api/bo/iterations/<int:iteration_id>/download/', views.api_bo_download_iteration, name='api_bo_download_iteration'),
+    path('api/bo/tasks/<int:bo_task_id>/download-all/', views.api_bo_download_all, name='api_bo_download_all'),
 
     # ==================== 备料员页面 ====================
     path('preparator/tasks/', views.preparator_tasks, name='preparator_tasks'),

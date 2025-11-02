@@ -9,15 +9,15 @@
     .card-header-collapsible { cursor: pointer; user-select: none; }
     .status-dot {
         display: inline-block;
-        width: 8px;
-        height: 8px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
-        margin-right: 6px;
+        margin-right: 8px;
+        transition: background-color 0.3s ease;
     }
-    .status-online { background-color: #28a745; }
+    .status-online { background-color: #28a745; box-shadow: 0 0 8px rgba(40, 167, 69, 0.7); }
     .status-offline { background-color: #dc3545; }
     .status-unknown { background-color: #6c757d; }
-    /* 确保悬浮不触发布局移动（无transform/box-shadow变化） */
     .card:hover { transform: none; box-shadow: none; }
     .station-card .card-body { padding: 1rem; }
     .positions-row { margin-bottom: 0.5rem; }
@@ -40,19 +40,19 @@
             <div class="col-lg-3 col-md-4 col-sm-6">
                 <div class="p-3 border rounded h-100">
                     <div class="fw-semibold mb-1">机械臂</div>
-                    <div class="text-muted small"><span class="status-dot status-unknown"></span>连接状态</div>
+                    <div id="arm-status-text" class="text-muted small"><span id="arm-status-dot" class="status-dot status-unknown"></span>正在连接...</div>
                 </div>
             </div>
             <div class="col-lg-3 col-md-4 col-sm-6">
                 <div class="p-3 border rounded h-100">
                     <div class="fw-semibold mb-1">天平</div>
-                    <div class="text-muted small"><span class="status-dot status-unknown"></span>连接状态</div>
+                    <div id="balance-status-text" class="text-muted small"><span id="balance-status-dot" class="status-dot status-unknown"></span>正在连接...</div>
                 </div>
             </div>
             <div class="col-lg-3 col-md-4 col-sm-6">
                 <div class="p-3 border rounded h-100">
                     <div class="fw-semibold mb-1">铼羽加粉仪</div>
-                    <div class="text-muted small"><span class="status-dot status-unknown"></span>连接状态</div>
+                    <div id="powder-dispenser-status-text" class="text-muted small"><span id="powder-dispenser-status-dot" class="status-dot status-unknown"></span>正在连接...</div>
                 </div>
             </div>
             <div class="col-lg-3 col-md-4 col-sm-6">
@@ -305,27 +305,80 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }} {# 保留父模板的JS #}
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
-    if (!breadcrumb) return;
-    var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
-    var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
-    var target = null;
-    for (var i = 0; i < links.length; i++) {
-        if (links[i].textContent.trim() === '固液配料') { target = links[i]; break; }
-    }
-    if (target) {
-        links.forEach(function(a){ a.classList.remove('active'); });
-        target.classList.add('active');
-        // 同步指示器位置
-        if (indicator) {
-            indicator.style.width = target.offsetWidth + 'px';
-            indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
+    // --- WebSocket 逻辑，用于实时更新设备状态 ---
+    const armStatusDot = document.getElementById('arm-status-dot');
+    const armStatusText = document.getElementById('arm-status-text');
+    const balanceStatusDot = document.getElementById('balance-status-dot');
+    const balanceStatusText = document.getElementById('balance-status-text');
+    const powderDispenserStatusDot = document.getElementById('powder-dispenser-status-dot');
+    const powderDispenserStatusText = document.getElementById('powder-dispenser-status-text');
+
+    // 为此网页客户端定义一个唯一的ID
+    const webClientId = 'web_gypl_station';
+    const socketUrl = 'ws://' + window.location.host + '/ws/test/' + webClientId + '/';
+    const stationSocket = new WebSocket(socketUrl);
+
+    stationSocket.onopen = function(e) {
+        console.log('WebSocket 连接成功，等待设备状态更新...');
+    };
+
+    stationSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        console.log('收到数据:', data);
+
+        if (data.type === 'device_status') {
+            updateDeviceStatus('arm', data.status.arm);
+            updateDeviceStatus('balance', data.status.balance);
+            updateDeviceStatus('powder_dispenser', data.status.powder_dispenser);
+        }
+    };
+
+    stationSocket.onclose = function(e) {
+        console.error('WebSocket 连接已断开');
+        updateDeviceStatus('arm', false, true); // 将所有设备标记为离线
+        updateDeviceStatus('balance', false, true);
+        updateDeviceStatus('powder_dispenser', false, true);
+    };
+
+    function updateDeviceStatus(device, isOnline, isSocketClosed = false) {
+        let dotElement, textElement;
+        let deviceName = '';
+
+        if (device === 'arm') {
+            dotElement = armStatusDot;
+            textElement = armStatusText;
+            deviceName = '机械臂';
+        } else if (device === 'balance') {
+            dotElement = balanceStatusDot;
+            textElement = balanceStatusText;
+            deviceName = '天平';
+        } else if (device === 'powder_dispenser') {
+            dotElement = powderDispenserStatusDot;
+            textElement = powderDispenserStatusText;
+            deviceName = '铼羽加粉仪';
+        }
+
+        if (!dotElement || !textElement) return;
+
+        dotElement.classList.remove('status-online', 'status-offline', 'status-unknown');
+        
+        if (isSocketClosed) {
+            dotElement.classList.add('status-offline');
+            textElement.innerHTML = `<span id="${device}-status-dot" class="status-dot status-offline"></span>连接中断`;
+        } else if (isOnline) {
+            dotElement.classList.add('status-online');
+            textElement.innerHTML = `<span id="${device}-status-dot" class="status-dot status-online"></span>连接正常`;
+        } else {
+            dotElement.classList.add('status-offline');
+            textElement.innerHTML = `<span id="${device}-status-dot" class="status-dot status-offline"></span>连接断开`;
         }
     }
 
-    // 卡片折叠动画与箭头旋转（参考AGV页面）
+    // 卡片折叠动画与箭头旋转
     var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
     collapseElements.forEach(function(element) {
         element.addEventListener('click', function() {
@@ -343,5 +396,3 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
-
-

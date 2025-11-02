@@ -1,0 +1,105 @@
+{% extends 'user_base.html' %}
+
+{% block title %}任务中心 - 贝叶斯优化{% endblock %}
+
+
+{% block main_content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h4">任务中心</h1>
+        <a href="{% url 'bo_home' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>新建优化
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-header">任务列表</div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:260px;">任务名称</th>
+                            <th>变量类型</th>
+                            <th>优化目标</th>
+                            <th>方向</th>
+                            <th>阶段</th>
+                            <th>创建时间</th>
+                            <th>更新时间</th>
+                            <th style="width:160px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bo-task-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function(){ loadBoTasks(); });
+
+    function loadBoTasks(){
+        fetch("{% url 'api_bo_tasks_list' %}").then(r=>r.json()).then(resp=>{
+            if (!resp.ok) { showToast(resp.message||'加载失败', 'danger'); return; }
+            const tb = document.getElementById('bo-task-tbody');
+            tb.innerHTML = '';
+            (resp.tasks||[]).forEach(t=>{
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="text-truncate" title="${escapeHtml(t.task_name)}">${escapeHtml(t.task_name)}</td>
+                    <td>${escapeHtml(mapVariableType(t.task_type))}</td>
+                    <td>${escapeHtml(t.objective_name)}</td>
+                    <td>${t.direction==='maximize'?'最大化':'最小化'}</td>
+                    <td>第 ${t.current_round||0} 轮</td>
+                    <td>${formatToBeijingTime(t.created_at)}</td>
+                    <td>${formatToBeijingTime(t.updated_at)}</td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary" href="{% url 'bo_home' %}?id=${t.id}">详情</a>
+                        <a class="btn btn-sm btn-outline-secondary ms-1" href="/api/bo/tasks/${t.id}/download-all/" target="_blank">下载</a>
+                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="delBo(${t.id})">删除</button>
+                    </td>`;
+                tb.appendChild(tr);
+            });
+        }).catch(()=>showToast('网络错误', 'danger'));
+    }
+
+    function delBo(id){
+        confirmAction('确定删除该优化任务？此操作不可恢复', function(){
+            fetch(`/api/bo/tasks/${id}/delete/`, { method:'POST', headers:{ 'X-CSRFToken': getCSRFToken() }})
+                .then(r=>r.json()).then(resp=>{
+                    if (resp.ok) { showToast('已删除', 'success'); loadBoTasks(); }
+                    else { showToast(resp.message||'删除失败', 'danger'); }
+                }).catch(()=>showToast('网络错误', 'danger'));
+        });
+    }
+    function mapVariableType(v){
+        if (v === 'continuous') return '连续型';
+        if (v === 'discrete') return '离散型';
+        if (v === 'mixed') return '混合型';
+        return v || '-';
+    }
+    function escapeHtml(s){ return (s||'').replace(/[&<>\"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;' }[c])); }
+    
+    function formatToBeijingTime(dateString) {
+        if (!dateString) return '-';
+        try {
+            const date = new Date(dateString);
+            // 转换为北京时间 (UTC+8)
+            const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000));
+            return beijingTime.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        } catch (e) {
+            return dateString; // 如果解析失败，返回原始字符串
+        }
+    }
+</script>
+{% endblock %}

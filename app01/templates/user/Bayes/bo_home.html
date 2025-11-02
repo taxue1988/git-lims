@@ -1,0 +1,1030 @@
+{% extends 'user_base.html' %}
+{% load static %}
+
+{% block title %}贝叶斯优化 - 自动实验管理系统{% endblock %}
+
+
+{% block main_content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h4">贝叶斯优化</h1>
+        <a href="{% url 'bo_task_center' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-list me-1"></i>任务中心
+        </a>
+    </div>
+
+    <!-- Step 1 基础信息 -->
+    <div class="card mb-3">
+        <div class="card-header"><strong>步骤一：任务信息与优化目标</strong></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">任务名称</label>
+                    <input id="bo-task-name" class="form-control" placeholder="例如：反应A 产率优化">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">优化目标名称</label>
+                    <input id="bo-objective-name" class="form-control" placeholder="例如：yield">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">优化方向</label>
+                    <select id="bo-direction" class="form-select">
+                        <option value="maximize" selected>最大化</option>
+                        <option value="minimize">最小化</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">每轮推荐数量</label>
+                    <input id="bo-per-round" type="number" class="form-control" value="3" min="1" max="20">
+                </div>
+            </div>
+            <div class="mt-3">
+                <button id="btn-create-bo" class="btn btn-primary">
+                    <i class="fas fa-play me-1"></i>创建任务并进入步骤二
+                </button>
+                <span id="bo-created-tip" class="text-success ms-3" style="display:none;">任务已创建</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2 参数空间或CSV -->
+    <div class="card mb-3" id="step-2" style="display:none;">
+        <div class="card-header"><strong>步骤二：上传CSV 或 定义参数空间</strong></div>
+        <div class="card-body">
+            <!-- CSV上传区域 -->
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="border rounded p-3">
+                        <h6>上传CSV（可选）</h6>
+                        <input type="file" id="bo-csv" accept=".csv" class="form-control">
+                        <small class="text-muted">CSV文件表头参数列名需为英文，不要有中文列名。</small>
+                        <div class="mt-2 d-flex gap-2">
+                            <a href="{% static 'files/bo_template.csv' %}" download="bo_template.csv" class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-download me-1"></i>下载模板文件
+                            </a>
+                            <button id="btn-upload-csv" class="btn btn-outline-secondary btn-sm">上传CSV</button>
+                            <span id="csv-tip" class="text-success ms-2" style="display:none;">已上传</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 参数与历史数据区域 -->
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="border rounded p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="m-0">参数与历史数据</h6>
+                            <div>
+                                <button id="btn-save-history" class="btn btn-outline-success btn-sm">保存表格</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive" style="max-height: 500px; overflow:auto;">
+                            <table class="table table-sm table-bordered align-middle">
+                                <thead id="hist-head" class="table-light"></thead>
+                                <tbody id="hist-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- 参数空间编辑器：提升到整宽显示，更易查看和编辑 -->
+            <div class="border rounded p-3 mt-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="m-0">参数空间定义</h6>
+                    <div>
+                        <button id="btn-infer-space" class="btn btn-outline-secondary btn-sm">从CSV推断</button>
+                        <button id="btn-save-space" class="btn btn-outline-success btn-sm ms-1">保存参数空间</button>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height: 420px; overflow:auto;">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 240px;">参数名</th>
+                                <th style="width: 200px;">类型</th>
+                                <th>取值/范围</th>
+                            </tr>
+                        </thead>
+                        <tbody id="space-body"></tbody>
+                    </table>
+                </div>
+                <small class="text-muted">说明：离散=枚举（文本或数值，逗号分隔），连续=填写最小值与最大值。仅存在连续或离散两种类型。</small>
+            </div>
+            <div class="mt-3">
+                <button id="btn-go-step3" class="btn btn-primary">进入步骤三</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3 优化与结果 -->
+    <div class="card mb-3" id="step-3" style="display:none;">
+        <div class="card-header">
+            <strong>步骤三：开始优化与可视化</strong>
+            <div class="text-muted small mt-1">说明：轮0用于初始历史（CSV/手动），"下载全部结果"不包含轮0，仅包含第1轮及之后的观测。</div>
+            <div class="text-info small mt-1">
+                <i class="fas fa-info-circle me-1"></i>
+                <strong>优化说明：</strong>贝叶斯优化在初期会进行探索（可能推荐表现较差的参数），随着观测点增加会逐渐转向开发模式。这是正常现象，请耐心等待收敛。
+            </div>
+            <div class="mt-2">
+                <button id="btn-start-iter" class="btn btn-success btn-sm">
+                    <i class="fas fa-magic me-1"></i>开始第一轮推荐
+                </button>
+                <a id="btn-download-all" class="btn btn-outline-secondary btn-sm ms-2" href="#" target="_blank">
+                    <i class="fas fa-download me-1"></i>下载全部结果
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- 轮次列表容器 -->
+            <div id="iterations-container" class="d-flex flex-column gap-3">
+                <!-- 轮次卡片将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% load static %}
+<script src="https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+    let g = {
+        boTaskId: null,
+        iterId: null,
+        suggestions: [],
+        objectiveName: '',
+        currentRound: 0,
+        iterations: [], // 存储所有轮次数据
+        csvRows: [], // CSV上传后返回的原始行（二维数组）
+        paramSpaceDirty: false // 参数空间是否有未保存修改
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        bindBoEvents();
+        const existingId = getQueryParam('id');
+        if (existingId) {
+            g.boTaskId = existingId;
+            // 载入任务详情（拿到parameter_space与objective），并加载历史
+            loadTaskDetail(existingId).then(() => {
+                document.getElementById('bo-created-tip').style.display = '';
+                document.getElementById('step-2').style.display = '';
+                document.getElementById('step-3').style.display = 'block'; // 直接显示步骤三
+                updateDownloadAllHref();
+                loadHistory(existingId);
+                loadAllIterations(existingId);
+            });
+        }
+    });
+
+    function bindBoEvents() {
+        document.getElementById('btn-create-bo').addEventListener('click', createBoTask);
+        document.getElementById('btn-upload-csv').addEventListener('click', uploadCsv);
+        document.getElementById('btn-save-history').addEventListener('click', saveHistory);
+        document.getElementById('btn-infer-space').addEventListener('click', inferSpaceFromCsv);
+        document.getElementById('btn-save-space').addEventListener('click', saveParamSpace);
+
+        // 监听参数空间编辑器的输入变化
+        document.addEventListener('input', function(e) {
+            if (e.target.closest('#space-body')) {
+                g.paramSpaceDirty = true;
+            }
+        });
+
+        document.getElementById('btn-go-step3').addEventListener('click', function(){
+            if (!g.boTaskId) return showToast('请先创建任务', 'warning');
+
+            // 检查参数空间是否已保存
+            if (g.paramSpaceDirty) {
+                showToast('请先点击"保存参数空间"按钮保存参数设置后再进入步骤三', 'warning');
+                return;
+            }
+
+            // 强校验参数空间
+            const check = validateParamSpaceCurrent();
+            if (!check.ok){
+                showToast(check.message || '参数空间不合法，请先修正', 'danger');
+                return;
+            }
+            document.getElementById('step-3').style.display = 'block';
+            updateDownloadAllHref();
+            // 如果还没有轮次，显示提示信息
+            if (g.iterations.length === 0) {
+                const container = document.getElementById('iterations-container');
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-flask fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">还没有开始优化</h5>
+                        <p class="text-muted">点击"开始新一轮推荐"按钮开始第一轮优化</p>
+                    </div>
+                `;
+            }
+        });
+        document.getElementById('btn-start-iter').addEventListener('click', startIteration);
+    }
+
+    function createBoTask() {
+        const name = document.getElementById('bo-task-name').value.trim();
+        const objName = document.getElementById('bo-objective-name').value.trim();
+        const direction = document.getElementById('bo-direction').value;
+        const perRound = parseInt(document.getElementById('bo-per-round').value || '3', 10);
+        if (!name || !objName) return showToast('任务名称与目标名称必填', 'warning');
+        // 变量类型已从步骤一移除，这里发送一个安全缺省值，后续以步骤二参数空间为准
+        const variableType = 'continuous';
+        fetch("{% url 'api_bo_tasks_create' %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ task_name: name, objective_name: objName, direction, per_round_suggest: perRound, variable_type: variableType })
+        }).then(r=>r.json()).then(resp=>{
+            if (resp.ok) {
+                g.boTaskId = resp.task_id; g.objectiveName = objName;
+                document.getElementById('bo-created-tip').style.display = '';
+                document.getElementById('step-2').style.display = '';
+                showToast('任务创建成功', 'success');
+                updateDownloadAllHref();
+                // 初始加载历史与参数空间（若有）
+                loadTaskDetail(g.boTaskId).then(()=> {
+                    loadHistory(g.boTaskId);
+                    loadAllIterations(g.boTaskId);
+                });
+            } else {
+                showToast(resp.message || '创建失败', 'danger');
+            }
+        }).catch(()=>showToast('网络错误', 'danger'));
+    }
+
+    function uploadCsv() {
+        if (!g.boTaskId) return showToast('请先创建任务', 'warning');
+        const file = document.getElementById('bo-csv').files[0];
+        if (!file) return showToast('请选择CSV文件', 'warning');
+        const form = new FormData();
+        form.append('file', file);
+        fetch(`/api/bo/tasks/${g.boTaskId}/upload-csv/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCSRFToken() },
+            body: form
+        }).then(r=>r.json()).then(resp=>{
+            if (resp.ok) {
+                document.getElementById('csv-tip').style.display = '';
+                g.columns = resp.columns || [];
+                g.csvRows = resp.rows || [];
+                renderTable(g.columns, g.csvRows);
+                // 若还未有参数空间，尝试自动推断一次并渲染编辑器
+                if (!g.paramSpace || Object.keys(g.paramSpace||{}).length===0){
+                    const space = inferParamSpaceByRule(g.columns, g.csvRows, g.objectiveName);
+                    g.paramSpace = space; g.paramSpaceDirty = true;
+                }
+                renderParamSpaceEditor(g.paramSpace||{});
+                showToast('CSV解析完成', 'success');
+            } else {
+                showToast(resp.message || '上传失败', 'danger');
+            }
+        }).catch(()=>showToast('网络错误', 'danger'));
+    }
+
+    // 历史表格与编辑器
+    // 列式表格
+    function renderTable(columns, rows){
+        const thead = document.getElementById('hist-head');
+        const tbody = document.getElementById('hist-body');
+        thead.innerHTML = '';
+        tbody.innerHTML = '';
+        const trh = document.createElement('tr');
+        trh.innerHTML = `<th>#</th>` + columns.map(c=>`<th>${escapeHtml(c)}</th>`).join('') + `<th style="width:80px;">操作</th>`;
+        thead.appendChild(trh);
+        rows.forEach((r,i)=>{
+            const tr = document.createElement('tr');
+            let inner = `<td class="text-muted">${i+1}</td>`;
+            r.forEach((v, j)=>{
+                const isTarget = (j === columns.length - 1);
+                const inputType = isTarget ? 'number' : 'text';
+                const stepAttr = isTarget ? ' step="any"' : '';
+                inner += `<td><input class="form-control form-control-sm" type="${inputType}"${stepAttr} value="${v==null?'':escapeHtml(String(v))}"></td>`;
+            });
+            inner += `<td><button class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">删除</button></td>`;
+            tr.innerHTML = inner;
+            tbody.appendChild(tr);
+        });
+        if (rows.length === 0) addEmptyRow(columns);
+        g.columns = columns;
+    }
+
+    function addEmptyRow(columns){
+        const tbody = document.getElementById('hist-body');
+        const tr = document.createElement('tr');
+        let inner = `<td class="text-muted">${tbody.children.length+1}</td>`;
+        for (let j=0;j<columns.length;j++){
+            const isTarget = (j === columns.length - 1);
+            inner += `<td><input class="form-control form-control-sm" type="${isTarget?'number':'text'}" ${isTarget?'step="any"':''} value=""></td>`;
+        }
+        inner += `<td><button class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()">删除</button></td>`;
+        tr.innerHTML = inner;
+        tbody.appendChild(tr);
+    }
+
+    function openEditor(){
+        if (!g.columns){
+            const space = g.paramSpace || {};
+            const params = Object.keys(space);
+            const cols = [...params, (g.objectiveName||'objective')];
+            renderTable(cols, []);
+        }
+        addEmptyRow(g.columns || []);
+    }
+
+    function saveHistory(){
+        if (!g.boTaskId) return showToast('请先创建任务', 'warning');
+        const rows = Array.from(document.querySelectorAll('#hist-body tr'));
+        const records = [];
+        for (const tr of rows){
+            const inputs = Array.from(tr.querySelectorAll('input'));
+            if (!inputs.length) continue;
+            const params = {};
+            let objective = null;
+            for (let j=0;j<g.columns.length;j++){
+                const col = g.columns[j];
+                const isTarget = (j === g.columns.length - 1);
+                const val = inputs[j].value;
+                if (isTarget){
+                    objective = (val === '' ? null : Number(val));
+                } else {
+                    params[col] = val === '' ? null : parseParamValue(col, val);
+                }
+            }
+            records.push({ params, objective });
+        }
+        fetch(`/api/bo/tasks/${g.boTaskId}/upsert-history/`, {
+            method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ records })
+        }).then(r=>r.json()).then(resp=>{
+            if (resp.ok){ showToast('历史数据已保存', 'success'); }
+            else { showToast(resp.message||'保存失败', 'danger'); }
+        }).catch(()=>showToast('网络错误', 'danger'));
+    }
+
+    function parseParamValue(name, raw){
+        const spec = (g.paramSpace||{})[name] || {};
+        if (spec.type === 'continuous'){
+            const v = Number(raw); return isNaN(v) ? raw : v;
+        } else if (spec.type === 'discrete'){
+            const v = Number(raw); return isNaN(v) ? raw : Math.round(v);
+        } else if (spec.type === 'categorical'){
+            return raw;
+        }
+        return raw;
+    }
+
+
+
+    // 历史加载与任务详情
+    function getQueryParam(key) {
+        const url = new URL(window.location.href);
+        return url.searchParams.get(key);
+    }
+
+    function loadTaskDetail(taskId){
+        return fetch(`/api/bo/tasks/${taskId}/`).then(r=>r.json()).then(resp=>{
+            if (resp && resp.ok && resp.task){
+                const t = resp.task;
+                g.objectiveName = t.objective_name || g.objectiveName;
+                g.paramSpace = t.parameter_space || {};
+                g.paramSpaceDirty = false; // 从服务器加载的参数空间是已保存状态
+                // 渲染参数空间编辑器（无CSV时也允许手动编辑）
+                renderParamSpaceEditor(g.paramSpace||{});
+                // 若还没有列定义，则根据空间构造列
+                if (!g.columns || !g.columns.length){
+                    const cols = Object.keys(g.paramSpace || {});
+                    if (cols.length){ g.columns = [...cols, g.objectiveName || 'objective']; }
+                }
+            }
+        }).catch(()=>{});
+    }
+
+    function loadHistory(taskId){
+        fetch(`/api/bo/tasks/${taskId}/history/`).then(r=>r.json()).then(resp=>{
+            if (resp && resp.ok){
+                const cols = resp.columns || (g.columns||[]);
+                const rows = resp.rows || [];
+                if (cols && cols.length){
+                    g.columns = cols;
+                    renderTable(cols, rows);
+                }
+            }
+        }).catch(()=>{});
+    }
+
+    // ========= 参数空间：推断、渲染与保存 =========
+    function inferParamSpaceByRule(columns, rows, objectiveName){
+        const space = {};
+        const paramCols = (columns||[]).filter(c=>c && String(c)!==String(objectiveName));
+        paramCols.forEach((col, idx)=>{
+            const j = columns.indexOf(col);
+            // 按列统计非空数据，仅当恰为2条且为数值并且顺序第一<第二，判定为连续(bounds=[第一,第二])
+            const nonEmpty = [];
+            (rows||[]).forEach((r, ridx)=>{
+                const v = j>=0 ? r[j] : '';
+                if (v!=='' && v!=null){ nonEmpty.push({ idx:ridx, v }); }
+            });
+            if (nonEmpty.length === 2){
+                const n1 = toNum(nonEmpty[0].v), n2 = toNum(nonEmpty[1].v);
+                if (n1!=null && n2!=null && n1 < n2){
+                    space[col] = { type:'continuous', bounds:[n1, n2] };
+                    return;
+                }
+            }
+            // 其余一律离散（文本或数值均可），并锁定不可更改类型
+            const colVals = (rows||[]).map(r=> j>=0 ? r[j] : '').filter(x=> x!==undefined);
+            space[col] = { type:'discrete', choices: uniqNonEmpty(colVals).map(s=>{ const n=Number(s); return isNaN(n)? s : n; }), locked:'discrete' };
+        });
+        return space;
+    }
+
+    function renderParamSpaceEditor(space){
+        const tbody = document.getElementById('space-body'); if (!tbody) return;
+        const params = Object.keys(space||{});
+        tbody.innerHTML = '';
+        (params||[]).forEach(name=>{
+            const spec = space[name]||{};
+            const tr = document.createElement('tr');
+            const type = (spec.type||'continuous');
+            const shouldLock = isCsvInferredDiscrete(name, spec);
+            let valueCell = '';
+            if (type==='continuous'){
+                const lo = spec.bounds?spec.bounds[0]:'';
+                const hi = spec.bounds?spec.bounds[1]:'';
+                valueCell = `<div class="row g-1">
+                    <div class="col">
+                        <label class="form-label small mb-1">最小值</label>
+                        <input class="form-control form-control-sm" data-k="min" data-name="${escapeAttr(name)}" type="number" step="any" value="${escapeAttr(lo)}">
+                    </div>
+                    <div class="col">
+                        <label class="form-label small mb-1">最大值</label>
+                        <input class="form-control form-control-sm" data-k="max" data-name="${escapeAttr(name)}" type="number" step="any" value="${escapeAttr(hi)}">
+                    </div>
+                </div>`;
+            } else {
+                // 若有CSV数据，预填choices，便于从连续切回离散时不丢数据
+                let choicesArr = (spec.choices||[]);
+                if ((!choicesArr || !choicesArr.length) && g.columns && g.csvRows){
+                    const j = g.columns.indexOf(name);
+                    if (j>=0){
+                        const colVals = (g.csvRows||[]).map(r=> r[j]).filter(x=> x!==undefined);
+                        choicesArr = uniqNonEmpty(colVals).map(s=>{ const n=Number(s); return isNaN(n)? s : n; });
+                    }
+                }
+                const choices = (choicesArr||[]).join(',');
+                valueCell = `<textarea class="form-control form-control-sm" rows="1" data-k="choices" data-name="${escapeAttr(name)}" placeholder="用逗号分隔">${escapeHtml(choices)}</textarea>`;
+            }
+            tr.innerHTML = `
+                <td><code>${escapeHtml(name)}</code></td>
+                <td>
+                    <select class="form-select form-select-sm" data-k="type" data-name="${escapeAttr(name)}" ${shouldLock?'disabled':''} onchange="onParamTypeChange('${escapeAttr(name)}')">
+                        <option value="discrete" ${type==='discrete'||type==='categorical'?'selected':''}>离散</option>
+                        <option value="continuous" ${type==='continuous'?'selected':''}>连续</option>
+                    </select>
+                </td>
+                <td id="cell-${escapeAttr(name)}">${valueCell}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function onParamTypeChange(name){
+        g.paramSpaceDirty = true;
+        const sel = document.querySelector(`select[data-name="${cssEscape(name)}"][data-k="type"]`);
+        if (!sel) return;
+        const type = sel.value;
+        const cell = document.getElementById(`cell-${name}`);
+        if (!cell) return;
+        if (type==='continuous'){
+            cell.innerHTML = `<div class="row g-1">
+                <div class="col">
+                    <label class="form-label small mb-1">最小值</label>
+                    <input class="form-control form-control-sm" data-k="min" data-name="${escapeAttr(name)}" type="number" step="any">
+                </div>
+                <div class="col">
+                    <label class="form-label small mb-1">最大值</label>
+                    <input class="form-control form-control-sm" data-k="max" data-name="${escapeAttr(name)}" type="number" step="any">
+                </div>
+            </div>`;
+            // 自动从CSV按严格规则回填 bounds；否则用现有参数空间中的值
+            const bounds = getCsvContinuousBounds(name) || (g.paramSpace && g.paramSpace[name] && g.paramSpace[name].bounds) || [];
+            const minEl = cell.querySelector('input[data-k="min"][data-name="'+cssEscape(name)+'"]');
+            const maxEl = cell.querySelector('input[data-k="max"][data-name="'+cssEscape(name)+'"]');
+            if (Array.isArray(bounds) && bounds.length===2){
+                if (minEl) minEl.value = bounds[0];
+                if (maxEl) maxEl.value = bounds[1];
+            }
+        } else {
+            let choicesArr = getCsvChoicesForParam(name);
+            if ((!choicesArr || !choicesArr.length) && g.paramSpace && g.paramSpace[name] && Array.isArray(g.paramSpace[name].choices)){
+                choicesArr = g.paramSpace[name].choices;
+            }
+            const preset = (choicesArr||[]).join(',');
+            cell.innerHTML = `<textarea class="form-control form-control-sm" rows="1" data-k="choices" data-name="${escapeAttr(name)}" placeholder="用逗号分隔">${escapeHtml(preset)}</textarea>`;
+        }
+    }
+
+    function saveParamSpace(){
+        if (!g.boTaskId) return showToast('请先创建任务', 'warning');
+        const space = collectParamSpaceFromEditor();
+        const check = validateParamSpace(space);
+        if (!check.ok){ showToast(check.message||'参数空间不合法', 'danger'); return; }
+        fetch(`/api/bo/tasks/${g.boTaskId}/set-params/`, {
+            method:'POST', headers:{ 'Content-Type':'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ parameter_space: space })
+        }).then(r=>r.json()).then(resp=>{
+            if (resp.ok){
+                g.paramSpace = space; g.paramSpaceDirty = false;
+                showToast('参数空间已保存', 'success');
+            } else { showToast(resp.message||'保存失败', 'danger'); }
+        }).catch(()=>showToast('网络错误', 'danger'));
+    }
+
+    function collectParamSpaceFromEditor(){
+        const space = {};
+        const rows = Array.from(document.querySelectorAll('#space-body tr'));
+        rows.forEach(tr=>{
+            const name = tr.querySelector('select[data-k="type"]').getAttribute('data-name');
+            const type = tr.querySelector('select[data-k="type"]').value;
+            if (type==='continuous'){
+                const minEl = tr.querySelector('input[data-k="min"]');
+                const maxEl = tr.querySelector('input[data-k="max"]');
+                const lo = Number(minEl && minEl.value);
+                const hi = Number(maxEl && maxEl.value);
+                space[name] = { type:'continuous', bounds:[lo, hi] };
+            } else {
+                const ta = tr.querySelector('textarea[data-k="choices"]');
+                const raw = (ta && ta.value || '').split(',').map(s=>s.trim()).filter(s=>s!=='');
+                // 离散统一为 choices（可文本或数值）。若用户未输入，自动回填CSV列唯一值，避免丢失
+                let mixed = raw.map(x=>{ const n=Number(x); return isNaN(n)? x : n; });
+                if (mixed.length===0){
+                    const j = g.columns.indexOf(name);
+                    if (j>=0){
+                        const colVals = (g.csvRows||[]).map(r=> r[j]).filter(x=> x!==undefined);
+                        mixed = uniqNonEmpty(colVals).map(s=>{ const n=Number(s); return isNaN(n)? s : n; });
+                    }
+                }
+                space[name] = { type:'discrete', choices: mixed };
+            }
+        });
+        return space;
+    }
+
+    function validateParamSpace(space){
+        const names = Object.keys(space||{});
+        if (!names.length) return { ok:false, message:'请先定义参数空间' };
+        for (const name of names){
+            const spec = space[name]||{};
+            const t = spec.type;
+            if (t==='continuous'){
+                const b = spec.bounds||[]; const lo=Number(b[0]), hi=Number(b[1]);
+                if (!isFinite(lo) || !isFinite(hi)) return { ok:false, message:`${name}: 连续型需要最小/最大数值` };
+                if (lo>=hi) return { ok:false, message:`${name}: 最小值必须小于最大值` };
+            } else if (t==='discrete'){
+                const arr = spec.choices||[];
+                if (!arr.length) return { ok:false, message:`${name}: 离散型需至少1个取值（已为你预填CSV唯一值，可再次保存）` };
+            } else {
+                return { ok:false, message:`${name}: 未知类型` };
+            }
+        }
+        return { ok:true };
+    }
+
+    function validateParamSpaceCurrent(){
+        const space = g.paramSpaceDirty ? collectParamSpaceFromEditor() : (g.paramSpace||{});
+        const check = validateParamSpace(space);
+        if (check.ok && g.paramSpaceDirty){ g.paramSpace = space; }
+        return check;
+    }
+
+    function inferSpaceFromCsv(){
+        if (!(g.columns&&g.columns.length&&g.csvRows&&g.csvRows.length)){
+            showToast('请先上传并解析CSV', 'warning'); return;
+        }
+        const space = inferParamSpaceByRule(g.columns, g.csvRows, g.objectiveName);
+        g.paramSpace = space; g.paramSpaceDirty = true;
+        renderParamSpaceEditor(space);
+        showToast('已根据CSV推断参数空间，请检查后保存', 'success');
+    }
+
+    function toNum(v){ const n = Number(v); return isNaN(n)? null : n; }
+    function uniqNonEmpty(arr){ return Array.from(new Set((arr||[]).map(x=> String(x)).filter(s=> s!=='' && s!=='null' && s!=='undefined'))); }
+    function escapeAttr(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
+    function cssEscape(s){ return String(s).replace(/"/g,'\\"'); }
+
+    // 根据CSV获取某参数的唯一值列表（用于从连续切换到离散时自动回填）
+    function getCsvChoicesForParam(name){
+        try{
+            const j = (g.columns||[]).indexOf(name);
+            if (j<0) return [];
+            const colVals = (g.csvRows||[]).map(r=> r[j]).filter(x=> x!==undefined);
+            const uniq = uniqNonEmpty(colVals);
+            return uniq.map(s=>{ const n = Number(s); return isNaN(n)? s : n; });
+        }catch(e){ return []; }
+    }
+
+    // 严格规则：若该列非空数据恰两条且数值递增，返回 [min,max]，否则返回 null
+    function getCsvContinuousBounds(name){
+        try{
+            const j = (g.columns||[]).indexOf(name);
+            if (j<0) return null;
+            const nonEmpty = [];
+            (g.csvRows||[]).forEach((r, ridx)=>{
+                const v = r[j];
+                if (v!=='' && v!=null) nonEmpty.push({ idx:ridx, v });
+            });
+            if (nonEmpty.length !== 2) return null;
+            const n1 = toNum(nonEmpty[0].v), n2 = toNum(nonEmpty[1].v);
+            if (n1==null || n2==null) return null;
+            if (!(n1 < n2)) return null;
+            return [n1, n2];
+        }catch(e){ return null; }
+    }
+
+    // 按严格规则判断该列是否应锁定为离散：不是"恰两条非空且递增数值"则锁定
+    function isCsvInferredDiscrete(name, spec){
+        try{
+            if (!(g.columns && g.csvRows && g.csvRows.length)) return false;
+            const j = g.columns.indexOf(name);
+            if (j < 0) return false;
+            const nonEmpty = [];
+            (g.csvRows||[]).forEach((r, ridx)=>{
+                const v = r[j];
+                if (v!=='' && v!=null) nonEmpty.push({ idx:ridx, v });
+            });
+            if (nonEmpty.length !== 2) return true;
+            const n1 = toNum(nonEmpty[0].v), n2 = toNum(nonEmpty[1].v);
+            if (n1==null || n2==null) return true;
+            if (!(n1 < n2)) return true;
+            return false;
+        }catch(e){ return false; }
+    }
+
+    function startIteration() {
+        if (!g.boTaskId) return showToast('请先创建任务', 'warning');
+        fetch(`/api/bo/tasks/${g.boTaskId}/start-iteration/`, {
+            method: 'POST', headers: { 'X-CSRFToken': getCSRFToken() }
+        }).then(r=>r.json()).then(resp=>{
+            if (resp.ok) {
+                // 成功开始第一轮后，隐藏按钮
+                const btnStart = document.getElementById('btn-start-iter');
+                if (btnStart) btnStart.style.display = 'none';
+
+                g.iterId = resp.iteration_id;
+                g.suggestions = resp.suggestions || [];
+                g.currentRound = resp.round_index;
+
+                // 将新的轮次数据添加到全局数组中
+                const newIteration = {
+                    id: resp.iteration_id,
+                    round_index: resp.round_index,
+                    suggestions: resp.suggestions || [],
+                    trials: []
+                };
+                g.iterations.push(newIteration);
+
+                // 创建新的轮次卡片
+                createIterationCard(resp.round_index, g.iterId, g.suggestions);
+
+                // 不再将建议写入历史表格，避免与轮0历史混淆
+
+                updateDownloadAllHref();
+
+                // 显示优化信息
+                const optInfo = resp.optimization_info || {};
+                const isExploration = optInfo.exploration_phase;
+                const message = isExploration ?
+                    `已生成第${resp.round_index}轮建议（探索阶段，共${optInfo.valid_trials}个历史观测点）` :
+                    `已生成第${resp.round_index}轮建议（开发阶段，共${optInfo.valid_trials}个历史观测点）`;
+                showToast(message, 'success');
+            } else { showToast(resp.message || '生成失败', 'danger'); }
+        }).catch(()=>showToast('网络错误', 'danger'));
+    }
+
+    // 从轮次卡片中开始新一轮推荐
+    function startIterationFromCard(currentIterationId) {
+        if (!g.boTaskId) return showToast('请先创建任务', 'warning');
+
+        // 检查当前轮次是否已完成
+        const currentIteration = g.iterations.find(iter => iter.id === currentIterationId);
+        if (!currentIteration) {
+            showToast('当前轮次数据不存在', 'error');
+            return;
+        }
+
+        // 检查当前轮次是否已完成
+        const isCompleted = currentIteration.trials && currentIteration.trials.length > 0 &&
+                           currentIteration.trials.every(t => t.objective !== null);
+        if (!isCompleted) {
+            showToast('请先完成当前轮次的观测提交', 'warning');
+            return;
+        }
+        // 仅允许由最后一轮开始，且下一轮不存在
+        const maxRound = Math.max(0, ...g.iterations.map(it => it.round_index || 0));
+        if (currentIteration.round_index !== maxRound) {
+            showToast('只能由当前最后一轮开始新一轮推荐', 'warning');
+            return;
+        }
+        const hasNextRound = g.iterations.some(it => it.round_index === currentIteration.round_index + 1);
+        if (hasNextRound) {
+            showToast('下一轮已存在，请在最新一轮继续操作', 'warning');
+            return;
+        }
+
+        // 开始新一轮推荐
+        startIteration();
+    }
+
+    // 加载所有轮次数据
+    function loadAllIterations(taskId) {
+        fetch(`/api/bo/tasks/${taskId}/`).then(r=>r.json()).then(resp=>{
+            if (resp && resp.ok && resp.task) {
+                const task = resp.task;
+                g.currentRound = task.current_round || 0;
+                g.iterations = task.iterations || [];
+
+                // 渲染所有轮次卡片
+                renderAllIterations();
+
+                // 如果已经有轮次，则隐藏“开始第一轮”按钮
+                if (g.iterations.length > 0) {
+                    const btnStart = document.getElementById('btn-start-iter');
+                    if (btnStart) btnStart.style.display = 'none';
+                }
+            }
+        }).catch(()=>{});
+    }
+
+    // 渲染所有轮次卡片
+    function renderAllIterations() {
+        const container = document.getElementById('iterations-container');
+        container.innerHTML = '';
+
+        // 按轮次排序，确保第一轮在最上面
+        const sortedIterations = g.iterations.sort((a, b) => a.round_index - b.round_index);
+
+        sortedIterations.forEach(iteration => {
+            createIterationCard(iteration.round_index, iteration.id, iteration.suggestions || [], iteration.trials || []);
+        });
+
+        // 延迟刷新所有图表，确保DOM元素已创建
+        setTimeout(() => {
+            refreshAllCharts();
+        }, 300);
+    }
+
+    // 创建单个轮次卡片
+    function createIterationCard(roundIndex, iterationId, suggestions, trials = []) {
+        const container = document.getElementById('iterations-container');
+        const card = document.createElement('div');
+        card.className = 'card border';
+        card.id = `iteration-card-${iterationId}`;
+
+        const isCompleted = trials.length > 0 && trials.every(t => t.objective !== null);
+        const isCurrentRound = roundIndex === g.currentRound;
+
+        card.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-flask me-2"></i>第 ${roundIndex} 轮
+                    ${isCompleted ? '<span class="badge bg-success ms-2">已完成</span>' : ''}
+                    ${isCurrentRound ? '<span class="badge bg-primary ms-2">当前轮次</span>' : ''}
+                </h6>
+                <div>
+                    ${isCompleted ? `
+                    <a class="btn btn-sm btn-outline-secondary" href="/api/bo/iterations/${iterationId}/download/" target="_blank">
+                        <i class="fas fa-download me-1"></i>下载本轮结果
+                    </a>` : `
+                    <button class="btn btn-sm btn-outline-secondary" onclick="showToast('请先提交本轮观测后再下载', 'warning')" disabled>
+                        <i class="fas fa-download me-1"></i>下载本轮结果
+                    </button>`}
+                    <a class="btn btn-sm btn-outline-info ms-1" href="/api/bo/tasks/${g.boTaskId}/download-all/" target="_blank">
+                        <i class="fas fa-download me-1"></i>下载全部结果
+                    </a>
+                    ${!isCompleted ? `
+                        <button class="btn btn-sm btn-primary ms-1" onclick="submitIterationObservation(${iterationId})">
+                            <i class="fas fa-check me-1"></i>提交观测
+                        </button>
+                    ` : `
+                        <button class="btn btn-sm btn-success ms-1" onclick="startIterationFromCard(${iterationId})">
+                            <i class="fas fa-plus me-1"></i>开始新一轮推荐
+                        </button>
+                    `}
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- 推荐参数列表 -->
+                <div class="mb-3">
+                    <h6 class="mb-2">推荐参数</h6>
+                <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th>参数</th>
+                                    <th style="width: 520px;">${escapeHtml(g.objectiveName || '目标值')}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="suggestions-tbody-${iterationId}">
+                                ${suggestions.map((suggestion, idx) => `
+                                    <tr>
+                                        <td class="text-center">${idx + 1}</td>
+                                        <td><code>${escapeHtml(JSON.stringify(suggestion))}</code></td>
+                                        <td>
+                                            ${isCompleted ?
+                                                `<span class="text-success">${trials[idx]?.objective || '-'}</span>` :
+                                                `<input class="form-control" type="number" step="any" style="min-width: 260px;"
+                                                       data-iteration-id="${iterationId}" data-suggestion-index="${idx}"
+                                                       placeholder="输入${escapeHtml(g.objectiveName || '目标值')}">`
+                                            }
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                    </table>
+                    </div>
+                </div>
+
+                <!-- 图表区域 -->
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="border rounded p-2">
+                            <h6 class="mb-2">实验性能对比（散点图）</h6>
+                            <div id="chart-scatter-${iterationId}" style="height: 300px;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-2">
+                            <h6 class="mb-2">优化进程收敛（折线图）</h6>
+                            <div id="chart-conv-${iterationId}" style="height: 300px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(card);
+
+        // 延迟渲染图表，确保DOM元素已创建
+        setTimeout(() => {
+            renderIterationCharts(iterationId, roundIndex);
+        }, 100);
+    }
+
+    // 提交轮次观测
+    function submitIterationObservation(iterationId) {
+        const inputs = document.querySelectorAll(`input[data-iteration-id="${iterationId}"]`);
+        const records = [];
+
+        // 找到对应的轮次数据
+        const iteration = g.iterations.find(iter => iter.id === iterationId);
+        if (!iteration) {
+            console.error('轮次数据不存在，iterationId:', iterationId, 'g.iterations:', g.iterations);
+            showToast('轮次数据不存在，请刷新页面重试', 'error');
+            return;
+        }
+
+        inputs.forEach(input => {
+            const suggestionIndex = parseInt(input.getAttribute('data-suggestion-index'));
+            const objective = input.value.trim();
+            if (objective !== '') {
+                const suggestion = iteration.suggestions[suggestionIndex];
+                if (suggestion) {
+                    records.push({
+                        params: suggestion,
+                        objective: parseFloat(objective)
+                    });
+                }
+            }
+        });
+
+        if (records.length === 0) {
+            showToast('请至少填写一个目标值', 'warning');
+            return;
+        }
+
+        fetch(`/api/bo/iterations/${iterationId}/submit-observation/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ records })
+        }).then(r=>r.json()).then(resp=>{
+            if (resp.ok) {
+                showToast('观测已提交', 'success');
+                // 重新加载所有轮次数据
+                loadAllIterations(g.boTaskId);
+            } else {
+                showToast(resp.message || '提交失败', 'danger');
+            }
+        }).catch(()=>showToast('网络错误', 'danger'));
+    }
+
+    // 渲染轮次图表
+    function renderIterationCharts(iterationId, roundIndex) {
+        // 获取累积数据（从第1轮到当前轮）
+        fetch(`/api/bo/tasks/${g.boTaskId}/`).then(r=>r.json()).then(resp=>{
+            if (!(resp && resp.ok)) return;
+
+            const task = resp.task;
+            const allPoints = [];
+            const convergenceData = [];
+            let bestValue = null;
+            const maximize = task.direction === 'maximize';
+
+            // 收集所有轮次的累积数据
+            for (let i = 1; i <= roundIndex; i++) {
+                const iteration = (task.iterations || []).find(iter => iter.round_index === i);
+                if (iteration) {
+                    (iteration.trials || []).forEach((trial, trialIdx) => {
+                        if (trial.objective !== null) {
+                            allPoints.push({
+                                x: allPoints.length + 1,
+                                y: trial.objective,
+                                round: i,
+                                trial: trialIdx + 1
+                            });
+
+                            // 更新最佳值
+                            if (bestValue === null) {
+                                bestValue = trial.objective;
+                            } else {
+                                bestValue = maximize ?
+                                    Math.max(bestValue, trial.objective) :
+                                    Math.min(bestValue, trial.objective);
+                            }
+                            convergenceData.push(bestValue);
+                        }
+                    });
+                }
+            }
+
+            // 渲染散点图
+            const scatterDom = document.getElementById(`chart-scatter-${iterationId}`);
+            if (scatterDom) {
+                const ec = echarts.init(scatterDom);
+                const scatterData = allPoints.map(p => [p.x, p.y]);
+                ec.setOption({
+                    xAxis: { type: 'value', name: '实验序号' },
+                    yAxis: { type: 'value', name: g.objectiveName || '目标值' },
+                    series: [{
+                        type: 'scatter',
+                        data: scatterData,
+                        itemStyle: { color: '#0d6efd' },
+                        symbolSize: 8
+                    }],
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: function(params) {
+                            const point = allPoints[params.dataIndex];
+                            return `第${point.round}轮 第${point.trial}次实验<br/>目标值: ${point.y}`;
+                        }
+                    }
+                });
+            }
+
+            // 渲染收敛图
+            const convDom = document.getElementById(`chart-conv-${iterationId}`);
+            if (convDom) {
+                const ec2 = echarts.init(convDom);
+                const xData = convergenceData.map((_, i) => i + 1);
+                ec2.setOption({
+                    xAxis: { type: 'category', data: xData, name: '实验序号' },
+                    yAxis: { type: 'value', name: `最佳${g.objectiveName || '目标值'}` },
+                    series: [{
+                        type: 'line',
+                        data: convergenceData,
+                        smooth: true,
+                        lineStyle: { color: '#198754', width: 2 },
+                        itemStyle: { color: '#198754' }
+                    }],
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: function(params) {
+                            const dataIndex = params[0].dataIndex;
+                            return `第${dataIndex + 1}次实验<br/>当前最佳: ${params[0].value}`;
+                        }
+                    }
+                });
+            }
+        }).catch(()=>{});
+    }
+
+    // 强制重新渲染所有图表
+    function refreshAllCharts() {
+        g.iterations.forEach(iteration => {
+            setTimeout(() => {
+                renderIterationCharts(iteration.id, iteration.round_index);
+            }, 200);
+        });
+    }
+
+    function updateDownloadAllHref() {
+        const a = document.getElementById('btn-download-all');
+        if (g.boTaskId) { a.href = `/api/bo/tasks/${g.boTaskId}/download-all/`; } else { a.removeAttribute('href'); }
+    }
+
+    function escapeHtml(s){
+        return (s||'').replace(/[&<>"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+    }
+</script>
+{% endblock %}
