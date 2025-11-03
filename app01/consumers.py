@@ -7,7 +7,11 @@ DEVICE_CLIENT_PREFIX = "gypl_station_"
 
 class TestConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.client_id = self.scope['url_route']['kwargs']['client_id']
+        # 兼容带与不带 client_id 的两种路由
+        self.client_id = self.scope['url_route']['kwargs'].get('client_id')
+        if not self.client_id:
+            # 无 client_id 视为网页端，使用通道名生成临时ID
+            self.client_id = f"{WEB_CLIENT_PREFIX}{self.channel_name}"
         self.client_group_name = f"client_{self.client_id}"
 
         # 1. 每个客户端都加入自己的私有组
@@ -93,3 +97,43 @@ class TestConsumer(AsyncWebsocketConsumer):
             'station_id': event['sender'],
             'status': event['payload']
         }))
+
+class GcmsConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.room_group_name = 'gcms_group'
+
+        # Join room group
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    # Receive message from WebSocket
+    async def receive(self, text_data):
+        # 解析入站文本，透传 JSON 对象；若非 JSON，则包裹为 {"message": 原始文本}
+        try:
+            payload = json.loads(text_data)
+        except Exception:
+            payload = {"message": text_data}
+
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': payload
+            }
+        )
+
+    # Receive message from room group
+    async def chat_message(self, event):
+        # 直接发送组内的 JSON 对象，避免再次包裹导致客户端收到转义字符串
+        await self.send(text_data=json.dumps(event['message']))
