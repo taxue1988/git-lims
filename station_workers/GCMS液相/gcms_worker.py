@@ -18,8 +18,8 @@ except ImportError:
 
 # 导入序列管理器
 try:
-    from .sequence_manager import get_sequence_file
-    from .sequence_manager import get_result_csv_path
+    from station_workers.GCMS液相.sequence_manager import get_sequence_file
+    from station_workers.GCMS液相.sequence_manager import get_result_csv_path
 except Exception:
     # 兼容直接运行
     from sequence_manager import get_sequence_file
