@@ -137,3 +137,37 @@ class GcmsConsumer(AsyncWebsocketConsumer):
     async def chat_message(self, event):
         # 直接发送组内的 JSON 对象，避免再次包裹导致客户端收到转义字符串
         await self.send(text_data=json.dumps(event['message']))
+
+class HplcConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.room_group_name = 'hplc_group'
+
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+    async def receive(self, text_data):
+        try:
+            payload = json.loads(text_data)
+        except Exception:
+            payload = {"message": text_data}
+
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': payload
+            }
+        )
+
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps(event['message']))

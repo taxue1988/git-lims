@@ -9,4 +9,6 @@ websocket_urlpatterns = [
     re_path(r'ws/test/$', consumers.TestConsumer.as_asgi()),
     # GCMS 专用路由
     re_path(r'ws/gcms/$', consumers.GcmsConsumer.as_asgi()),
+    # HPLC 专用路由
+    re_path(r'ws/hplc/$', consumers.HplcConsumer.as_asgi()),
 ]
