@@ -221,6 +221,94 @@ def admin_station_hplc(request):
 
 @login_required
 @ensure_csrf_cookie
+def api_hplc_result(request):
+    """
+    提供 HPLC 结果数据（无需运行 hplc_worker），从归档或本地最新 CSV 读取并返回 x/y 数组。
+    GET 参数：
+      - archiveId: 可选，指定归档ID（station_workers/HPLC液相/results_archive/{archiveId}.csv）
+    若未提供 archiveId，则返回 station_workers/HPLC液相/ 目录下最新的 .csv 文件内容。
+    返回：{ available: bool, series?: {x:[], y:[]}, message?: str }
+    """
+    import os
+    import csv
+    from django.http import JsonResponse
+
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # app01/ -> project root
+    project_root = os.path.dirname(base_dir)
+    hplc_dir = os.path.join(project_root, 'station_workers', 'HPLC液相')
+
+    archive_id = request.GET.get('archiveId')
+
+    def ensure_archive_dir():
+        archive_dir_path = os.path.join(hplc_dir, 'results_archive')
+        os.makedirs(archive_dir_path, exist_ok=True)
+        return archive_dir_path
+
+    def find_latest_csv():
+        if not os.path.isdir(hplc_dir):
+            return None
+        try:
+            candidates = [
+                os.path.join(hplc_dir, f)
+                for f in os.listdir(hplc_dir)
+                if f.lower().endswith('.csv') and os.path.isfile(os.path.join(hplc_dir, f))
+            ]
+        except Exception:
+            return None
+        if not candidates:
+            return None
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        return candidates[0]
+
+    path = None
+    if archive_id:
+        archive_dir = ensure_archive_dir()
+        candidate = os.path.join(archive_dir, f"{archive_id}.csv")
+        if os.path.isfile(candidate):
+            path = candidate
+    if not path:
+        path = find_latest_csv()
+
+    if not path:
+        return JsonResponse({
+            'available': False,
+            'message': '未找到CSV结果文件'
+        })
+
+    x_vals, y_vals = [], []
+    try:
+        with open(path, 'r', newline='') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) < 2:
+                    continue
+                try:
+                    x_vals.append(float(row[0]))
+                    y_vals.append(float(row[1]))
+                except Exception:
+                    continue
+    except Exception as e:
+        return JsonResponse({
+            'available': False,
+            'message': f'读取CSV失败: {str(e)}'
+        })
+
+    n = len(x_vals)
+    if n > 8000:
+        target = 2000
+        step = max(1, n // target)
+        x_vals = x_vals[::step]
+        y_vals = y_vals[::step]
+
+    return JsonResponse({
+        'available': True,
+        'series': {'x': x_vals, 'y': y_vals}
+    })
+
+
+@login_required
+@ensure_csrf_cookie
 def admin_station_agv(request):
     """
     管理端 - 工站管理 - AGV 子页面

@@ -448,12 +448,24 @@ document.addEventListener('DOMContentLoaded', function () {
         resultModal.show();
         showResultLoading('正在请求结果数据...');
         const task = tasks.find(t=>t.id===taskId);
-        if (task && task.archiveId){
-            sendMessage(`get_result_${task.archiveId}`);
-        } else {
-            // 回退到读取最新
-            sendMessage('get_result_0');
-        }
+        const params = new URLSearchParams();
+        if (task && task.archiveId){ params.set('archiveId', task.archiveId); }
+        const url = '/api/hplc/result' + (params.toString() ? ('?' + params.toString()) : '');
+        fetch(url, { method: 'GET', credentials: 'same-origin' })
+            .then(r=>r.json())
+            .then(data=>{
+                if (!data || !data.available){
+                    showResultMessage((data && data.message) || '未找到结果文件');
+                    return;
+                }
+                const s = data.series || {};
+                if (Array.isArray(s.x) && Array.isArray(s.y)){
+                    renderResultChart(s.x, s.y, 'HPLC 结果');
+                } else {
+                    showResultMessage('结果数据格式不正确');
+                }
+            })
+            .catch(()=>{ showResultMessage('请求失败'); });
     }
 
     window.handleDeleteTask = function(taskId){

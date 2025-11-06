@@ -39,6 +39,9 @@ urlpatterns = [
     path('api/user/task/<int:task_id>/result/', views.api_task_result, name='api_task_result'),
     path('api/user/task/<int:task_id>/copy/', views.api_user_task_copy, name='api_user_task_copy'),
 
+    # ==================== HPLC 结果接口（无需worker） ====================
+    path('api/hplc/result', views.api_hplc_result, name='api_hplc_result'),
+
     # ==================== 任务管理 API（管理员）与公共接口 ====================
     path('api/tasks/submit/', views.api_submit_tasks, name='api_submit_tasks'),
     path('api/filter-tasks/', views.api_filter_tasks, name='api_filter_tasks'),
