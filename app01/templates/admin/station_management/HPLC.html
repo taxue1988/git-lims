@@ -444,7 +444,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (downloadPngBtn){ downloadPngBtn.addEventListener('click', function(){ if(!resultChartInstance) return; const link=document.createElement('a'); link.href=resultChartInstance.toBase64Image(); link.download=`hplc_result_${Date.now()}.png`; link.click(); }); }
 
-    window.handleViewResult = function(taskId){ resultModal.show(); showResultLoading('正在请求结果数据...'); sendMessage('get_result_0'); } // 瓶号对结果读取不敏感，读取最新
+    window.handleViewResult = function(taskId){
+        resultModal.show();
+        showResultLoading('正在请求结果数据...');
+        const task = tasks.find(t=>t.id===taskId);
+        if (task && task.archiveId){
+            sendMessage(`get_result_${task.archiveId}`);
+        } else {
+            // 回退到读取最新
+            sendMessage('get_result_0');
+        }
+    }
 
     window.handleDeleteTask = function(taskId){
         if (!confirm('您确定要删除这个任务吗？')) return;
@@ -470,7 +480,14 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'analysis_started':
                 isWorkerBusy = true; updateRuntimeStart();
                 updateAnyRunningTask('任务开始', 'bg-info'); break;
+            case 'analysis_progress':
+                isWorkerBusy = true; updateRuntimeStart();
+                updateAnyRunningTask(message.stage || '进行中', 'bg-info'); break;
             case 'analysis_complete':
+                if (message.archive_id){
+                    const runningTask = tasks.find(t => !['待运行','排队中','已完成','失败'].includes(t.statusText));
+                    if (runningTask){ runningTask.archiveId = message.archive_id; saveTasks(); }
+                }
                 isWorkerBusy = false; updateAnyRunningTask('已完成', 'bg-success', true); updateRuntimeStopIfIdle(); break;
             case 'analysis_error':
                 isWorkerBusy = false; updateAnyRunningTask('失败', 'bg-danger', true); updateRuntimeStopIfIdle(); break;
@@ -484,11 +501,21 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     function updateAnyRunningTask(statusText, statusClass, stopTiming){
-        const running = tasks.find(t => t.statusText==='排队中' || t.statusText==='任务开始');
+        // 先尝试找到已处于“运行中”的任务（排除待运行/排队中/已完成/失败）
+        let running = tasks.find(t => !['待运行','排队中','已完成','失败'].includes(t.statusText));
+        // 若未找到，再回退到刚进入运行的任务
+        if (!running) running = tasks.find(t => t.statusText==='排队中' || t.statusText==='任务开始');
         if (!running) return;
         if (statusText==='任务开始'){ running.startTime = Date.now(); }
         if (stopTiming){ running.endTime = Date.now(); if (running.startTime){ const dur = Math.round((running.endTime - running.startTime)/1000); const m=Math.floor(dur/60); const s=dur%60; running.duration=`${m}分${s}秒`; } }
-        running.statusText = statusText; running.statusClass = statusClass; running.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行'; running.runButtonDisabled = false;
+        running.statusText = statusText; running.statusClass = statusClass;
+        if (statusText==='已完成' || statusText==='失败' || stopTiming){
+            running.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行';
+            running.runButtonDisabled = false;
+        } else {
+            running.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
+            running.runButtonDisabled = true;
+        }
         saveTasks(); renderTasks();
     }
 
@@ -504,6 +531,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!startTime){ document.getElementById('runtimeHours').textContent='0'; document.getElementById('runtimeMinutes').textContent='00'; return; }
         const diff = Date.now()-parseInt(startTime,10); const hours = Math.floor(diff/(1000*60*60)); const minutes = Math.floor((diff%(1000*60*60))/(1000*60));
         document.getElementById('runtimeHours').textContent = String(hours); document.getElementById('runtimeMinutes').textContent = String(minutes).padStart(2,'0');
+    }
+
+    // 页面加载时若发现已有计时起点，则恢复计时（避免刷新后回到0）
+    if (localStorage.getItem('hplcTotalRuntimeStart')){
+        updateTotalRuntimeDisplay();
+        if (!totalRuntimeInterval){ totalRuntimeInterval = setInterval(updateTotalRuntimeDisplay, 10000); }
     }
 });
 </script>
