@@ -29,10 +29,11 @@ except ImportError:
 
 class HplcWorker:
     def __init__(self, server_url=None):
+        # 优先级：入参 > 环境变量 HPLC_SERVER_URL > 默认地址（非TLS）
         self.server_url = (
-            server_url
-            or os.environ.get("HPLC_SERVER_URL")
-            or "ws://127.0.0.1:8000/ws/hplc/"
+                server_url
+                or os.environ.get("HPLC_SERVER_URL")
+                or "ws://192.168.58.8:8000/ws/hplc/"
         )
         self.ws = None
         self.is_connected = False
@@ -235,7 +236,8 @@ class HplcWorker:
                     payload["run_status"] = info.get("runStatus", info.get("systemStatus", "Unknown"))
                     payload["run_mode"] = info.get("runMode", info.get("mode", "Unknown"))
                     mode_str = str(payload["run_mode"]).lower()
-                    payload["status"] = "运行中" if mode_str not in ("notrun", '"notrun"', "unknown", "idle", "ready") else "就绪"
+                    payload["status"] = "运行中" if mode_str not in (
+                    "notrun", '"notrun"', "unknown", "idle", "ready") else "就绪"
                 else:
                     payload["status"] = "就绪" if self.instrument_is_connected else "连接失败"
             else:
@@ -291,7 +293,8 @@ class HplcWorker:
                 # 1) 开始
                 self.send({"type": "analysis_started", "bottle_num": bottle_num})
                 # 2) 机械臂操作（取样/放置）
-                self.send({"type": "analysis_progress", "bottle_num": bottle_num, "stage": "机械臂操作", "message": f"放置 {bottle_num} 号样品"})
+                self.send({"type": "analysis_progress", "bottle_num": bottle_num, "stage": "机械臂操作",
+                           "message": f"放置 {bottle_num} 号样品"})
                 # —— 改为通过控制台输出事件来切换阶段 ——
                 place_done_token = "放置测试瓶到仪器完成"
                 tray_reset_token = "托盘成功归置原位"
@@ -300,15 +303,18 @@ class HplcWorker:
                 sent_second_arm = False
 
                 orig_stdout = sys.stdout
+
                 class _TeeStdout:
                     def write(self2, s):
                         nonlocal sent_instrument_started, sent_second_arm
                         try:
                             if (not sent_instrument_started) and (place_done_token in s):
-                                self.send({"type": "analysis_progress", "bottle_num": bottle_num, "stage": "仪器分析", "message": "HPLC 开始采集"})
+                                self.send({"type": "analysis_progress", "bottle_num": bottle_num, "stage": "仪器分析",
+                                           "message": "HPLC 开始采集"})
                                 sent_instrument_started = True
                             if (not sent_second_arm) and (tray_reset_token in s):
-                                self.send({"type": "analysis_progress", "bottle_num": bottle_num, "stage": "机械臂操作", "message": f"取回 {bottle_num} 号样品"})
+                                self.send({"type": "analysis_progress", "bottle_num": bottle_num, "stage": "机械臂操作",
+                                           "message": f"取回 {bottle_num} 号样品"})
                                 sent_second_arm = True
                             if arm_done_token in s:
                                 # 如果模块明确打印“机械臂操作完成”，可直接在此完成
@@ -316,8 +322,10 @@ class HplcWorker:
                         except Exception:
                             pass
                         return orig_stdout.write(s)
+
                     def flush(self2):
                         return orig_stdout.flush()
+
                 _orig = sys.stdout
                 sys.stdout = _TeeStdout()
                 try:
@@ -347,11 +355,47 @@ class HplcWorker:
                         pass
                     sys.stdout = _orig
                 # 4) 机械臂操作（取回/复位）
-                self.send({"type": "analysis_progress", "bottle_num": bottle_num, "stage": "机械臂操作", "message": f"取回 {bottle_num} 号样品"})
+                self.send({
+                    "type": "analysis_progress",
+                    "bottle_num": bottle_num,
+                    "stage": "机械臂操作",
+                    "message": f"取回 {bottle_num} 号样品"
+                })
                 # 归档当次结果，便于后续按任务查看
                 archive_id = self._archive_latest_result(bottle_num)
+                if archive_id:
+                    archive_path = self._get_archive_file_path(archive_id)
+                    series = self._read_series_from_csv(archive_path)
+                    if series:
+                        self.send({
+                            'type': 'analysis_result',
+                            'bottle_num': bottle_num,
+                            'archive_id': archive_id,
+                            'available': True,
+                            'series': series
+                        })
+                    else:
+                        self.send({
+                            'type': 'analysis_result',
+                            'bottle_num': bottle_num,
+                            'archive_id': archive_id,
+                            'available': False,
+                            'message': '未能解析结果数据'
+                        })
+                else:
+                    self.send({
+                        'type': 'analysis_result',
+                        'bottle_num': bottle_num,
+                        'available': False,
+                        'message': '结果归档失败'
+                    })
+
                 self.current_status = "就绪"
-                self.send({"type": "analysis_complete", "bottle_num": bottle_num, "archive_id": archive_id})
+                self.send({
+                    "type": "analysis_complete",
+                    "bottle_num": bottle_num,
+                    "archive_id": archive_id
+                })
             except Exception as e:
                 self.current_status = "错误"
                 self.send({"type": "analysis_error", "bottle_num": bottle_num, "message": str(e)})
@@ -410,13 +454,26 @@ class HplcWorker:
             path = self._get_archive_file_path(archive_id)
         if not path:
             path = self._find_latest_csv()
-        if not path:
+        series = self._read_series_from_csv(path)
+        if not series:
             self.send({
                 'type': 'analysis_result',
                 'available': False,
                 'message': '未找到CSV结果文件'
             })
             return
+
+        self.send({
+            'type': 'analysis_result',
+            'available': True,
+            'series': series,
+            'path': path,
+            'archive_id': archive_id
+        })
+
+    def _read_series_from_csv(self, path):
+        if not path or not os.path.isfile(path):
+            return None
         x_vals, y_vals = [], []
         try:
             with open(path, 'r', newline='') as f:
@@ -436,9 +493,8 @@ class HplcWorker:
                         y_vals.append(float(row[1]))
                     except Exception:
                         continue
-        except Exception as e:
-            self.send({'type': 'analysis_result', 'available': False, 'message': f'读取CSV失败: {str(e)}'})
-            return
+        except Exception:
+            return None
 
         n = len(x_vals)
         if n > 8000:
@@ -446,14 +502,7 @@ class HplcWorker:
             step = max(1, n // target)
             x_vals = x_vals[::step]
             y_vals = y_vals[::step]
-
-        self.send({
-            'type': 'analysis_result',
-            'available': True,
-            'series': {'x': x_vals, 'y': y_vals},
-            'path': path,
-            'archive_id': archive_id
-        })
+        return {'x': x_vals, 'y': y_vals}
 
     # --- util ---
     def send(self, message: dict):
@@ -480,10 +529,10 @@ if __name__ == '__main__':
     try:
         if "-s" in sys.argv:
             i = sys.argv.index("-s")
-            url = sys.argv[i+1]
+            url = sys.argv[i + 1]
         elif "--server-url" in sys.argv:
             i = sys.argv.index("--server-url")
-            url = sys.argv[i+1]
+            url = sys.argv[i + 1]
     except Exception:
         url = None
 
