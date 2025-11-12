@@ -2025,6 +2025,24 @@
                                 updateDeveloperInfo(tp.developerSystem);
                             }, 100);
                         }
+
+                        // HPLC分析工站
+                        if (task.stations && task.stations.hplc && task.stations.hplc.enabled) {
+                            console.log('启用HPLC分析工站，数据：', task.stations.hplc);
+                            
+                            // HPLC工站可以与其他工站同时使用，不需要禁用其他工站
+                            $('#hplc-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#hplc-method-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                const hp = task.stations.hplc.params || {};
+                                $('#hplc-method-selector').val(hp.method || '');
+                                $('#hplc-method-selector').trigger('change');
+                            }, 100);
+                        }
                     }).catch(function() { console.warn('获取任务详情异常，进入新建模式'); });
                 } else {
                     // 新建模式：确保所有工站都是禁用状态，清空所有数据
@@ -2037,6 +2055,7 @@
                     $('#gcms-station-enable').prop('checked', false);
                     $('#evaporation-station-enable').prop('checked', false);
                     $('#tlc-station-enable').prop('checked', false);
+                    $('#hplc-station-enable').prop('checked', false);
                     
                     // 隐藏所有工站相关表单
                     $('#reagent-form-card').hide();
@@ -2048,6 +2067,7 @@
                     $('#gcms-sequence-card').hide();
                     $('#evaporation-mode-card').hide();
                     $('#evaporation-manual-params-card').hide();
+                    $('#hplc-method-card').hide();
                     
                     // 清空所有数组数据
                     reagents.length = 0;
@@ -2065,6 +2085,7 @@
                     $('#tlc-developer-form')[0].reset();
                     $('#tlc-detection-form')[0].reset();
                     $('#tlc-sample-form')[0].reset();
+                    $('#hplc-method-selector').val('');
                     
                     // 清空新增的采样分析字段
                     $('#glovebox-sampling-analysis').val('');
@@ -2158,6 +2179,7 @@
                 const gcmsEnabled = $('#gcms-station-enable').is(':checked');
                 const evaporationEnabled = $('#evaporation-station-enable').is(':checked');
                 const tlcEnabled = $('#tlc-station-enable').is(':checked');
+                const hplcEnabled = $('#hplc-station-enable').is(':checked');
 
                 // 采集固液配料列表（使用已有reagents数组，如未启用则为空）
                 let solidReagents = [];
@@ -2240,6 +2262,11 @@
                     detectionMethod: $('#tlc-detection-method').val() || null
                 } : null;
 
+                // 采集HPLC参数
+                const hplcParams = hplcEnabled ? {
+                    method: $('#hplc-method-selector').val() || null
+                } : null;
+
                 // 元信息：名称/日期/状态
                 const now = new Date();
                 const two = n => (n < 10 ? '0' + n : '' + n);
@@ -2263,7 +2290,8 @@
                         reaction: { enabled: reactionEnabled, params: reactionParams },
                         gcms: { enabled: gcmsEnabled, params: gcmsParams },
                         evaporation: { enabled: evaporationEnabled, params: evaporationParams },
-                        tlc: { enabled: tlcEnabled, params: tlcParams }
+                        tlc: { enabled: tlcEnabled, params: tlcParams },
+                        hplc: { enabled: hplcEnabled, params: hplcParams }
                     }
                 };
                 // 生成摘要HTML
@@ -2351,6 +2379,20 @@
                     </div>
                 ` : '';
 
+                const hplcHtml = task.stations.hplc.enabled ? (() => {
+                    const methodName = hplcParams.method || '';
+                    const methodInfo = hplcMethodData[methodName];
+                    if (methodInfo) {
+                        return `
+                    <div class="mb-3">
+                        <strong>采集方法：</strong>${methodName}
+                    </div>
+                `;
+                    } else {
+                        return `<div class="mb-3">采集方法：${methodName || '-'}</div>`;
+                    }
+                })() : '';
+
                 const remark = ($('#experiment-remark-input').val() || '').trim();
 
                 const summaryHtml = `
@@ -2381,6 +2423,8 @@
                     ${evaporationHtml}
                     <div class="mb-3"><strong>TLC分析工站：</strong>${task.stations.tlc.enabled ? '已启用' : '未启用'}</div>
                     ${tlcHtml}
+                    <div class="mb-3"><strong>HPLC分析工站：</strong>${task.stations.hplc.enabled ? '已启用' : '未启用'}</div>
+                    ${hplcHtml}
                 `;
 
                 // 暂存任务，等待确认

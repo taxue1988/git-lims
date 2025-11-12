@@ -586,6 +586,7 @@
             const gcms = stations.gcms || {};
             const evap = stations.evaporation || {};
             const tlc = stations.tlc || {};
+            const hplc = stations.hplc || {};
 
             const reagentRows = (solid.enabled && Array.isArray(solid.reagents) && solid.reagents.length)
                 ? solid.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
@@ -740,6 +741,16 @@
                 </div>
             ` : '';
 
+            // HPLC
+            const hp = hplc.params || {};
+            let hplcHtml = '';
+            if (hplc.enabled) {
+                const methodName = hp.method || '';
+                hplcHtml = `<div class="mb-3">
+                    <strong>采集方法：</strong>${methodName || '-'}
+                </div>`;
+            }
+
             const createdAt = task.created_at || task.date || '';
             const summaryHtml = `
                 <div class="mb-3"><strong>实验名称：</strong>${task.name || '-'}</div>
@@ -769,6 +780,8 @@
                 ${evaporationHtml}
                 <div class="mb-3"><strong>TLC分析工站：</strong>${tlc.enabled ? '已启用' : '未启用'}</div>
                 ${tlcHtml}
+                <div class="mb-3"><strong>HPLC分析工站：</strong>${hplc.enabled ? '已启用' : '未启用'}</div>
+                ${hplcHtml}
             `;
             return summaryHtml;
         }
