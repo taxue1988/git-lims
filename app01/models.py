@@ -204,6 +204,24 @@ class Task(models.Model):
             reason=reason,
         )
 
+        # 同步写入/更新“实验详情”表
+        try:
+            # 延迟导入以避免潜在的循环引用问题
+            from .models import ExperimentDetail  # noqa
+            ExperimentDetail.objects.update_or_create(
+                task=self,
+                defaults={
+                    "task_name": self.name,
+                    "created_by_id": self.created_by_id,
+                    "status": self.status,
+                    "remark": self.remark,
+                    "stations": self.stations,
+                },
+            )
+        except Exception as _e:
+            # 不阻断主流程，仅记录（生产中建议使用日志系统）
+            pass
+
         return self
 
     def get_available_statuses(self):
@@ -270,6 +288,42 @@ class TaskStatusLog(models.Model):
 # endregion
 
 
+# region 实验详情(ExperimentDetail)
+class ExperimentDetail(models.Model):
+    """
+    实验详情表：将实验任务中的具体内容写入专用表。
+    需求指定表名为“实验详情”。
+    一条任务对应一条详情记录（可按需扩展为多条）。
+    """
+    task = models.OneToOneField(
+        Task, on_delete=models.CASCADE, related_name="experiment_detail", verbose_name="关联任务"
+    )
+    task_name = models.CharField(max_length=255, verbose_name="实验名称")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="提交人"
+    )
+    status = models.CharField(max_length=20, choices=TaskStatus.choices, verbose_name="状态")
+    remark = models.TextField(blank=True, null=True, verbose_name="备注")
+    stations = models.JSONField(blank=True, null=True, verbose_name="工站参数")
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="写入时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "实验详情"  # 根据需求使用中文表名
+        verbose_name = "实验详情"
+        verbose_name_plural = "实验详情"
+        indexes = [
+            models.Index(fields=["created_by", "created_at"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"实验详情: {self.task_name} (任务ID: {self.task_id})"
+
+# endregion
+
+
 # region 工站类型与工站模型(StationType, Station)
 
 
@@ -315,6 +369,96 @@ class Station(models.Model):
     def __str__(self):
         return self.name
 
+
+# endregion
+
+# region 固液配料工站位置模型
+
+class BatchingStationPosition(models.Model):
+    """
+    固液配料工站 - 位置模型
+    记录页面上的位置 prep_1..prep_10 与当前占用的转移仓。
+    """
+    station = models.ForeignKey(
+        'Station', on_delete=models.CASCADE, related_name='batching_positions', verbose_name='所属工站'
+    )
+    position_id = models.CharField(max_length=32, unique=True, verbose_name='位置ID(如 prep_1)')
+    display_name = models.CharField(max_length=64, verbose_name='显示名称', help_text='例如 位置 1')
+    order_index = models.PositiveIntegerField(default=0, verbose_name='显示排序')
+
+    is_occupied = models.BooleanField(default=False, verbose_name='是否被占用')
+    current_container = models.ForeignKey(
+        'Container', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='当前转移仓'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'batching_station_position'
+        verbose_name = '固液配料工站位置'
+        verbose_name_plural = '固液配料工站位置'
+        ordering = ['order_index', 'position_id']
+        indexes = [
+            models.Index(fields=['station', 'position_id']),
+            models.Index(fields=['is_occupied']),
+        ]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.position_id})"
+
+# endregion
+
+# region 反应工站位置模型 (ReactionStationPosition)
+
+class ReactionStationPosition(models.Model):
+    """
+    反应工站 - 转移仓位置模型
+    记录页面上的位置 PREP_1..PREP_12 与当前占用的转移仓（独立于固液配料）。
+    """
+    class PositionId(models.TextChoices):
+        PREP_1 = "PREP_1", "位置 1"
+        PREP_2 = "PREP_2", "位置 2"
+        PREP_3 = "PREP_3", "位置 3"
+        PREP_4 = "PREP_4", "位置 4"
+        PREP_5 = "PREP_5", "位置 5"
+        PREP_6 = "PREP_6", "位置 6"
+        PREP_7 = "PREP_7", "位置 7"
+        PREP_8 = "PREP_8", "位置 8"
+        PREP_9 = "PREP_9", "位置 9"
+        PREP_10 = "PREP_10", "位置 10"
+        PREP_11 = "PREP_11", "位置 11"
+        PREP_12 = "PREP_12", "位置 12"
+
+    station = models.ForeignKey(
+        'Station', on_delete=models.CASCADE, related_name='reaction_positions', verbose_name='所属工站'
+    )
+    position_id = models.CharField(max_length=32, choices=PositionId.choices, verbose_name='位置ID(如 PREP_1)')
+    display_name = models.CharField(max_length=64, verbose_name='显示名称', help_text='例如 位置 1')
+    order_index = models.PositiveIntegerField(default=0, verbose_name='显示排序')
+
+    is_occupied = models.BooleanField(default=False, verbose_name='是否被占用')
+    current_container = models.ForeignKey(
+        'Container', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='当前转移仓'
+    )
+
+    placed_at = models.DateTimeField(blank=True, null=True, verbose_name='放置时间')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'reaction_station_position'
+        verbose_name = '反应工站位置'
+        verbose_name_plural = '反应工站位置'
+        ordering = ['order_index', 'position_id']
+        unique_together = ('station', 'position_id')
+        indexes = [
+            models.Index(fields=['station', 'position_id']),
+            models.Index(fields=['is_occupied']),
+        ]
+
+    def __str__(self):
+        return f"{self.display_name} ({self.position_id})"
 
 # endregion
 
@@ -410,6 +554,9 @@ class Container(models.Model):
         null=True,
         related_name="target_containers",
         verbose_name="目标工站",
+    )
+    current_position = models.CharField(
+        max_length=64, blank=True, null=True, verbose_name="当前位置ID"
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
@@ -1498,3 +1645,81 @@ class BOTrial(models.Model):
 
     def __str__(self):
         return f"Trial@{self.iteration.task.task_name}#R{self.iteration.round_index}"
+
+
+# ==================== 反应工站：磁搅设备与孔位 ====================
+class ReactionStirrer(models.Model):
+    """反应工站的磁搅设备（20台）。"""
+    class OnlineStatus(models.TextChoices):
+        ONLINE = 'online', '在线'
+        OFFLINE = 'offline', '离线'
+        UNKNOWN = 'unknown', '未知'
+
+    station = models.ForeignKey(
+        Station, on_delete=models.CASCADE, related_name='reaction_stirrers', verbose_name='所属工站'
+    )
+    number = models.PositiveIntegerField(verbose_name='设备编号(1-20)')
+    name = models.CharField(max_length=64, verbose_name='名称', default='磁搅')
+    is_active = models.BooleanField(default=True, verbose_name='是否启用')
+
+    # 运行信息（可选实时写入或周期落库）
+    online_status = models.CharField(max_length=10, choices=OnlineStatus.choices, default=OnlineStatus.UNKNOWN, verbose_name='在线状态')
+    current_temperature = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, verbose_name='当前温度(°C)')
+    target_temperature = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, verbose_name='目标温度(°C)')
+    stirring_speed = models.PositiveIntegerField(null=True, blank=True, verbose_name='搅拌速度(rpm)')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'reaction_stirrer'
+        verbose_name = '反应磁搅'
+        verbose_name_plural = '反应磁搅'
+        ordering = ['station_id', 'number']
+        unique_together = ('station', 'number')
+        indexes = [
+            models.Index(fields=['station', 'number']),
+        ]
+
+    def __str__(self):
+        return f"{self.station.name}#磁搅{self.number}"
+
+
+class ReactionStirrerHole(models.Model):
+    """磁搅设备的孔位（每台12孔）。"""
+    class Status(models.TextChoices):
+        IDLE = 'idle', '空闲'
+        REACTING = 'reacting', '反应中'
+        COMPLETED = 'completed', '已完成'
+
+    stirrer = models.ForeignKey(
+        ReactionStirrer, on_delete=models.CASCADE, related_name='holes', verbose_name='磁搅设备'
+    )
+    hole_index = models.PositiveIntegerField(verbose_name='孔位(1-12)')
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.IDLE, verbose_name='状态')
+
+    # 绑定对象（可选其一）
+    test_tube = models.ForeignKey('TestTube15', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='试管')
+    current_task = models.ForeignKey('Task', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='任务')
+
+    # 运行参数快照（用于复盘）
+    setpoints = models.JSONField(null=True, blank=True, verbose_name='设定参数')
+    started_at = models.DateTimeField(null=True, blank=True, verbose_name='开始时间')
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='完成时间')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        db_table = 'reaction_stirrer_hole'
+        verbose_name = '反应磁搅孔位'
+        verbose_name_plural = '反应磁搅孔位'
+        unique_together = ('stirrer', 'hole_index')
+        ordering = ['stirrer_id', 'hole_index']
+        indexes = [
+            models.Index(fields=['stirrer', 'hole_index']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.stirrer} - 孔位{self.hole_index}"

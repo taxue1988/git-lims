@@ -16,6 +16,10 @@ from .models import (
     LaiyuPowder,
     JingtaiPowder,
     ReagentBottle150,
+    BatchingStationPosition,
+    ReactionStirrer,
+    ReactionStirrerHole,
+    ReactionStationPosition,
 )
 
 # 自定义用户创建表单
@@ -142,9 +146,9 @@ class ContainerSpecAdmin(admin.ModelAdmin):
 
 @admin.register(Container)
 class ContainerAdmin(admin.ModelAdmin):
-    list_display = ("name", "spec", "state", "current_station", "created_at")
+    list_display = ("name", "spec", "state", "current_station", "current_position", "target_station", "updated_at")
     list_filter = ("state", "spec", "current_station")
-    search_fields = ("name",)
+    search_fields = ("name", "current_position")
     readonly_fields = ("created_at", "updated_at")
 
 
@@ -181,3 +185,38 @@ class ReagentBottle150Admin(admin.ModelAdmin):
     list_display = ("name", "reagent_name", "volume_ml", "state", "current_container")
     list_filter = ("state", "reagent_name")
     search_fields = ("name", "reagent_name")
+
+
+@admin.register(BatchingStationPosition)
+class BatchingStationPositionAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "position_id", "station", "is_occupied", "current_container", "updated_at")
+    list_filter = ("station", "is_occupied")
+    search_fields = ("display_name", "position_id")
+    ordering = ("order_index",)
+
+
+@admin.register(ReactionStirrer)
+class ReactionStirrerAdmin(admin.ModelAdmin):
+    list_display = ("station", "number", "name", "is_active", "online_status", "current_temperature", "stirring_speed", "updated_at")
+    list_filter = ("station", "is_active", "online_status")
+    search_fields = ("name",)
+    ordering = ("station", "number")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ReactionStirrerHole)
+class ReactionStirrerHoleAdmin(admin.ModelAdmin):
+    list_display = ("stirrer", "hole_index", "status", "test_tube", "current_task", "started_at", "completed_at", "updated_at")
+    list_filter = ("status", "stirrer")
+    search_fields = ("stirrer__station__name", "stirrer__number")
+    ordering = ("stirrer", "hole_index")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(ReactionStationPosition)
+class ReactionStationPositionAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "position_id", "station", "is_occupied", "current_container", "placed_at", "updated_at")
+    list_filter = ("station", "is_occupied")
+    search_fields = ("display_name", "position_id", "current_container__name")
+    ordering = ("order_index",)
+    readonly_fields = ("created_at", "updated_at")

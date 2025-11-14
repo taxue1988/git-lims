@@ -1,0 +1,576 @@
+{% extends 'admin/station_management.html' %}
+
+{% block title %}固液配料 - 工站管理<!-- 放置转移仓模态框 -->
+<div class="modal fade" id="placeContainerModal" tabindex="-1" aria-labelledby="placeContainerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="placeContainerModalLabel">选择一个转移仓放置到 <span id="position-name-in-modal"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="available-containers-list" class="list-group"> 
+                    <!-- 可用转移仓将通过JS动态加载 -->
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">正在加载...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block main_content %}
+{{ block.super }}
+
+<style>
+    .card-header-collapsible { cursor: pointer; user-select: none; }
+    .status-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+        transition: background-color 0.3s ease;
+    }
+    .status-online { background-color: #28a745; box-shadow: 0 0 8px rgba(40, 167, 69, 0.7); }
+    .status-offline { background-color: #dc3545; }
+    .status-unknown { background-color: #6c757d; }
+    .card:hover { transform: none; box-shadow: none; }
+    .station-card .card-body { padding: 1rem; }
+    .positions-row { margin-bottom: 0.5rem; }
+    .positions-row:last-child { margin-bottom: 0; }
+</style>
+
+<!-- 工站状态 -->
+<div class="card mt-3">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center card-header-collapsible"
+         data-bs-toggle="collapse" data-bs-target="#stationStatusContent" aria-expanded="true" aria-controls="stationStatusContent">
+        <h4 class="mb-0"><i class="fas fa-cogs me-2"></i> 工站状态</h4>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-light text-dark me-2">连接与统计</span>
+            <i class="fas fa-chevron-down collapse-icon"></i>
+        </div>
+    </div>
+    <div class="collapse show" id="stationStatusContent">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">机械臂</div>
+                    <div id="arm-status-text" class="text-muted small"><span id="arm-status-dot" class="status-dot status-unknown"></span>正在连接...</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">天平</div>
+                    <div id="balance-status-text" class="text-muted small"><span id="balance-status-dot" class="status-dot status-unknown"></span>正在连接...</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">铼羽加粉仪</div>
+                    <div id="powder-dispenser-status-text" class="text-muted small"><span id="powder-dispenser-status-dot" class="status-dot status-unknown"></span>正在连接...</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="p-3 border rounded h-100">
+                    <div class="fw-semibold mb-1">运行信息</div>
+                    <div class="text-muted small">运行时间：<span id="uptime-text">--:--:--</span></div>
+                    <div class="text-muted small">待配料任务数：<span id="pending-count">0</span></div>
+                    <div class="text-muted small">已完成配料任务数：<span id="done-count">0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center card-header-collapsible"
+         data-bs-toggle="collapse" data-bs-target="#currentPositions" aria-expanded="true" aria-controls="currentPositions">
+        <h4 class="mb-0"><i class="fas fa-boxes me-2"></i> 当前仓位（10）</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="currentPositions">
+    <div class="card-body">
+        <div class="row positions-row">
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 1</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 2</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 3</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 4</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 5</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row positions-row">
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 6</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 7</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 8</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 9</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-2 col-sm-4 mb-3">
+                <div class="card h-100 station-card border-light">
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-primary">位置 10</h5>
+                        <p class="card-text text-muted small">转移仓</p>
+                        <div class="current-container-info mb-3">
+                            <div class="alert alert-light py-2 mb-2">
+                                <i class="fas fa-circle"></i>
+                                <span class="text-muted">位置空闲</span>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                                <i class="fas fa-plus"></i> 放置转移仓
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center card-header-collapsible"
+         data-bs-toggle="collapse" data-bs-target="#dispenseTasks" aria-expanded="true" aria-controls="dispenseTasks">
+        <h4 class="mb-0"><i class="fas fa-tasks me-2"></i> 配料任务列表</h4>
+        <i class="fas fa-chevron-down collapse-icon"></i>
+    </div>
+    <div class="collapse show" id="dispenseTasks">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 140px;">实验任务ID</th>
+                        <th>名称</th>
+                        <th style="width: 140px;">试管ID</th>
+                        <th>物料详情</th>
+                        <th style="width: 180px;">创建时间</th>
+                    </tr>
+                </thead>
+                <tbody id="experiment-list-body">
+                    {% for task in tasks %}
+                    <tr>
+                        <td>{{ task.id }}</td>
+                        <td>{{ task.name }}</td>
+                        <td>试管ID</td>
+                        <td>物料详情</td>
+                        <td>{{ task.created_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center">当前没有已通过的配料任务。</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }} {# 保留父模板的JS #}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // --- WebSocket 逻辑，用于实时更新设备状态 ---
+    const armStatusDot = document.getElementById('arm-status-dot');
+    const armStatusText = document.getElementById('arm-status-text');
+    const balanceStatusDot = document.getElementById('balance-status-dot');
+    const balanceStatusText = document.getElementById('balance-status-text');
+    const powderDispenserStatusDot = document.getElementById('powder-dispenser-status-dot');
+    const powderDispenserStatusText = document.getElementById('powder-dispenser-status-text');
+
+    const webClientId = 'web_gypl_station';
+    const socketUrl = 'ws://' + window.location.host + '/ws/test/' + webClientId + '/';
+    const stationSocket = new WebSocket(socketUrl);
+
+    stationSocket.onopen = function(e) {
+        console.log('WebSocket 连接成功，请求初始设备状态...');
+        stationSocket.send(JSON.stringify({ type: 'get_status' }));
+    };
+
+    stationSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        console.log('收到数据:', data);
+        if (data.type === 'device_status') {
+            updateDeviceStatus('arm', data.status.arm);
+            updateDeviceStatus('balance', data.status.balance);
+            updateDeviceStatus('powder_dispenser', data.status.powder_dispenser);
+        }
+    };
+
+    stationSocket.onclose = function(e) {
+        console.error('WebSocket 连接已断开');
+        updateDeviceStatus('arm', false, true);
+        updateDeviceStatus('balance', false, true);
+        updateDeviceStatus('powder_dispenser', false, true);
+    };
+
+    function updateDeviceStatus(device, isOnline, isSocketClosed = false) {
+        let dotElement, textElement;
+        if (device === 'arm') {
+            dotElement = armStatusDot;
+            textElement = armStatusText;
+        } else if (device === 'balance') {
+            dotElement = balanceStatusDot;
+            textElement = balanceStatusText;
+        } else if (device === 'powder_dispenser') {
+            dotElement = powderDispenserStatusDot;
+            textElement = powderDispenserStatusText;
+        }
+        if (!dotElement || !textElement) return;
+
+        dotElement.classList.remove('status-online', 'status-offline', 'status-unknown');
+        if (isSocketClosed) {
+            dotElement.classList.add('status-offline');
+            textElement.innerHTML = `<span id="${device}-status-dot" class="status-dot status-offline"></span>连接中断`;
+        } else if (isOnline) {
+            dotElement.classList.add('status-online');
+            textElement.innerHTML = `<span id="${device}-status-dot" class="status-dot status-online"></span>连接正常`;
+        } else {
+            dotElement.classList.add('status-offline');
+            textElement.innerHTML = `<span id="${device}-status-dot" class="status-dot status-offline"></span>连接断开`;
+        }
+    }
+
+    // --- 放置/移除转移仓逻辑 ---
+    const placeContainerModal = new bootstrap.Modal(document.getElementById('placeContainerModal'));
+    const availableContainersList = document.getElementById('available-containers-list');
+    const positionNameInModal = document.getElementById('position-name-in-modal');
+    let currentPositionId = null;
+    let currentCardElement = null;
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function placeContainer(containerId, positionId, containerName) {
+        fetch('/api/batching-station/place-container/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ container_id: containerId, position_id: positionId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success' || data.success === true) {
+                placeContainerModal.hide();
+                const containerInfo = currentCardElement.querySelector('.current-container-info');
+                containerInfo.innerHTML = `
+                    <div class="alert alert-success py-2 mb-2">
+                        <i class="fas fa-check-circle"></i>
+                        <span>${containerName}</span>
+                    </div>
+                `;
+                const buttonGroup = currentCardElement.querySelector('.btn-group-vertical');
+                buttonGroup.innerHTML = `
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-transfer-bin-btn">
+                        <i class="fas fa-times"></i> 移除转移仓
+                    </button>
+                `;
+            } else {
+                alert('放置失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error placing container:', error);
+            alert('放置时发生错误，请查看控制台。');
+        });
+    }
+
+    function removeContainer(positionId, cardElement) {
+        fetch('/api/preparation-station/remove-container/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ position_id: positionId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success' || data.success === true) {
+                const containerInfo = cardElement.querySelector('.current-container-info');
+                containerInfo.innerHTML = `
+                    <div class="alert alert-light py-2 mb-2">
+                        <i class="fas fa-circle"></i>
+                        <span class="text-muted">位置空闲</span>
+                    </div>
+                `;
+                const buttonGroup = cardElement.querySelector('.btn-group-vertical');
+                buttonGroup.innerHTML = `
+                    <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                        <i class="fas fa-plus"></i> 放置转移仓
+                    </button>
+                `;
+            } else {
+                alert('移除失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error removing container:', error);
+            alert('移除时发生错误，请查看控制台。');
+        });
+    }
+
+    document.addEventListener('click', function(event) {
+        const target = event.target;
+        const placeBtn = target.closest('.place-transfer-bin-btn');
+        const removeBtn = target.closest('.remove-transfer-bin-btn');
+
+        if (placeBtn) {
+            const card = placeBtn.closest('.station-card');
+            currentCardElement = card;
+            const positionTitle = card.querySelector('.card-title').textContent.trim();
+            const positionNumber = positionTitle.split(' ')[1];
+            currentPositionId = `prep_${positionNumber}`;
+
+            positionNameInModal.textContent = positionTitle;
+            availableContainersList.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">正在加载...</span></div></div>';
+            placeContainerModal.show();
+
+            fetch('/api/preparation-station/available-containers/')
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    availableContainersList.innerHTML = '';
+                    if (data.length > 0) {
+                        data.forEach(container => {
+                            const a = document.createElement('a');
+                            a.href = '#';
+                            a.className = 'list-group-item list-group-item-action';
+                            a.textContent = container.name;
+                            a.dataset.containerId = container.id;
+                            a.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                placeContainer(container.id, currentPositionId, container.name);
+                            });
+                            availableContainersList.appendChild(a);
+                        });
+                    } else {
+                        availableContainersList.innerHTML = '<p class="text-center text-muted">没有可用的转移仓。</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching containers:', error);
+                    availableContainersList.innerHTML = '<p class="text-center text-danger">加载失败，请重试。</p>';
+                });
+        } else if (removeBtn) {
+            const card = removeBtn.closest('.station-card');
+            const positionTitle = card.querySelector('.card-title').textContent.trim();
+            const positionNumber = positionTitle.split(' ')[1];
+            const positionId = `prep_${positionNumber}`;
+            
+            if (confirm(`确定要从 ${positionTitle} 移除转移仓吗？`)) {
+                removeContainer(positionId, card);
+            }
+        }
+    });
+
+    // --- 卡片折叠动画与箭头旋转 ---
+    var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    collapseElements.forEach(function(element) {
+        element.addEventListener('click', function() {
+            var icon = this.querySelector('.collapse-icon');
+            var target = document.querySelector(this.getAttribute('data-bs-target'));
+            setTimeout(function() {
+                if (target && target.classList.contains('show')) {
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                } else {
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                }
+            }, 50);
+        });
+    });
+});
+</script>
+{% endblock %}

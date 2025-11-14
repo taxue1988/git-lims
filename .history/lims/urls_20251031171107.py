@@ -150,14 +150,6 @@ urlpatterns = [
     
     # ==================== 固液配料工站 API ====================
     path('api/batching-station/place-container/', views.api_batching_station_place_container, name='api_batching_station_place_container'),
-    path('api/batching-station/available-containers/', views.api_batching_station_available_containers, name='api_batching_station_available_containers'),
-    path('api/batching-station/remove-container/', views.api_batching_station_remove_container, name='api_batching_station_remove_container'),
-    path('api/batching-station/current-containers/', views.api_batching_station_current_containers, name='api_batching_station_current_containers'),
-
-    # ==================== 反应工站 API ====================
-    path('api/reaction-station/current-containers/', views.api_reaction_station_current_containers, name='api_reaction_station_current_containers'),
-    path('api/reaction-station/place-container/', views.api_reaction_station_place_container, name='api_reaction_station_place_container'),
-    path('api/reaction-station/remove-container/', views.api_reaction_station_remove_container, name='api_reaction_station_remove_container'),
 
     # ==================== 转移仓 API ====================
     # 规格/列表/统计
@@ -172,7 +164,6 @@ urlpatterns = [
     path('api/containers/<int:container_id>/complete/', views.api_container_complete, name='api_container_complete'),
     path('api/containers/<int:container_id>/clear/', views.api_container_clear, name='api_container_clear'),
     path('api/containers/<int:container_id>/delete/', views.api_container_delete, name='api_container_delete'),
-    path('api/containers/<int:container_id>/slots/', views.api_container_slots, name='api_container_slots'),
     # 导出
     path('api/containers/export/names/', views.api_containers_export_names, name='api_containers_export_names'),
 

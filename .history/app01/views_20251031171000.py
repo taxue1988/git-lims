@@ -3,12 +3,7 @@ import json
 import re
 import random
 import time
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required  # pyright: ignore[reportMissingImports]
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods
-from django.http import JsonResponse
-from .models import Container, ContainerSlot
+from django.shortcuts import render, redirect  # pyright: ignore[reportMissingImports]
 from .models import Task, TaskStatus
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
@@ -25,7 +20,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 
 from .models import Task, TaskStatus
-from .models import Container, ContainerSpec, ContainerSlot, Station, StationType
+from .models import Container, ContainerSpec, ContainerSlot, Station
 from .models import TestTube15, LaiyuPowder, JingtaiPowder, ReagentBottle150
 from .models import PreparationList, FillOperation, PreparationStation
 from .models import DataFile, MLAlgorithm, MLTask, MLTaskResult, DataProcessingLog
@@ -34,11 +29,8 @@ from decimal import Decimal
 from datetime import datetime
 from django.core.exceptions import ValidationError
 # 精简并修正模型导入：去除不存在的模型，保留实际使用的模型
-from .models import TaskStatusManager, BayesianOptTask, BOIteration, BOTrial, ExperimentDetail
-
+from .models import TaskStatusManager, BayesianOptTask, BOIteration, BOTrial
 User = get_user_model()
-
-
 # endregion
 
 
@@ -92,50 +84,6 @@ def logout_view(request):
     return redirect("login")
 
 
-@login_required
-@require_http_methods(["POST"])
-def api_batching_station_remove_container(request):
-    """
-    固液配料工站 - 从当前位置移除转移仓（通过 container_id 移除）
-    """
-    if not request.user.is_admin():
-        return JsonResponse({"success": False, "message": "权限不足"}, status=403)
-
-    try:
-        data = json.loads(request.body)
-        container_id = data.get("container_id")
-
-        if not container_id:
-            return JsonResponse({"success": False, "message": "参数不完整"}, status=400)
-
-        container = Container.objects.get(id=container_id)
-
-        # 将转移仓状态恢复为空闲，并解除工站绑定
-        old_position = container.current_position
-        container.state = "idle"
-        container.current_station = None
-        container.target_station = None
-        container.current_position = None
-        container.save(update_fields=["state", "current_station", "target_station", "current_position", "updated_at"])
-
-        # 同步位置表：清空该位置占用
-        try:
-            from .models import BatchingStationPosition
-            if old_position:
-                BatchingStationPosition.objects.filter(position_id=old_position, current_container=container).update(
-                    is_occupied=False, current_container=None
-                )
-        except Exception:
-            pass
-
-        return JsonResponse({"success": True, "message": f"已移除转移仓 {container.name}"})
-
-    except Container.DoesNotExist:
-        return JsonResponse({"success": False, "message": "转移仓不存在"}, status=404)
-    except Exception as e:
-        return JsonResponse({"success": False, "message": f"操作失败: {str(e)}"}, status=500)
-
-
 # endregion
 
 # region 管理端 - 工站管理子页
@@ -146,27 +94,11 @@ def admin_station_batching(request):
     管理端 - 工站管理 - 固液配料子页面
     继承父模板并默认高亮“固液配料”。
     """
-    # 仅管理员可访问该页面，避免普通用户调用管理员接口导致 403/404
-    if not hasattr(request.user, 'is_admin') or not request.user.is_admin():
-        return redirect("user_task_management")
-
     approved_tasks = Task.objects.filter(status=TaskStatus.APPROVED).order_by("-created_at")
-
-    # 查询所有固液配料工站的位置，并按名称排序
-    try:
-        # 固液配料工站位置模型（如未迁移或不存在，降级为空列表）
-        from .models import BatchingStationPosition
-        positions = BatchingStationPosition.objects.order_by('order_index', 'display_name')
-    except Exception:
-        # 模型未迁移或其他错误，避免页面崩溃
-        positions = []
-
     context = {
         'tasks': approved_tasks,
-        'positions': positions,  # 将仓位信息传递给模板
     }
     return render(request, "admin/station_management/固液配料.html", context)
-
 
 # endregion
 
@@ -224,138 +156,9 @@ def admin_station_manual(request):
 @ensure_csrf_cookie
 def admin_station_reaction(request):
     """
-    管理端 - 工站管理 - 反应子页面
+    管理端 - 工站管理 - 反应子页面（只读占位版本）
     """
     return render(request, "admin/station_management/反应.html")
-
-# ===== 反应工站 API：转移仓位置 =====
-@login_required
-@require_http_methods(["GET"])
-def api_reaction_station_current_containers(request):
-    """
-    获取反应工站的转移仓位置与占用情况（返回结构与固液配料接口保持兼容）
-    GET 参数：station_id 可选
-    返回：{ success, containers: [ {position_id: 'prep_1', id, name} ] }
-    """
-    try:
-        from .models import ReactionStationPosition
-        station_id = request.GET.get('station_id')
-        qs = ReactionStationPosition.objects.select_related('current_container').all()
-        if station_id:
-            qs = qs.filter(station_id=station_id)
-        containers = []
-        for pos in qs.order_by('order_index', 'position_id'):
-            if pos.is_occupied and pos.current_container:
-                containers.append({
-                    'position_id': pos.position_id.lower(),  # 兼容前端使用的小写 prep_x
-                    'id': pos.current_container.id,
-                    'name': pos.current_container.name,
-                    'placed_at': pos.placed_at.isoformat() if pos.placed_at else None,
-                    'updated_at': pos.updated_at.isoformat() if pos.updated_at else None,
-                })
-        return JsonResponse({'success': True, 'containers': containers})
-    except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
-
-
-@login_required
-@require_http_methods(["POST"])
-@transaction.atomic
-def api_reaction_station_place_container(request):
-    """
-    在指定反应工站位置放置转移仓
-    Body: { position_id: 'PREP_1', container_id: 123, station_id?: number }
-    """
-    try:
-        from .models import ReactionStationPosition, Container, Station, StationType
-        payload = json.loads(request.body or '{}')
-        position_id = str(payload.get('position_id') or '').upper()
-        container_id = payload.get('container_id')
-        station_id = payload.get('station_id')
-        if not position_id or not container_id:
-            return JsonResponse({'success': False, 'message': 'position_id 与 container_id 必填'}, status=400)
-
-        # 选择位置
-        qs = ReactionStationPosition.objects.select_related('station').filter(position_id=position_id)
-        if station_id:
-            qs = qs.filter(station_id=station_id)
-        pos = qs.first()
-        if not pos:
-            return JsonResponse({'success': False, 'message': '位置不存在'}, status=404)
-        if pos.is_occupied:
-            return JsonResponse({'success': False, 'message': '该位置已被占用'}, status=400)
-
-        container = Container.objects.get(id=container_id)
-        # 绑定
-        pos.current_container = container
-        pos.is_occupied = True
-        pos.placed_at = timezone.now()
-        pos.save(update_fields=['current_container', 'is_occupied', 'placed_at', 'updated_at'])
-
-        # 更新容器归属
-        container.state = Container.State.IN_USE
-        container.current_station = pos.station
-        container.current_position = position_id
-        container.save(update_fields=['state', 'current_station', 'current_position', 'updated_at'])
-
-        return JsonResponse({'success': True, 'message': '放置成功', 'container_name': container.name})
-    except Container.DoesNotExist:
-        return JsonResponse({'success': False, 'message': '转移仓不存在'}, status=404)
-    except Exception as e:
-        transaction.set_rollback(True)
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
-
-
-@login_required
-@require_http_methods(["POST"])
-@transaction.atomic
-def api_reaction_station_remove_container(request):
-    """
-    从反应工站位置移除转移仓
-    Body: { position_id?: 'PREP_1', container_id?: 123 }
-    """
-    try:
-        from .models import ReactionStationPosition, Container
-        payload = json.loads(request.body or '{}')
-        position_id = payload.get('position_id')
-        container_id = payload.get('container_id')
-        pos = None
-        container = None
-        if container_id:
-            container = Container.objects.get(id=container_id)
-            pos = ReactionStationPosition.objects.filter(current_container=container).first()
-            if not pos:
-                # 容器存在但未绑定位置，也只重置容器状态
-                container.state = Container.State.IDLE
-                container.current_station = None
-                container.current_position = None
-                container.save(update_fields=['state', 'current_station', 'current_position', 'updated_at'])
-                return JsonResponse({'success': True, 'message': '容器状态已恢复'})
-        elif position_id:
-            pos = ReactionStationPosition.objects.filter(position_id=position_id).first()
-        else:
-            return JsonResponse({'success': False, 'message': 'position_id 或 container_id 至少提供一个'}, status=400)
-
-        if not pos:
-            return JsonResponse({'success': False, 'message': '未找到对应位置'}, status=404)
-
-        if pos.current_container:
-            container = pos.current_container
-            container.state = Container.State.IDLE
-            container.current_station = None
-            container.current_position = None
-            container.save(update_fields=['state', 'current_station', 'current_position', 'updated_at'])
-
-        pos.current_container = None
-        pos.is_occupied = False
-        pos.save(update_fields=['current_container', 'is_occupied', 'updated_at'])
-
-        return JsonResponse({'success': True, 'message': '移除成功'})
-    except Container.DoesNotExist:
-        return JsonResponse({'success': False, 'message': '转移仓不存在'}, status=404)
-    except Exception as e:
-        transaction.set_rollback(True)
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 
 @login_required
@@ -451,6 +254,8 @@ def admin_test_ctrl(request):
         return redirect("user_task_management")
 
     return render(request, "admin/test_ctrl.html")
+
+
 
 
 # region 普通用户仪表板
@@ -706,8 +511,7 @@ def api_bo_upload_csv(request: HttpRequest, bo_task_id: int):
 
     # 自动分隔符探测（若失败则用逗号）
     try:
-        dialect = csv.Sniffer().sniff(
-            content.splitlines()[0] + '\n' + (content.splitlines()[1] if len(content.splitlines()) > 1 else ''))
+        dialect = csv.Sniffer().sniff(content.splitlines()[0] + '\n' + (content.splitlines()[1] if len(content.splitlines())>1 else ''))
         reader = csv.DictReader(io.StringIO(content), dialect=dialect)
     except Exception:
         reader = csv.DictReader(io.StringIO(content))
@@ -729,14 +533,12 @@ def api_bo_upload_csv(request: HttpRequest, bo_task_id: int):
                 # 即使文件没有目标列，我们也不把它作为参数列
                 continue
             vals = [r.get(col) for r in rows]
-
             # 严格连续判定：仅当数据总行数恰为2，且第二、第三行均为数值且第2<第3
             def to_float_safe(x):
                 try:
                     return float(x)
                 except Exception:
                     return None
-
             # 连续判定（按列）：该列非空数据条数必须恰为2，且两个都是数值，且按原出现顺序第一个 < 第二个
             non_empty = []
             for idx, r in enumerate(rows):
@@ -747,7 +549,7 @@ def api_bo_upload_csv(request: HttpRequest, bo_task_id: int):
                 v_first = to_float_safe(non_empty[0][1])
                 v_second = to_float_safe(non_empty[1][1])
                 if v_first is not None and v_second is not None and v_first < v_second:
-                    param_space[col] = {'type': 'continuous', 'bounds': [v_first, v_second]}
+                    param_space[col] = { 'type': 'continuous', 'bounds': [v_first, v_second] }
                     continue
             # 其他情况一律离散（支持中文/文本或数值混合）
             uniq = []
@@ -768,7 +570,7 @@ def api_bo_upload_csv(request: HttpRequest, bo_task_id: int):
                     mixed.append(int(n) if n.is_integer() else n)
                 except Exception:
                     mixed.append(s)
-            param_space[col] = {'type': 'discrete', 'choices': mixed}
+            param_space[col] = { 'type': 'discrete', 'choices': mixed }
         t.parameter_space = param_space
         t.save(update_fields=['parameter_space', 'updated_at'])
 
@@ -777,28 +579,23 @@ def api_bo_upload_csv(request: HttpRequest, bo_task_id: int):
     created = 0
     for r in rows:
         # 仅以CSV中的列作为参数
-        params = {k: r.get(k) for k in header if k != obj_col}
+        params = { k: r.get(k) for k in header if k != obj_col }
         # 尝试将数值参数转换为float/int
         for name, spec in (t.parameter_space or {}).items():
             if name in params and params[name] is not None:
                 if (spec.get('type') == 'continuous'):
-                    try:
-                        params[name] = float(params[name])
-                    except Exception:
-                        pass
+                    try: params[name] = float(params[name])
+                    except Exception: pass
                 elif (spec.get('type') == 'discrete'):
-                    try:
-                        params[name] = int(float(params[name]))
-                    except Exception:
-                        pass
+                    try: params[name] = int(float(params[name]))
+                    except Exception: pass
         try:
             # 如果CSV没有目标列，则目标为空
             objective = r.get(obj_col) if obj_col in r else None
             objective = float(objective) if objective not in (None, '') else None
         except Exception:
             objective = None
-        BOTrial.objects.create(iteration=it0, params={k: v for k, v in params.items() if k != obj_col},
-                               objective=objective, source_row=r)
+        BOTrial.objects.create(iteration=it0, params={k:v for k,v in params.items() if k!=obj_col}, objective=objective, source_row=r)
         created += 1
 
     # 返回表头与数据行，便于前端渲染表格（目标列放最后）
@@ -863,9 +660,7 @@ def api_bo_start_iteration(request: HttpRequest, bo_task_id: int):
             else:
                 bounds = spec.get('bounds')
                 if not (isinstance(bounds, (list, tuple)) and len(bounds) == 2):
-                    return JsonResponse(
-                        {'ok': False, 'message': f'参数 {name} 离散型需要 bounds=[min,max] 或 choices 列表'},
-                        status=400)
+                    return JsonResponse({'ok': False, 'message': f'参数 {name} 离散型需要 bounds=[min,max] 或 choices 列表'}, status=400)
                 lo, hi = int(float(bounds[0])), int(float(bounds[1]))
                 sk_space.append(Integer(lo, hi, name=name))
         else:
@@ -926,7 +721,7 @@ def api_bo_start_iteration(request: HttpRequest, bo_task_id: int):
 
     # 初始化优化器并灌入历史数据
     # 为避免每轮相同，使用任务与轮次派生的随机种子；并尽量使用更稳健的初始化/采集优化器
-    derived_seed = int((t.id * 1009 + next_round * 97) % (2 ** 32 - 1))
+    derived_seed = int((t.id * 1009 + next_round * 97) % (2**32 - 1))
     try:
         optimizer = Optimizer(
             sk_space,
@@ -951,7 +746,6 @@ def api_bo_start_iteration(request: HttpRequest, bo_task_id: int):
 
     # 生成建议
     num = max(1, t.per_round_suggest)
-
     # 建立历史参数集合用于去重（改进浮点数精度处理）
     def _tuple_from_params(params_dict: dict):
         result = []
@@ -1038,8 +832,7 @@ def api_bo_start_iteration(request: HttpRequest, bo_task_id: int):
         try:
             row = optimizer.ask()
         except Exception:
-            row = [optimizer.space.transform([optimizer.space.rvs(random_state=derived_seed + tried)])[0][i] if hasattr(
-                optimizer, 'space') else None for i in range(len(param_names))]
+            row = [optimizer.space.transform([optimizer.space.rvs(random_state=derived_seed + tried)])[0][i] if hasattr(optimizer, 'space') else None for i in range(len(param_names))]
         params = _build_params_from_row(row)
         tup = _tuple_from_params(params)
         if tup in existing_param_tuples:
@@ -1142,15 +935,11 @@ def api_bo_upsert_history(request: HttpRequest, bo_task_id: int):
         for name, spec in (t.parameter_space or {}).items():
             if name in params and params[name] is not None:
                 if (spec.get('type') == 'continuous'):
-                    try:
-                        params[name] = float(params[name])
-                    except Exception:
-                        pass
+                    try: params[name] = float(params[name])
+                    except Exception: pass
                 elif (spec.get('type') == 'discrete'):
-                    try:
-                        params[name] = int(float(params[name]))
-                    except Exception:
-                        pass
+                    try: params[name] = int(float(params[name]))
+                    except Exception: pass
         BOTrial.objects.create(iteration=it0, params=params, objective=(None if obj in (None, '') else float(obj)))
 
     return JsonResponse({'ok': True, 'count': len(records)})
@@ -1233,7 +1022,6 @@ def api_bo_download_all(request: HttpRequest, bo_task_id: int):
     resp['Content-Disposition'] = f'attachment; filename="bo_task_{t.id}_all.csv"'
     return resp
 
-
 # region 任务管理（用户端：编辑/创建/更新）
 @login_required
 @ensure_csrf_cookie
@@ -1299,21 +1087,6 @@ def api_user_task_create(request: HttpRequest):
             stations=stations,
             status=status_val,
         )
-
-    # 同步写入/更新“实验详情”
-    try:
-        ExperimentDetail.objects.update_or_create(
-            task=obj,
-            defaults={
-                "task_name": obj.name,
-                "created_by_id": obj.created_by_id,
-                "status": obj.status,
-                "remark": obj.remark,
-                "stations": obj.stations,
-            },
-        )
-    except Exception:
-        pass
 
     return JsonResponse(
         {
@@ -2053,7 +1826,6 @@ def admin_user_management(request):
 
     return render(request, "admin/user_management.html", context)
 
-
 # endregion
 
 
@@ -2545,6 +2317,7 @@ def user_analysis_train(request):
     return render(request, 'user/data_analysis/analysis_train.html')
 
 
+
 @login_required
 @ensure_csrf_cookie
 def ml_data_analysis(request):
@@ -2553,7 +2326,7 @@ def ml_data_analysis(request):
     """
     if request.user.is_admin():
         return redirect('admin_experiment_tasks')
-
+    
     return render(request, 'user/data_analysis/ml_data_analysis.html')
 
 
@@ -2565,7 +2338,7 @@ def ml_model_creation(request):
     """
     if request.user.is_admin():
         return redirect('admin_experiment_tasks')
-
+    
     return render(request, 'user/data_analysis/ml_model_creation.html')
 
 
@@ -2577,7 +2350,7 @@ def ml_task_management(request):
     """
     if request.user.is_admin():
         return redirect('admin_experiment_tasks')
-
+    
     return render(request, 'user/data_analysis/ml_task_management.html')
 
 
@@ -2589,7 +2362,7 @@ def ml_task_detail(request, task_id):
     """
     if request.user.is_admin():
         return redirect('admin_experiment_tasks')
-
+    
     try:
         task = MLTask.objects.get(id=task_id, user=request.user)
         return render(request, 'user/data_analysis/ml_task_detail.html', {'task': task})
@@ -2607,7 +2380,7 @@ def api_ml_data_files_list(request):
     """
     try:
         files = DataFile.objects.filter(user=request.user).order_by('-created_at')
-
+        
         files_data = []
         for file in files:
             from zoneinfo import ZoneInfo
@@ -2626,12 +2399,12 @@ def api_ml_data_files_list(request):
                 'created_at': file.created_at.astimezone(cn_tz).strftime('%Y-%m-%d %H:%M:%S'),
                 'updated_at': file.updated_at.astimezone(cn_tz).strftime('%Y-%m-%d %H:%M:%S'),
             })
-
+        
         return JsonResponse({
             'success': True,
             'files': files_data
         })
-
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -2640,7 +2413,7 @@ def api_ml_data_files_list(request):
 
 
 @login_required
-@require_http_methods(["GET"])
+@require_http_methods(["GET"]) 
 def api_ml_data_files_download(request, file_id):
     """
     下载指定数据文件
@@ -2676,39 +2449,39 @@ def api_ml_data_files_upload(request):
                 'success': False,
                 'message': '请选择要上传的文件'
             })
-
+        
         file = request.FILES['file']
-
+        
         # 验证文件类型
         if not file.name.lower().endswith('.csv'):
             return JsonResponse({
                 'success': False,
                 'message': '只支持CSV格式的文件'
             })
-
+        
         # 验证文件大小（50MB限制）
         if file.size > 50 * 1024 * 1024:
             return JsonResponse({
                 'success': False,
                 'message': '文件大小不能超过50MB'
             })
-
+        
         # 生成唯一文件名
         import uuid
         import os
         from django.conf import settings
-
+        
         filename = f"{uuid.uuid4()}.csv"
         file_path = os.path.join(settings.MEDIA_ROOT, 'ml_data', filename)
-
+        
         # 确保目录存在
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
+        
         # 保存文件
         with open(file_path, 'wb') as destination:
             for chunk in file.chunks():
                 destination.write(chunk)
-
+        
         # 创建数据库记录
         data_file = DataFile.objects.create(
             user=request.user,
@@ -2718,16 +2491,16 @@ def api_ml_data_files_upload(request):
             file_size=file.size,
             status='uploading'
         )
-
+        
         # 异步处理文件（这里先同步处理）
         process_uploaded_file(data_file)
-
+        
         return JsonResponse({
             'success': True,
             'message': '文件上传成功',
             'file_id': data_file.id
         })
-
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -2742,7 +2515,7 @@ def process_uploaded_file(data_file):
     try:
         import pandas as pd
         import numpy as np
-
+        
         # 读取CSV文件（更健壮：编码回退，禁用低内存分块）
         try:
             df = pd.read_csv(data_file.file_path, low_memory=False)
@@ -2751,13 +2524,13 @@ def process_uploaded_file(data_file):
                 df = pd.read_csv(data_file.file_path, engine='python', low_memory=False)
             except Exception:
                 df = pd.read_csv(data_file.file_path, encoding_errors='ignore', low_memory=False)
-
+        
         # 更新文件信息
         data_file.total_rows = len(df)
         data_file.total_columns = len(df.columns)
         data_file.column_names = df.columns.tolist()
         data_file.data_types = df.dtypes.astype(str).to_dict()
-
+        
         # 分析缺失值（确保为原生int以便JSON序列化）
         missing_values = {}
         for col in df.columns:
@@ -2768,9 +2541,9 @@ def process_uploaded_file(data_file):
                 except Exception:
                     # 兜底转换
                     missing_values[col] = int(float(missing_count))
-
+        
         data_file.missing_values = missing_values
-
+        
         # 分析异常值（使用IQR方法，确保计数为原生int）
         outlier_info = {}
         for col in df.select_dtypes(include=[np.number]).columns:
@@ -2779,13 +2552,13 @@ def process_uploaded_file(data_file):
             IQR = Q3 - Q1
             lower_bound = Q1 - 1.5 * IQR
             upper_bound = Q3 + 1.5 * IQR
-
+            
             outliers = df[(df[col] < lower_bound) | (df[col] > upper_bound)]
             if len(outliers) > 0:
                 outlier_info[col] = int(len(outliers))
-
+        
         data_file.outlier_info = outlier_info
-
+        
         # 列统计与类型检测
         column_stats = []
         for col in df.columns:
@@ -2820,20 +2593,19 @@ def process_uploaded_file(data_file):
         except Exception:
             # 兜底逐元素替换
             preview_df = preview_df.copy()
-            preview_df = preview_df.applymap(
-                lambda x: None if (isinstance(x, float) and (x != x or x == float('inf') or x == float('-inf'))) else x)
+            preview_df = preview_df.applymap(lambda x: None if (isinstance(x, float) and (x != x or x == float('inf') or x == float('-inf'))) else x)
 
         data_file.data_preview = {
             'headers': df.columns.tolist(),
             'data': preview_df.values.tolist(),
             'column_stats': column_stats
         }
-
+        
         # 更新状态
         data_file.status = 'ready'
         data_file.processing_log = f"文件处理完成：{data_file.total_rows}行，{data_file.total_columns}列"
         data_file.save()
-
+        
     except Exception as e:
         # 若因numpy类型导致JSON序列化失败，清空相关字段再保存错误状态
         try:
@@ -2860,7 +2632,7 @@ def api_ml_data_files_detail(request, file_id):
     """
     try:
         data_file = DataFile.objects.get(id=file_id, user=request.user)
-
+        
         return JsonResponse({
             'success': True,
             'file': {
@@ -2880,7 +2652,7 @@ def api_ml_data_files_detail(request, file_id):
                 'created_at': data_file.created_at.strftime('%Y-%m-%d %H:%M'),
             }
         })
-
+        
     except DataFile.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -2901,17 +2673,16 @@ def api_ml_data_files_process(request, file_id):
     """
     try:
         data_file = DataFile.objects.get(id=file_id, user=request.user)
-
+        
         if data_file.status != 'ready':
             return JsonResponse({
                 'success': False,
                 'message': '文件状态不允许处理'
             })
-
+        
         # 组装列级统计与类型信息（若预览中已缓存则直接使用）
         column_stats = []
-        if data_file.data_preview and isinstance(data_file.data_preview, dict) and data_file.data_preview.get(
-                'column_stats'):
+        if data_file.data_preview and isinstance(data_file.data_preview, dict) and data_file.data_preview.get('column_stats'):
             column_stats = data_file.data_preview.get('column_stats')
         else:
             import pandas as pd
@@ -2948,18 +2719,17 @@ def api_ml_data_files_process(request, file_id):
                 'counts': list((data_file.missing_values or {}).values())
             },
             'outliers': {
-                'normal_count': (data_file.total_rows or 0) - sum((data_file.outlier_info or {}).values()) if (
-                            data_file.total_rows and data_file.outlier_info) else None,
+                'normal_count': (data_file.total_rows or 0) - sum((data_file.outlier_info or {}).values()) if (data_file.total_rows and data_file.outlier_info) else None,
                 'outlier_count': sum((data_file.outlier_info or {}).values()) if data_file.outlier_info else None
             },
             'total_rows': data_file.total_rows
         }
-
+        
         return JsonResponse({
             'success': True,
             'analysis': analysis
         })
-
+        
     except DataFile.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -2980,18 +2750,18 @@ def api_ml_data_files_preview(request, file_id):
     """
     try:
         data_file = DataFile.objects.get(id=file_id, user=request.user)
-
+        
         if not data_file.data_preview:
             return JsonResponse({
                 'success': False,
                 'message': '文件预览数据不可用'
             })
-
+        
         return JsonResponse({
             'success': True,
             'preview': data_file.data_preview
         })
-
+        
     except DataFile.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3012,20 +2782,20 @@ def api_ml_data_files_delete(request, file_id):
     """
     try:
         data_file = DataFile.objects.get(id=file_id, user=request.user)
-
+        
         # 删除物理文件
         import os
         if os.path.exists(data_file.file_path):
             os.remove(data_file.file_path)
-
+        
         # 删除数据库记录
         data_file.delete()
-
+        
         return JsonResponse({
             'success': True,
             'message': '文件已删除'
         })
-
+        
     except DataFile.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3051,16 +2821,16 @@ def api_ml_missing_values_analysis(request):
         file_id = data.get('file_id')
         strategy = data.get('missing_value_strategy', 'drop')
         columns = data.get('columns')  # 可选，限定处理列
-
+        
         data_file = DataFile.objects.get(id=file_id, user=request.user)
-
+        
         # 实际读取并处理数据
         import pandas as pd
         import numpy as np
         df = pd.read_csv(data_file.file_path)
         before_rows = int(len(df))
         strategy_applied = ''
-
+        
         if strategy == 'drop':
             if columns and isinstance(columns, list):
                 df = df.dropna(subset=columns)
@@ -3112,13 +2882,13 @@ def api_ml_missing_values_analysis(request):
             strategy_applied = '后向填充'
         else:
             return JsonResponse({'success': False, 'message': '不支持的缺失值处理策略'})
-
+        
         # 保存处理后的文件为新版本
         import os
         base_dir, name = os.path.split(data_file.file_path)
         processed_path = os.path.join(base_dir, f"processed_missing_{data_file.filename}")
         df.to_csv(processed_path, index=False)
-
+        
         # 更新统计并记录日志（重新计算缺失值、基本统计）
         missing_values = {}
         for col in df.columns:
@@ -3169,27 +2939,25 @@ def api_ml_missing_values_analysis(request):
             data_file.data_preview = dp
         except Exception:
             pass
-        data_file.processing_log = (
-                                               data_file.processing_log or '') + f"\n缺失值处理：{strategy_applied}，原行数{int(before_rows)}，现行数{int(len(df))}"
+        data_file.processing_log = (data_file.processing_log or '') + f"\n缺失值处理：{strategy_applied}，原行数{int(before_rows)}，现行数{int(len(df))}"
         data_file.save()
-
+        
         DataProcessingLog.objects.create(
             user=request.user,
             data_file=data_file,
             processing_type='missing_value',
             parameters={'strategy': strategy},
-            result_summary={'rows_before': int(before_rows), 'rows_after': int(len(df)),
-                            'remaining_missing': {k: int(v) for k, v in missing_values.items()}},
+            result_summary={'rows_before': int(before_rows), 'rows_after': int(len(df)), 'remaining_missing': {k: int(v) for k, v in missing_values.items()}},
             processing_log=f"应用策略：{strategy_applied}，保存为：{processed_path}"
         )
-
+        
         return JsonResponse({
             'success': True,
             'message': f'缺失值处理完成，使用策略：{strategy}',
             'rows_before': int(before_rows),
             'rows_after': int(len(df))
         })
-
+        
     except DataFile.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3214,9 +2982,9 @@ def api_ml_outliers_analysis(request):
         strategy = data.get('outlier_strategy', 'keep')
         cap_percentile = float(data.get('cap_percentile', 0.01))  # 分位点用于cap策略
         columns = data.get('columns')  # 可选，仅处理指定列
-
+        
         data_file = DataFile.objects.get(id=file_id, user=request.user)
-
+        
         import pandas as pd
         import numpy as np
         df = pd.read_csv(data_file.file_path)
@@ -3227,7 +2995,7 @@ def api_ml_outliers_analysis(request):
             processed_cols = [c for c in columns if c in numeric_cols_all]
         outlier_counts_before = {}
         outlier_counts_after_processed = {}
-
+        
         # 使用IQR检测异常值阈值
         bounds = {}
         for col in processed_cols:
@@ -3238,7 +3006,7 @@ def api_ml_outliers_analysis(request):
             upper = Q3 + 1.5 * IQR
             bounds[col] = (lower, upper)
             outlier_counts_before[col] = int(((df[col] < lower) | (df[col] > upper)).sum())
-
+        
         strategy_applied = ''
         if strategy == 'keep':
             strategy_applied = '保留异常值，不做处理'
@@ -3258,7 +3026,7 @@ def api_ml_outliers_analysis(request):
                 lower_q = df[col].quantile(cap_percentile)
                 upper_q = df[col].quantile(1 - cap_percentile)
                 df[col] = df[col].clip(lower_q, upper_q)
-            strategy_applied = f'按分位点({cap_percentile:.2%},{(1 - cap_percentile):.2%})截断异常值'
+            strategy_applied = f'按分位点({cap_percentile:.2%},{(1-cap_percentile):.2%})截断异常值'
         elif strategy == 'mean':
             # 将异常值替换为列均值
             for col in processed_cols:
@@ -3292,7 +3060,7 @@ def api_ml_outliers_analysis(request):
             strategy_applied = '对正数的数值列进行log1p转换'
         else:
             return JsonResponse({'success': False, 'message': '不支持的异常值处理策略'})
-
+        
         # 计算处理后异常值数量（仅对处理列或在删除策略下对全部数值列）
         recalc_cols = list(df.select_dtypes(include=[np.number]).columns) if strategy == 'remove' else processed_cols
         for col in recalc_cols:
@@ -3302,13 +3070,13 @@ def api_ml_outliers_analysis(request):
             lower = Q1 - 1.5 * IQR
             upper = Q3 + 1.5 * IQR
             outlier_counts_after_processed[col] = int(((df[col] < lower) | (df[col] > upper)).sum())
-
+        
         # 保存处理后的文件
         import os
         base_dir, name = os.path.split(data_file.file_path)
         processed_path = os.path.join(base_dir, f"processed_outlier_{data_file.filename}")
         df.to_csv(processed_path, index=False)
-
+        
         # 更新模型中的统计信息
         if strategy == 'remove':
             # 删除行会影响所有列，重算所有数值列的异常计数
@@ -3373,13 +3141,12 @@ def api_ml_outliers_analysis(request):
             dp['column_stats'] = column_stats
             data_file.data_preview = dp
             # 同步缺失统计
-            data_file.missing_values = {c: int(df[c].isnull().sum()) for c in df.columns if
-                                        int(df[c].isnull().sum()) > 0}
+            data_file.missing_values = {c: int(df[c].isnull().sum()) for c in df.columns if int(df[c].isnull().sum()) > 0}
         except Exception:
             pass
         data_file.processing_log = (data_file.processing_log or '') + f"\n异常值处理：{strategy_applied}"
         data_file.save()
-
+        
         DataProcessingLog.objects.create(
             user=request.user,
             data_file=data_file,
@@ -3388,14 +3155,14 @@ def api_ml_outliers_analysis(request):
             result_summary={'before': outlier_counts_before, 'after': outlier_counts_after_processed},
             processing_log=f"应用策略：{strategy_applied}，保存为：{processed_path}"
         )
-
+        
         return JsonResponse({
             'success': True,
             'message': f'异常值处理完成，使用策略：{strategy}',
             'outliers_before': outlier_counts_before,
             'outliers_after': outlier_counts_after_processed
         })
-
+        
     except DataFile.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3420,26 +3187,26 @@ def api_ml_data_split(request):
         train_ratio = float(data.get('train_ratio', 0.8))
         test_ratio = float(data.get('test_ratio', 0.2))
         validation_ratio = float(data.get('validation_ratio', 0.0))
-
+        
         if train_ratio <= 0 or test_ratio < 0 or validation_ratio < 0:
             return JsonResponse({'success': False, 'message': '比例必须为非负，且训练集>0'})
         if round(train_ratio + test_ratio + validation_ratio, 3) > 1.0:
             return JsonResponse({'success': False, 'message': '比例之和不能超过1'})
-
+        
         data_file = DataFile.objects.get(id=file_id, user=request.user)
-
+        
         import pandas as pd
         from sklearn.model_selection import train_test_split
         import os
-
+        
         df = pd.read_csv(data_file.file_path)
         total_rows = len(df)
-
+        
         # 先切分出测试集
         remaining_ratio = train_ratio + validation_ratio
         if remaining_ratio <= 0:
             return JsonResponse({'success': False, 'message': '训练集与验证集之和必须大于0'})
-
+        
         df_train_val, df_test = train_test_split(df, test_size=test_ratio, random_state=42)
         if validation_ratio > 0:
             # 在train_val中再切分验证集，比例需按相对比例计算
@@ -3447,22 +3214,22 @@ def api_ml_data_split(request):
             df_train, df_val = train_test_split(df_train_val, test_size=val_relative, random_state=42)
         else:
             df_train, df_val = df_train_val, pd.DataFrame(columns=df.columns)
-
+        
         base_dir, name = os.path.split(data_file.file_path)
         # 以原始文件名为基名，可被客户端自定义覆盖
         base_name = os.path.splitext(data_file.original_filename)[0]
         # 客户端可传入 train_filename/test_filename 覆盖默认命名
         client_train_filename = (request_body := data).get('train_filename') if isinstance(data, dict) else None
         client_test_filename = (request_body := data).get('test_filename') if isinstance(data, dict) else None
-        default_train_filename = f"{base_name}_train_{int(train_ratio * 100)}.csv"
-        default_test_filename = f"{base_name}_test_{int(test_ratio * 100)}.csv"
+        default_train_filename = f"{base_name}_train_{int(train_ratio*100)}.csv"
+        default_test_filename = f"{base_name}_test_{int(test_ratio*100)}.csv"
         train_filename = client_train_filename or default_train_filename
         test_filename = client_test_filename or default_test_filename
         val_filename = None
         train_path = os.path.join(base_dir, train_filename)
         test_path = os.path.join(base_dir, test_filename)
         val_path = os.path.join(base_dir, val_filename) if val_filename else None
-
+        
         df_train.to_csv(train_path, index=False)
         df_test.to_csv(test_path, index=False)
         if not df_val.empty and val_path:
@@ -3503,8 +3270,7 @@ def api_ml_data_split(request):
                 for col in df_src.columns:
                     col_series = df_src[col]
                     is_numeric_series = pd.to_numeric(col_series.dropna(), errors='coerce').notnull()
-                    detected_type = 'Numeric' if is_numeric_series.all() and col_series.dropna().shape[
-                        0] > 0 else 'Enum'
+                    detected_type = 'Numeric' if is_numeric_series.all() and col_series.dropna().shape[0] > 0 else 'Enum'
                     stats_entry = {
                         'name': col,
                         'detected_type': detected_type,
@@ -3528,8 +3294,7 @@ def api_ml_data_split(request):
                 try:
                     preview_df = preview_df.replace({np.nan: None, np.inf: None, -np.inf: None})
                 except Exception:
-                    preview_df = preview_df.applymap(lambda x: None if (
-                                isinstance(x, float) and (x != x or x == float('inf') or x == float('-inf'))) else x)
+                    preview_df = preview_df.applymap(lambda x: None if (isinstance(x, float) and (x != x or x == float('inf') or x == float('-inf'))) else x)
                 return {
                     'headers': df_src.columns.tolist(),
                     'data': preview_df.values.tolist(),
@@ -3555,7 +3320,7 @@ def api_ml_data_split(request):
                 )
         except Exception:
             pass
-
+        
         # 记录日志
         DataProcessingLog.objects.create(
             user=request.user,
@@ -3565,7 +3330,7 @@ def api_ml_data_split(request):
             result_summary={'train_rows': len(df_train), 'test_rows': len(df_test), 'validation_rows': len(df_val)},
             processing_log=f"训练集:{train_path} 测试集:{test_path} 验证集:{val_path if not df_val.empty else '无'}"
         )
-
+        
         return JsonResponse({
             'success': True,
             'message': '数据分割完成',
@@ -3581,7 +3346,7 @@ def api_ml_data_split(request):
                 'test_filename': test_filename
             }
         })
-
+        
     except DataFile.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3603,9 +3368,8 @@ def api_ml_algorithms_list(request):
     获取可用的机器学习算法列表
     """
     try:
-        algorithms = MLAlgorithm.objects.filter(is_active=True, algorithm_type='regression').order_by('algorithm_type',
-                                                                                                      'name')
-
+        algorithms = MLAlgorithm.objects.filter(is_active=True, algorithm_type='regression').order_by('algorithm_type', 'name')
+        
         algorithms_data = []
         for algorithm in algorithms:
             algorithms_data.append({
@@ -3617,12 +3381,12 @@ def api_ml_algorithms_list(request):
                 'default_parameters': algorithm.default_parameters,
                 'is_premium': algorithm.is_premium
             })
-
+        
         return JsonResponse({
             'success': True,
             'algorithms': algorithms_data
         })
-
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -3638,13 +3402,13 @@ def api_ml_algorithms_parameters(request, algorithm_id):
     """
     try:
         algorithm = MLAlgorithm.objects.get(id=algorithm_id, is_active=True)
-
+        
         return JsonResponse({
             'success': True,
             'parameters': algorithm.default_parameters,
             'schema': algorithm.parameter_schema
         })
-
+        
     except MLAlgorithm.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3672,7 +3436,7 @@ def api_ml_tasks_list(request):
         status = request.GET.get('status', '')
         algorithm = request.GET.get('algorithm', '')
         search = request.GET.get('search', '')
-
+        
         # 构建查询
         is_admin_user = False
         try:
@@ -3681,25 +3445,23 @@ def api_ml_tasks_list(request):
         except Exception:
             is_admin_user = False
 
-        base_qs = MLTask.objects.all() if is_admin_user or request.user.is_superuser else MLTask.objects.filter(
-            user=request.user)
-        tasks = base_qs.select_related('data_file', 'train_data_file', 'test_data_file', 'algorithm').order_by(
-            '-created_at')
-
+        base_qs = MLTask.objects.all() if is_admin_user or request.user.is_superuser else MLTask.objects.filter(user=request.user)
+        tasks = base_qs.select_related('data_file', 'train_data_file', 'test_data_file', 'algorithm').order_by('-created_at')
+        
         if status:
             tasks = tasks.filter(status=status)
-
+        
         if algorithm:
             tasks = tasks.filter(algorithm_id=algorithm)
-
+        
         if search:
             tasks = tasks.filter(name__icontains=search)
-
+        
         # 分页
         from django.core.paginator import Paginator
         paginator = Paginator(tasks, page_size)
         page_obj = paginator.get_page(page)
-
+        
         # 序列化任务数据
         tasks_data = []
         for task in page_obj.object_list:
@@ -3721,15 +3483,13 @@ def api_ml_tasks_list(request):
                 'validation_ratio': task.validation_ratio,
                 'user_username': task.user.username,
                 'created_at': task.created_at.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M:%S'),
-                'started_at': task.started_at.astimezone(timezone.get_current_timezone()).strftime(
-                    '%Y-%m-%d %H:%M:%S') if task.started_at else None,
-                'completed_at': task.completed_at.astimezone(timezone.get_current_timezone()).strftime(
-                    '%Y-%m-%d %H:%M:%S') if task.completed_at else None,
+                'started_at': task.started_at.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M:%S') if task.started_at else None,
+                'completed_at': task.completed_at.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M:%S') if task.completed_at else None,
                 'get_duration_display': task.get_duration_display(),
                 'training_log': task.training_log,
                 'error_message': task.error_message
             })
-
+        
         # 统计信息
         statistics = {
             'total': MLTask.objects.filter(user=request.user).count(),
@@ -3737,7 +3497,7 @@ def api_ml_tasks_list(request):
             'completed': MLTask.objects.filter(user=request.user, status='completed').count(),
             'failed': MLTask.objects.filter(user=request.user, status='failed').count()
         }
-
+        
         return JsonResponse({
             'success': True,
             'tasks': tasks_data,
@@ -3750,7 +3510,7 @@ def api_ml_tasks_list(request):
             },
             'statistics': statistics
         })
-
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -3766,7 +3526,7 @@ def api_ml_tasks_create(request):
     """
     try:
         data = json.loads(request.body)
-
+        
         # 验证必需字段
         required_fields = ['task_name', 'data_file', 'target_column', 'feature_columns', 'algorithm']
         for field in required_fields:
@@ -3775,20 +3535,18 @@ def api_ml_tasks_create(request):
                     'success': False,
                     'message': f'缺少必需字段: {field}'
                 })
-
+        
         # 验证数据文件
         try:
             data_file = DataFile.objects.get(id=data['data_file'], user=request.user)
-            train_data_file = DataFile.objects.get(id=data['train_data_file'], user=request.user) if data.get(
-                'train_data_file') else None
-            test_data_file = DataFile.objects.get(id=data['test_data_file'], user=request.user) if data.get(
-                'test_data_file') else None
+            train_data_file = DataFile.objects.get(id=data['train_data_file'], user=request.user) if data.get('train_data_file') else None
+            test_data_file = DataFile.objects.get(id=data['test_data_file'], user=request.user) if data.get('test_data_file') else None
         except DataFile.DoesNotExist:
             return JsonResponse({
                 'success': False,
                 'message': '数据文件不存在或无权限访问'
             })
-
+        
         # 验证算法
         try:
             algorithm = MLAlgorithm.objects.get(id=data['algorithm'], is_active=True)
@@ -3797,11 +3555,11 @@ def api_ml_tasks_create(request):
                 'success': False,
                 'message': '算法不存在'
             })
-
+        
         # 过滤特征列，确保目标列不在特征列中
         target_column = data['target_column']
         feature_columns = [col for col in data['feature_columns'] if col != target_column]
-
+        
         # 创建任务
         task = MLTask.objects.create(
             user=request.user,
@@ -3819,7 +3577,7 @@ def api_ml_tasks_create(request):
             algorithm_parameters=data.get('algorithm_parameters', {}),
             status='pending'
         )
-
+        
         # 若当前无运行中的任务，则立刻启动该任务；否则排队等待
         has_running = MLTask.objects.filter(user=request.user, status='running').exists()
         started = False
@@ -3829,14 +3587,14 @@ def api_ml_tasks_create(request):
             task.save()
             start_training_task(task)
             started = True
-
+        
         return JsonResponse({
             'success': True,
             'message': '任务创建成功' + ('，已开始训练' if started else '，已加入队列待上一个任务完成后自动开始'),
             'task_id': task.id,
             'started': started
         })
-
+        
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
@@ -3856,9 +3614,8 @@ def api_ml_tasks_detail(request, task_id):
     获取任务详情
     """
     try:
-        task = MLTask.objects.select_related('data_file', 'train_data_file', 'test_data_file', 'algorithm').get(
-            id=task_id, user=request.user)
-
+        task = MLTask.objects.select_related('data_file', 'train_data_file', 'test_data_file', 'algorithm').get(id=task_id, user=request.user)
+        
         return JsonResponse({
             'success': True,
             'task': {
@@ -3880,16 +3637,14 @@ def api_ml_tasks_detail(request, task_id):
                 'algorithm_parameters': task.algorithm_parameters,
                 'user_username': task.user.username,
                 'created_at': task.created_at.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M:%S'),
-                'started_at': task.started_at.astimezone(timezone.get_current_timezone()).strftime(
-                    '%Y-%m-%d %H:%M:%S') if task.started_at else None,
-                'completed_at': task.completed_at.astimezone(timezone.get_current_timezone()).strftime(
-                    '%Y-%m-%d %H:%M:%S') if task.completed_at else None,
+                'started_at': task.started_at.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M:%S') if task.started_at else None,
+                'completed_at': task.completed_at.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M:%S') if task.completed_at else None,
                 'get_duration_display': task.get_duration_display(),
                 'training_log': task.training_log,
                 'error_message': task.error_message
             }
         })
-
+        
     except MLTask.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3910,27 +3665,27 @@ def api_ml_tasks_start(request, task_id):
     """
     try:
         task = MLTask.objects.get(id=task_id, user=request.user)
-
+        
         if task.status != 'pending':
             return JsonResponse({
                 'success': False,
                 'message': '任务状态不允许开始训练'
             })
-
+        
         # 更新任务状态
         task.status = 'running'
         task.started_at = timezone.now()
         task.save()
-
+        
         # 这里可以启动异步训练任务
         # 暂时模拟训练过程
         start_training_task(task)
-
+        
         return JsonResponse({
             'success': True,
             'message': '训练任务已开始'
         })
-
+        
     except MLTask.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -3948,31 +3703,31 @@ def start_training_task(task):
     启动真实的机器学习训练任务
     """
     import threading
-
+    
     def train_model():
         try:
             # 确保开始时间被正确设置
             if not task.started_at:
                 task.started_at = timezone.now()
                 task.save()
-
+            
             # 更新进度
             task.progress = 10
             task.training_log = "开始加载数据...\n"
             task.save()
-
+            
             # 添加调试信息
             print(f"开始训练任务 {task.id}: {task.task_name}")
             print(f"算法: {task.algorithm.name}")
             print(f"训练集文件: {task.train_data_file}")
             print(f"测试集文件: {task.test_data_file}")
             print(f"开始时间: {task.started_at}")
-
+            
             # 执行真实的机器学习训练
             result = perform_real_ml_training(task)
-
+            
             print(f"训练结果: {result}")
-
+            
             if result['success']:
                 # 训练完成
                 task.status = 'completed'
@@ -3980,21 +3735,21 @@ def start_training_task(task):
                 task.actual_duration = round((task.completed_at - task.started_at).total_seconds(), 2)
                 task.training_log += "训练完成！\n"
                 task.save()
-
+                
                 print(f"训练完成 - 任务ID: {task.id}")
                 print(f"开始时间: {task.started_at}")
                 print(f"完成时间: {task.completed_at}")
                 print(f"训练时长: {task.actual_duration} 秒")
-
+                
                 # 在训练日志中也记录详细时间信息
                 task.training_log += f"训练开始时间: {task.started_at}\n"
                 task.training_log += f"训练完成时间: {task.completed_at}\n"
                 task.training_log += f"实际训练时长: {task.actual_duration} 秒\n"
                 task.save()
-
+                
                 # 创建训练结果
                 create_real_training_result(task, result)
-
+                
                 # 自动启动队列中的下一个任务（同一用户，按创建时间）
                 next_task = MLTask.objects.filter(user=task.user, status='pending').order_by('created_at').first()
                 if next_task:
@@ -4008,13 +3763,13 @@ def start_training_task(task):
                 task.error_message = result['error']
                 task.training_log += f"训练失败: {result['error']}\n"
                 task.save()
-
+        
         except Exception as e:
             task.status = 'failed'
             task.error_message = str(e)
             task.training_log += f"训练失败: {str(e)}\n"
             task.save()
-
+    
     # 在后台线程中运行训练
     thread = threading.Thread(target=train_model)
     thread.daemon = False  # 改为False，确保训练完成
@@ -4028,7 +3783,7 @@ def perform_real_ml_training(task):
     """
     try:
         print(f"开始执行真实机器学习训练 - 任务ID: {task.id}")
-
+        
         import pandas as pd
         import numpy as np
         from sklearn.model_selection import train_test_split
@@ -4040,8 +3795,7 @@ def perform_real_ml_training(task):
         from sklearn.linear_model import Lars, LarsCV, LassoLarsIC
         from sklearn.linear_model import OrthogonalMatchingPursuit, OrthogonalMatchingPursuitCV
         from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
-        from sklearn.linear_model import PassiveAggressiveRegressor, SGDRegressor, QuantileRegressor, TweedieRegressor, \
-            PoissonRegressor, GammaRegressor
+        from sklearn.linear_model import PassiveAggressiveRegressor, SGDRegressor, QuantileRegressor, TweedieRegressor, PoissonRegressor, GammaRegressor
         from sklearn.kernel_ridge import KernelRidge
         from sklearn.svm import SVR, LinearSVR, NuSVR
         from sklearn.neighbors import RadiusNeighborsRegressor
@@ -4049,8 +3803,7 @@ def perform_real_ml_training(task):
         from sklearn.experimental import enable_hist_gradient_boosting  # noqa: F401
         from sklearn.ensemble import HistGradientBoostingRegressor
         from sklearn.cross_decomposition import PLSRegression
-        from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, AdaBoostRegressor, \
-            GradientBoostingRegressor, VotingRegressor, StackingRegressor, BaggingRegressor
+        from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, AdaBoostRegressor, GradientBoostingRegressor, VotingRegressor, StackingRegressor, BaggingRegressor
         from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
         import os
         import ast
@@ -4067,24 +3820,24 @@ def perform_real_ml_training(task):
             from catboost import CatBoostRegressor  # type: ignore
         except Exception:
             CatBoostRegressor = None
-
+        
         print("机器学习库导入成功")
-
+        
         # 更新进度
         task.progress = 20
         task.training_log += "正在加载数据文件...\n"
         task.save()
-
+        
         # 检查是否有单独的训练集和测试集文件
         print(f"检查文件: train_data_file={task.train_data_file}, test_data_file={task.test_data_file}")
-
+        
         if task.train_data_file and task.test_data_file:
             # 使用用户上传的独立训练集和测试集
             train_file_path = task.train_data_file.file_path
             test_file_path = task.test_data_file.file_path
-
+            
             print(f"使用独立文件: 训练集={train_file_path}, 测试集={test_file_path}")
-
+            
             if not os.path.exists(train_file_path):
                 error_msg = f'训练集文件不存在: {train_file_path}'
                 print(error_msg)
@@ -4093,118 +3846,117 @@ def perform_real_ml_training(task):
                 error_msg = f'测试集文件不存在: {test_file_path}'
                 print(error_msg)
                 return {'success': False, 'error': error_msg}
-
+            
             print("开始读取CSV文件...")
             df_train = pd.read_csv(train_file_path)
             df_test = pd.read_csv(test_file_path)
             print(f"文件读取成功: 训练集{len(df_train)}行, 测试集{len(df_test)}行")
-
+            
             task.training_log += f"训练集加载完成，共 {len(df_train)} 行，{len(df_train.columns)} 列\n"
             task.training_log += f"测试集加载完成，共 {len(df_test)} 行，{len(df_test.columns)} 列\n"
             task.save()
-
+            
             # 直接使用训练集和测试集，不需要分割
             use_separate_files = True
-
+            
         else:
             # 使用原始数据文件进行分割
             data_file_path = task.data_file.file_path
             if not os.path.exists(data_file_path):
                 return {'success': False, 'error': f'数据文件不存在: {data_file_path}'}
-
+            
             df = pd.read_csv(data_file_path)
             task.training_log += f"数据加载完成，共 {len(df)} 行，{len(df.columns)} 列\n"
             task.save()
             use_separate_files = False
-
+            
             # 如果test_ratio为0，说明用户没有指定测试集，我们需要使用默认比例
             if task.test_ratio == 0:
                 task.training_log += f"注意：测试集比例为0，将使用默认比例进行数据分割\n"
                 task.save()
-
+        
         # 更新进度
         task.progress = 30
         task.training_log += "正在准备特征和目标变量...\n"
         task.save()
-
+        
         # 准备特征和目标变量
         feature_columns = task.feature_columns
         target_column = task.target_column
-
+        
         if use_separate_files:
             # 使用独立的训练集和测试集文件
             # 检查列是否存在
             if target_column not in df_train.columns or target_column not in df_test.columns:
                 return {'success': False, 'error': f'目标列 "{target_column}" 不存在于训练集或测试集中'}
-
+            
             missing_features_train = [col for col in feature_columns if col not in df_train.columns]
             missing_features_test = [col for col in feature_columns if col not in df_test.columns]
             if missing_features_train or missing_features_test:
-                return {'success': False,
-                        'error': f'特征列不存在: 训练集{missing_features_train}, 测试集{missing_features_test}'}
-
+                return {'success': False, 'error': f'特征列不存在: 训练集{missing_features_train}, 测试集{missing_features_test}'}
+            
             # 提取训练集特征和目标
             X_train = df_train[feature_columns]
             y_train = df_train[target_column]
-
+            
             # 提取测试集特征和目标
             X_test = df_test[feature_columns]
             y_test = df_test[target_column]
-
+            
             task.training_log += f"特征数量: {len(feature_columns)}, 训练集样本: {len(X_train)}, 测试集样本: {len(X_test)}\n"
             task.save()
-
+            
         else:
             # 使用原始数据文件进行分割
             if target_column not in df.columns:
                 return {'success': False, 'error': f'目标列 "{target_column}" 不存在于数据中'}
-
+            
             missing_features = [col for col in feature_columns if col not in df.columns]
             if missing_features:
                 return {'success': False, 'error': f'特征列不存在: {missing_features}'}
-
+            
             # 提取特征和目标
             X = df[feature_columns]
             y = df[target_column]
-
+            
             task.training_log += f"特征数量: {len(feature_columns)}, 样本数量: {len(X)}\n"
             task.save()
-
+            
             # 更新进度
             task.progress = 40
             task.training_log += "正在分割训练集和测试集...\n"
             task.save()
-
+            
             # 分割数据
             test_size = task.test_ratio if task.test_ratio > 0 else 0.2  # 如果test_ratio为0，使用默认值0.2
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=42
             )
-
+        
         # 处理缺失值
         X_train = X_train.fillna(X_train.mean())
         y_train = y_train.fillna(y_train.mean())
         X_test = X_test.fillna(X_test.mean())
         y_test = y_test.fillna(y_test.mean())
-
+        
         # 标准化特征
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
-
+        
         if not use_separate_files:
             task.training_log += f"训练集: {len(X_train)} 样本, 测试集: {len(X_test)} 样本\n"
             task.save()
-
+        
         # 更新进度
         task.progress = 50
         task.training_log += f"正在训练 {task.algorithm.display_name} 模型...\n"
         task.save()
-
+        
         # 根据算法类型选择模型
         algorithm_name = task.algorithm.name
         model = None
-
+        
         if algorithm_name == 'linear_regression':
             model = LinearRegression()
         elif algorithm_name == 'ridge':
@@ -4254,11 +4006,9 @@ def perform_real_ml_training(task):
             residual_threshold = task.algorithm_parameters.get('residual_threshold', None)
             # 兼容 sklearn 版本：新版本使用 estimator，老版本为 base_estimator
             try:
-                model = RANSACRegressor(estimator=base_estimator, min_samples=min_samples,
-                                        residual_threshold=residual_threshold, random_state=42)
+                model = RANSACRegressor(estimator=base_estimator, min_samples=min_samples, residual_threshold=residual_threshold, random_state=42)
             except TypeError:
-                model = RANSACRegressor(base_estimator=base_estimator, min_samples=min_samples,
-                                        residual_threshold=residual_threshold, random_state=42)
+                model = RANSACRegressor(base_estimator=base_estimator, min_samples=min_samples, residual_threshold=residual_threshold, random_state=42)
         elif algorithm_name == 'theil_sen':
             model = TheilSenRegressor(random_state=task.algorithm_parameters.get('random_state', 42))
         elif algorithm_name == 'huber':
@@ -4335,8 +4085,7 @@ def perform_real_ml_training(task):
             algorithm_param = task.algorithm_parameters.get('algorithm', 'auto')
             leaf_size = task.algorithm_parameters.get('leaf_size', 30)
             metric = task.algorithm_parameters.get('metric', 'minkowski')
-            model = RadiusNeighborsRegressor(radius=radius, weights=weights, algorithm=algorithm_param,
-                                             leaf_size=leaf_size, metric=metric)
+            model = RadiusNeighborsRegressor(radius=radius, weights=weights, algorithm=algorithm_param, leaf_size=leaf_size, metric=metric)
         elif algorithm_name == 'mlp_regressor':
             hls = task.algorithm_parameters.get('hidden_layer_sizes', '(100,)')
             if isinstance(hls, str):
@@ -4348,15 +4097,13 @@ def perform_real_ml_training(task):
             alpha = task.algorithm_parameters.get('alpha', 0.0001)
             lr = task.algorithm_parameters.get('learning_rate_init', 0.001)
             max_iter = task.algorithm_parameters.get('max_iter', 200)
-            model = MLPRegressor(hidden_layer_sizes=hls, activation=activation, alpha=alpha, learning_rate_init=lr,
-                                 max_iter=max_iter, random_state=42)
+            model = MLPRegressor(hidden_layer_sizes=hls, activation=activation, alpha=alpha, learning_rate_init=lr, max_iter=max_iter, random_state=42)
         elif algorithm_name == 'hist_gradient_boosting':
             learning_rate = task.algorithm_parameters.get('learning_rate', 0.1)
             max_depth = task.algorithm_parameters.get('max_depth', None)
             max_iter = task.algorithm_parameters.get('max_iter', 200)
             l2_reg = task.algorithm_parameters.get('l2_regularization', 0.0)
-            model = HistGradientBoostingRegressor(learning_rate=learning_rate, max_depth=max_depth, max_iter=max_iter,
-                                                  l2_regularization=l2_reg, random_state=42)
+            model = HistGradientBoostingRegressor(learning_rate=learning_rate, max_depth=max_depth, max_iter=max_iter, l2_regularization=l2_reg, random_state=42)
         elif algorithm_name == 'pls_regression':
             n_components = task.algorithm_parameters.get('n_components', 2)
             scale = task.algorithm_parameters.get('scale', True)
@@ -4388,8 +4135,7 @@ def perform_real_ml_training(task):
             n_estimators = task.algorithm_parameters.get('n_estimators', 200)
             learning_rate = task.algorithm_parameters.get('learning_rate', 0.1)
             max_depth = task.algorithm_parameters.get('max_depth', 3)
-            model = GradientBoostingRegressor(n_estimators=n_estimators, learning_rate=learning_rate,
-                                              max_depth=max_depth, random_state=42)
+            model = GradientBoostingRegressor(n_estimators=n_estimators, learning_rate=learning_rate, max_depth=max_depth, random_state=42)
         elif algorithm_name == 'voting_regressor':
             # 白名单 + 丰富组合
             whitelist = {
@@ -4402,7 +4148,7 @@ def perform_real_ml_training(task):
                 'svr': lambda: SVR(C=1.0, epsilon=0.1),
                 'gbrt': lambda: GradientBoostingRegressor(n_estimators=200, random_state=42),
             }
-            estimators_names = task.algorithm_parameters.get('estimators', ['linear_regression', 'ridge', 'lasso'])
+            estimators_names = task.algorithm_parameters.get('estimators', ['linear_regression','ridge','lasso'])
             base_estimators = []
             used_keys = set()
             for ename in estimators_names:
@@ -4424,7 +4170,7 @@ def perform_real_ml_training(task):
                 'svr': lambda: SVR(C=1.0, epsilon=0.1),
                 'gbrt': lambda: GradientBoostingRegressor(n_estimators=200, random_state=42),
             }
-            estimators_names = task.algorithm_parameters.get('estimators', ['ridge', 'lasso'])
+            estimators_names = task.algorithm_parameters.get('estimators', ['ridge','lasso'])
             final_name = task.algorithm_parameters.get('final_estimator', 'linear_regression')
             base_estimators = []
             used_keys = set()
@@ -4485,14 +4231,13 @@ def perform_real_ml_training(task):
         else:
             # 默认使用线性回归
             model = LinearRegression()
-
+        
         # 训练模型
         print(f"开始训练模型: {algorithm_name}")
         print(f"训练数据形状: X_train={X_train.shape}, y_train={y_train.shape}")
         print(f"测试数据形状: X_test={X_test.shape}, y_test={y_test.shape}")
-
-        if algorithm_name in ['linear_regression', 'ridge', 'lasso', 'elastic_net', 'lasso_lars', 'bayesian_regression',
-                              'huber', 'knn_regressor', 'radius_neighbors_regressor']:
+        
+        if algorithm_name in ['linear_regression', 'ridge', 'lasso', 'elastic_net', 'lasso_lars', 'bayesian_regression', 'huber', 'knn_regressor', 'radius_neighbors_regressor']:
             print("使用标准化数据进行训练...")
             model.fit(X_train_scaled, y_train)
             y_pred = model.predict(X_test_scaled)
@@ -4500,18 +4245,18 @@ def perform_real_ml_training(task):
             print("使用原始数据进行训练...")
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
-
+        
         print(f"模型训练完成，预测结果形状: {y_pred.shape}")
-
+        
         task.progress = 80
         task.training_log += "模型训练完成，正在计算评估指标...\n"
         task.save()
-
+        
         # 计算评估指标
         mse = mean_squared_error(y_test, y_pred)
         mae = mean_absolute_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
-
+        
         # 计算特征重要性
         feature_importance = None
         if hasattr(model, 'feature_importances_'):
@@ -4525,11 +4270,11 @@ def perform_real_ml_training(task):
                 'features': feature_columns,
                 'importance': np.abs(model.coef_).tolist()
             }
-
+        
         task.progress = 90
         task.training_log += f"评估指标计算完成: R²={r2:.4f}, MSE={mse:.4f}, MAE={mae:.4f}\n"
         task.save()
-
+        
         # 准备图表数据
         # 特征相关性矩阵基于测试集原始特征计算
         try:
@@ -4541,8 +4286,7 @@ def perform_real_ml_training(task):
         except Exception:
             correlation_matrix = {
                 'labels': feature_columns,
-                'matrix': [[1.0 if i == j else 0.0 for j in range(len(feature_columns))] for i in
-                           range(len(feature_columns))]
+                'matrix': [[1.0 if i == j else 0.0 for j in range(len(feature_columns))] for i in range(len(feature_columns))]
             }
 
         chart_data = {
@@ -4557,11 +4301,11 @@ def perform_real_ml_training(task):
             },
             'correlation_matrix': correlation_matrix
         }
-
+        
         task.progress = 100
         task.training_log += "训练完成！\n"
         task.save()
-
+        
         return {
             'success': True,
             'mse': mse,
@@ -4572,7 +4316,7 @@ def perform_real_ml_training(task):
             'model': model,
             'scaler': scaler
         }
-
+        
     except Exception as e:
         error_msg = f"训练过程中发生异常: {str(e)}"
         print(error_msg)
@@ -4617,10 +4361,10 @@ def create_real_training_result(task, training_result):
                     fields[k] = float(training_result[k])
 
         MLTaskResult.objects.create(**fields)
-
+        
         # 保存模型（可选）
         # 这里可以保存训练好的模型到文件系统
-
+        
     except Exception as e:
         print(f"创建训练结果失败: {str(e)}")
 
@@ -4631,34 +4375,33 @@ def create_training_result(task):
     """
     try:
         # 使用任务的实际特征列来生成特征重要性数据
-        feature_columns = task.feature_columns if task.feature_columns else ['feature1', 'feature2', 'feature3',
-                                                                             'feature4']
+        feature_columns = task.feature_columns if task.feature_columns else ['feature1', 'feature2', 'feature3', 'feature4']
         feature_importance_data = {
             'features': feature_columns,
             'importance': [0.3 + (hash(str(task.id) + str(i)) % 20) / 100 for i in range(len(feature_columns))]
         }
-
+        
         # 根据算法类型生成相应的评估指标
         algorithm_type = task.algorithm.algorithm_type
-
+        
         if algorithm_type == 'regression':
             # 回归模型：只生成回归相关指标
             # 生成更真实的评估指标
             import random
             random.seed(hash(str(task.id)) % 1000)  # 使用任务ID作为随机种子，确保结果可重现
-
+            
             # 更真实的R²值范围：0.3-0.85
             r2_score = 0.3 + random.uniform(0, 0.55)
             # 根据R²值计算相应的MSE和MAE
             mse = (1 - r2_score) * random.uniform(0.5, 2.0)
             mae = mse ** 0.5 * random.uniform(0.7, 1.3)
-
+            
             # 生成更真实的预测数据
             n_samples = 50
             predictions = []
             actual = []
             residuals = []
-
+            
             for i in range(n_samples):
                 # 生成基础值
                 base_value = random.uniform(0, 10)
@@ -4666,18 +4409,17 @@ def create_training_result(task):
                 noise = random.gauss(0, 0.5)
                 pred_value = base_value + noise
                 actual_value = base_value + random.gauss(0, 0.3)
-
+                
                 predictions.append(round(pred_value, 2))
                 actual.append(round(actual_value, 2))
                 residuals.append(round(actual_value - pred_value, 2))
-
+            
             # 生成模拟的相关性矩阵（与特征列数量一致）
             try:
                 size = len(feature_columns)
                 sim_labels = feature_columns
                 # 简单构造对称、对角为1的矩阵
-                sim_matrix = [[1.0 if i == j else round(0.2 * ((i + j) % 5) / 2, 3) for j in range(size)] for i in
-                              range(size)]
+                sim_matrix = [[1.0 if i == j else round(0.2 * ((i + j) % 5) / 2, 3) for j in range(size)] for i in range(size)]
                 correlation_matrix = {
                     'labels': sim_labels,
                     'matrix': sim_matrix
@@ -4685,8 +4427,7 @@ def create_training_result(task):
             except Exception:
                 correlation_matrix = {
                     'labels': feature_columns,
-                    'matrix': [[1.0 if i == j else 0.0 for j in range(len(feature_columns))] for i in
-                               range(len(feature_columns))]
+                    'matrix': [[1.0 if i == j else 0.0 for j in range(len(feature_columns))] for i in range(len(feature_columns))]
                 }
 
             chart_data = {
@@ -4701,7 +4442,7 @@ def create_training_result(task):
                 },
                 'correlation_matrix': correlation_matrix
             }
-
+            
             result = MLTaskResult.objects.create(
                 task=task,
                 # 回归指标
@@ -4740,7 +4481,7 @@ def create_training_result(task):
                     'labels': ['Class 0', 'Class 1']
                 }
             )
-
+        
     except Exception as e:
         print(f"创建训练结果失败: {str(e)}")
 
@@ -4753,25 +4494,25 @@ def api_ml_tasks_stop(request, task_id):
     """
     try:
         task = MLTask.objects.get(id=task_id, user=request.user)
-
+        
         if task.status != 'running':
             return JsonResponse({
                 'success': False,
                 'message': '任务状态不允许停止'
             })
-
+        
         # 更新任务状态
         task.status = 'cancelled'
         task.completed_at = timezone.now()
         task.actual_duration = round((task.completed_at - task.started_at).total_seconds(), 2)
         task.training_log += "训练已停止\n"
         task.save()
-
+        
         return JsonResponse({
             'success': True,
             'message': '训练任务已停止'
         })
-
+        
     except MLTask.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -4792,22 +4533,22 @@ def api_ml_tasks_delete(request, task_id):
     """
     try:
         task = MLTask.objects.get(id=task_id, user=request.user)
-
+        
         # 删除相关的训练结果
         try:
             result = MLTaskResult.objects.get(task=task)
             result.delete()
         except MLTaskResult.DoesNotExist:
             pass
-
+        
         # 删除任务
         task.delete()
-
+        
         return JsonResponse({
             'success': True,
             'message': '任务已删除'
         })
-
+        
     except MLTask.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -4828,13 +4569,13 @@ def api_ml_tasks_result(request, task_id):
     """
     try:
         task = MLTask.objects.get(id=task_id, user=request.user)
-
+        
         if task.status != 'completed':
             return JsonResponse({
                 'success': False,
                 'message': '任务尚未完成'
             })
-
+        
         try:
             result = MLTaskResult.objects.get(task=task)
         except MLTaskResult.DoesNotExist:
@@ -4868,7 +4609,7 @@ def api_ml_tasks_result(request, task_id):
                 'chart_data': result.chart_data
             }
         })
-
+        
     except MLTask.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -4889,7 +4630,7 @@ def api_ml_tasks_progress(request, task_id):
     """
     try:
         task = MLTask.objects.get(id=task_id, user=request.user)
-
+        
         return JsonResponse({
             'success': True,
             'progress': {
@@ -4899,7 +4640,7 @@ def api_ml_tasks_progress(request, task_id):
                 'error_message': task.error_message
             }
         })
-
+        
     except MLTask.DoesNotExist:
         return JsonResponse({
             'success': False,
@@ -4910,6 +4651,8 @@ def api_ml_tasks_progress(request, task_id):
             'success': False,
             'message': f'获取任务进度失败: {str(e)}'
         })
+
+
 
 
 # region 备料员页面与任务筛选
@@ -5137,6 +4880,7 @@ def api_reagents_stats(request: HttpRequest):
     if hazard in dict(HazardType.choices):
         q = q.filter(hazard_type=hazard)
     today = timezone.now().date()
+
     total = q.count()
     liquid = q.filter(reagent_type=ReagentType.LIQUID).count()
     solid = q.filter(reagent_type=ReagentType.SOLID).count()
@@ -5292,7 +5036,6 @@ def api_reagent_create(request: HttpRequest):
         def dec(v, default="0"):
             if v in (None, ""): return Decimal(default)
             return Decimal(str(v))
-
         qty = dec(payload.get("quantity"), "0")
         mw = dec(payload.get("molecular_weight"), "0")
         dens = dec(payload.get("density"), "0")
@@ -5417,19 +5160,16 @@ def api_reagent_update(request: HttpRequest, reagent_id: int):
             reagent.expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date() if expiry_str else None
         if "storage_env" in payload: reagent.storage_env = (payload.get("storage_env") or "").strip()
         if "storage_location" in payload: reagent.storage_location = (payload.get("storage_location") or "").strip()
-        for k in ("chinese_aliases", "english_names"):
+        for k in ("chinese_aliases","english_names"):
             if k in payload: setattr(reagent, k, payload.get(k) or [])
-        for k in ("color", "odor", "explosion_limit", "water_solubility", "disposal_notes"):
+        for k in ("color","odor","explosion_limit","water_solubility","disposal_notes"):
             if k in payload: setattr(reagent, k, (payload.get(k) or "").strip())
-
         # 可选Decimal
         def set_opt_dec(field):
             if field in payload:
                 v = payload.get(field)
                 setattr(reagent, field, (Decimal(str(v)) if v not in (None, "") else None))
-
-        for f in ("melting_point", "boiling_point", "flash_point", "autoignition_temp", "decomposition_temp",
-                  "vapor_pressure", "ph_value", "particle_size", "viscosity", "refractive_index", "logp"):
+        for f in ("melting_point","boiling_point","flash_point","autoignition_temp","decomposition_temp","vapor_pressure","ph_value","particle_size","viscosity","refractive_index","logp"):
             set_opt_dec(f)
         if "is_controlled" in payload: reagent.is_controlled = bool(payload.get("is_controlled"))
         if "is_narcotic" in payload: reagent.is_narcotic = bool(payload.get("is_narcotic"))
@@ -5698,7 +5438,7 @@ def api_materials(request: HttpRequest):
         return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
     name_kw = (request.GET.get("name") or "").strip()
     kind_filter = (
-            request.GET.get("kind") or ""
+        request.GET.get("kind") or ""
     ).strip()  # 可选：test_tube_15|laiyu_powder|jingtai_powder|reagent_bottle_150
     items = []
 
@@ -5725,10 +5465,10 @@ def api_materials(request: HttpRequest):
         d = d.filter(name__icontains=name_kw)
     # 根据 kind_filter 选择性返回
     if kind_filter in (
-            "test_tube_15",
-            "laiyu_powder",
-            "jingtai_powder",
-            "reagent_bottle_150",
+        "test_tube_15",
+        "laiyu_powder",
+        "jingtai_powder",
+        "reagent_bottle_150",
     ):
         if kind_filter == "test_tube_15":
             push(a.order_by("-created_at"), "15mL试管")
@@ -5753,10 +5493,10 @@ def api_materials_stats(request: HttpRequest):
     if not request.user.is_preparator() and not request.user.is_admin():
         return JsonResponse({"ok": False, "message": "权限不足"}, status=403)
     total = (
-            TestTube15.objects.count()
-            + LaiyuPowder.objects.count()
-            + JingtaiPowder.objects.count()
-            + ReagentBottle150.objects.count()
+        TestTube15.objects.count()
+        + LaiyuPowder.objects.count()
+        + JingtaiPowder.objects.count()
+        + ReagentBottle150.objects.count()
     )
     return JsonResponse(
         {
@@ -6268,10 +6008,10 @@ def api_material_by_name(request: HttpRequest):
                     task_id = None
             detail["task_id"] = task_id
         elif resolved_kind in (
-                "laiyu_powder",
-                "铼羽粉筒",
-                "jingtai_powder",
-                "晶泰粉筒",
+            "laiyu_powder",
+            "铼羽粉筒",
+            "jingtai_powder",
+            "晶泰粉筒",
         ):
             detail["material_name"] = getattr(obj, "material_name", "")
             detail["mass_mg"] = str(getattr(obj, "mass_mg", ""))
@@ -6292,10 +6032,10 @@ def api_material_by_name(request: HttpRequest):
         return JsonResponse({"ok": True, "material": build_detail(obj, kind)})
 
     for resolved_kind, model in (
-            ("test_tube_15", TestTube15),
-            ("laiyu_powder", LaiyuPowder),
-            ("jingtai_powder", JingtaiPowder),
-            ("reagent_bottle_150", ReagentBottle150),
+        ("test_tube_15", TestTube15),
+        ("laiyu_powder", LaiyuPowder),
+        ("jingtai_powder", JingtaiPowder),
+        ("reagent_bottle_150", ReagentBottle150),
     ):
         obj = model.objects.filter(name=name).first()
         if obj:
@@ -6696,7 +6436,7 @@ def api_container_create(request):
                 name_candidate = base_name
                 retry = 0
                 while (
-                        Container.objects.filter(name=name_candidate).exists() and retry < 3
+                    Container.objects.filter(name=name_candidate).exists() and retry < 3
                 ):
                     rand_suffix = f"{random.randint(0, 9999):04d}"
                     name_candidate = f"{spec.code}_{ts}_{rand_suffix}"
@@ -7087,7 +6827,7 @@ def api_preparator_batch_prepare(request):
                                     material_type
                                 ]:
                                     if existing.get(
-                                            "reagent_name"
+                                        "reagent_name"
                                     ) == reagent_name and existing.get(
                                         "unit"
                                     ) == reagent_item.get("unit"):
@@ -7104,7 +6844,7 @@ def api_preparator_batch_prepare(request):
                                             reagent_item.get("amount", 0)
                                         )
                                         existing_item["amount"] = (
-                                                existing_amount + new_amount
+                                            existing_amount + new_amount
                                         )
                                     except (ValueError, TypeError):
                                         pass
@@ -7244,7 +6984,7 @@ def api_preparator_calc_materials(request):
                                     material_type
                                 ]:
                                     if existing.get(
-                                            "reagent_name"
+                                        "reagent_name"
                                     ) == reagent_name and existing.get(
                                         "unit"
                                     ) == reagent_item.get("unit"):
@@ -7261,7 +7001,7 @@ def api_preparator_calc_materials(request):
                                             reagent_item.get("amount", 0)
                                         )
                                         existing_item["amount"] = (
-                                                existing_amount + new_amount
+                                            existing_amount + new_amount
                                         )
                                     except (ValueError, TypeError):
                                         pass
@@ -7305,6 +7045,7 @@ def api_preparator_calc_materials(request):
 
 
 # endregion
+
 
 
 # region 转移仓槽位装填/清空/完成
@@ -7359,15 +7100,15 @@ def api_container_fill_slot(request, container_id):
             return JsonResponse(
                 {
                     "success": False,
-                    "message": f"槽位超出范围：有效范围为 0~{capacity - 1}",
+                    "message": f"槽位超出范围：有效范围为 0~{capacity-1}",
                 },
                 status=400,
             )
 
         # 校验物料类型与转移仓类型是否匹配（仅对装填操作，解绑时跳过）
         if (
-                material_kind is not None
-                and material_kind != container.spec.allowed_material_kind
+            material_kind is not None
+            and material_kind != container.spec.allowed_material_kind
         ):
             return JsonResponse(
                 {
@@ -7425,10 +7166,10 @@ def api_container_fill_slot(request, container_id):
 
             # 清空绑定关系（如果有备料清单ID）
             if (
-                    preparation_id
-                    and station_key
-                    and material_type
-                    and material_index is not None
+                preparation_id
+                and station_key
+                and material_type
+                and material_index is not None
             ):
                 try:
                     preparation_list = PreparationList.objects.get(id=preparation_id)
@@ -7436,8 +7177,8 @@ def api_container_fill_slot(request, container_id):
 
                     # 清空对应的绑定关系
                     if (
-                            station_key in bindings
-                            and material_type in bindings[station_key]
+                        station_key in bindings
+                        and material_type in bindings[station_key]
                     ):
                         if str(material_index) in bindings[station_key][material_type]:
                             del bindings[station_key][material_type][
@@ -7744,7 +7485,7 @@ def api_preparation_list_detail(request, preparation_id):
                     "id": preparation_list.id,
                     "station_materials": station_materials,
                     "material_fill_bindings": preparation_list.material_fill_bindings
-                                              or {},
+                    or {},
                     "task_count": task_count,
                     "created_at": preparation_list.created_at.strftime(
                         "%Y-%m-%d %H:%M:%S"
@@ -7938,9 +7679,6 @@ def get_available_containers(request):
     try:
         # 获取所有状态为空闲的转移仓
         containers = Container.objects.filter(state="idle").select_related("spec").order_by("name")
-        # 修复：增加对 "空闲" 状态的兼容
-        from django.db.models import Q
-        containers = Container.objects.filter(Q(state='idle') | Q(state='空闲')).select_related("spec").order_by("name")
 
         container_list = []
         for container in containers:
@@ -8016,196 +7754,4 @@ def api_occupied_preparation_containers(request):
         )
 
 
-@login_required
-@require_http_methods(["GET"])
-def api_batching_station_available_containers(request):
-    """
-    固液配料工站 - 获取所有可用的转移仓（状态为空闲）
-    """
-    if not request.user.is_admin():
-        return JsonResponse({"success": False, "message": "权限不足"}, status=403)
-
-    try:
-        # 获取所有状态为空闲的转移仓（兼容英文 idle 与中文 空闲）
-        from django.db.models import Q
-        containers = Container.objects.filter(Q(state="idle") | Q(state="空闲")).select_related("spec").order_by("name")
-
-        container_list = []
-        for container in containers:
-            container_list.append(
-                {
-                    "id": container.id,
-                    "name": container.name,
-                    "spec_name": container.spec.name,
-                    "capacity": container.spec.capacity,
-                }
-            )
-
-        return JsonResponse({"success": True, "containers": container_list})
-
-    except Exception as e:
-        return JsonResponse(
-            {"success": False, "message": f"获取失败: {str(e)}"}, status=500
-        )
-
-
-@login_required
-@require_http_methods(["POST"])
-def api_batching_station_place_container(request):
-    """
-    固液配料工站 - 放置转移仓到指定位置
-    """
-    if not request.user.is_admin():
-        return JsonResponse({"success": False, "message": "权限不足"}, status=403)
-
-    try:
-        data = json.loads(request.body)
-        position_id = data.get("position_id")
-        container_id = data.get("container_id")
-
-        if not position_id or not container_id:
-            return JsonResponse({"success": False, "message": "参数不完整"}, status=400)
-
-        # 获取转移仓
-        container = Container.objects.get(id=container_id)
-
-        # 检查转移仓是否可用
-        if container.state not in ("idle", "空闲"):
-            return JsonResponse({"success": False, "message": "转移仓当前不可用"}, status=400)
-
-        # 从position_id中提取位置编号（格式为"prep_1" -> 1）
-        position_number = position_id.replace("prep_", "")
-
-        # 更新转移仓状态和目标工站（固液配料工站）
-        container.state = "in_use"
-        # 这里可以设置目标工站为固液配料工站，需要先获取或创建对应的工站
-        batching_station, created = Station.objects.get_or_create(
-            name="固液配料工站",
-            defaults={
-                "desc": "固液配料工站",
-                "station_type": StationType.SOLID_LIQUID
-            }
-        )
-        container.current_station = batching_station
-        container.target_station = batching_station
-        container.current_position = position_id
-        container.save()
-
-        # 同步更新/创建 固液配料工站位置表（BatchingStationPosition）
-        try:
-            from .models import BatchingStationPosition
-            # 其他位置若已有这个容器，先清除
-            BatchingStationPosition.objects.filter(current_container=container).update(is_occupied=False,
-                                                                                       current_container=None)
-            # 目标位置 upsert
-            display_name = f"位置 {position_number}" if str(position_number).isdigit() else position_id
-            pos_obj, _ = BatchingStationPosition.objects.get_or_create(
-                station=batching_station,
-                position_id=position_id,
-                defaults={
-                    "display_name": display_name,
-                    "order_index": int(position_number) if str(position_number).isdigit() else 0,
-                }
-            )
-            pos_obj.is_occupied = True
-            pos_obj.current_container = container
-            pos_obj.save(update_fields=["is_occupied", "current_container", "updated_at"])
-        except Exception:
-            # 若模型未迁移或不可用，忽略，不影响放置流程
-            pass
-
-        return JsonResponse({
-            "success": True,
-            "message": f"成功将转移仓 {container.name} 放置到位置 {position_number}",
-            "container_name": container.name,
-            "container_spec": container.spec.name,
-            "position_number": position_number
-        })
-
-    except Container.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Container not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
-
-
-@login_required
-@require_http_methods(["GET"])
-def api_batching_station_current_containers(request):
-    """
-    固液配料工站 - 获取当前各位置已放置的转移仓（用于刷新后还原页面状态）
-    支持通过 ?station_id=1 筛选指定工站ID。
-    仅返回 current_position 映射到本页的 prep_1..prep_10。
-    返回: { success, containers: [{id, name, spec_name, position_id, state}] }
-    """
-    if not request.user.is_admin():
-        return JsonResponse({"success": False, "message": "权限不足"}, status=403)
-    try:
-        station_id = request.GET.get("station_id")
-        positions_on_page = {f"prep_{i}" for i in range(1, 11)}
-
-        qs = Container.objects.filter(current_position__isnull=False)
-        if station_id:
-            qs = qs.filter(current_station_id=station_id)
-        else:
-            try:
-                batching_station = Station.objects.get(name="固液配料工站")
-                qs = qs.filter(current_station=batching_station)
-            except Station.DoesNotExist:
-                return JsonResponse({"success": True, "containers": []})
-
-        qs = qs.filter(current_position__in=positions_on_page)
-
-        containers = qs.select_related("spec").order_by("current_position")
-        data = [
-            {
-                "id": c.id,
-                "name": c.name,
-                "spec_name": c.spec.name if c.spec else "",
-                "position_id": c.current_position,
-                "state": c.state,
-            }
-            for c in containers
-        ]
-        return JsonResponse({"success": True, "containers": data})
-    except Exception as e:
-        return JsonResponse({"success": False, "message": f"获取失败: {str(e)}"}, status=500)
-
-
-@login_required
-@require_http_methods(["GET"])
-def api_container_slots(request, container_id):
-    try:
-        container = Container.objects.get(id=container_id)
-        slots = ContainerSlot.objects.filter(container=container).order_by('index').select_related(
-            'laiyu_powder', 'jingtai_powder', 'reagent_bottle_150'
-        )
-
-        slot_data = []
-        for slot in slots:
-            material_name = None
-            material_type = None
-
-            if slot.laiyu_powder:
-                material_name = slot.laiyu_powder.material_name
-                material_type = 'solid'
-            elif slot.jingtai_powder:
-                material_name = slot.jingtai_powder.material_name
-                material_type = 'solid'
-            elif slot.reagent_bottle_150:
-                material_name = slot.reagent_bottle_150.reagent_name
-                material_type = 'liquid'
-
-            slot_data.append({
-                'slot_number': slot.index + 1,  # 前端期望1-based
-                'occupied': slot.occupied,
-                'material_name': material_name,
-                'material_type': material_type,
-            })
-
-        return JsonResponse({'success': True, 'slots': slot_data})
-
-    except Container.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Container not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
 # endregion

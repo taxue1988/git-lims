@@ -2,6 +2,26 @@
 
 {% block title %}固液配料 - 工站管理{% endblock %}
 
+{% block modals %}<!-- 查看任务 Modal -->
+<div class="modal fade" id="viewTaskModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">查看任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Task details will be loaded here by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
 {% block main_content %}
 {{ block.super }}
 
@@ -22,7 +42,70 @@
     .station-card .card-body { padding: 1rem; }
     .positions-row { margin-bottom: 0.5rem; }
     .positions-row:last-child { margin-bottom: 0; }
+.station-card{ overflow:hidden; }
+.station-card .current-container-info{ overflow:hidden; }
+.station-card .current-container-info .alert{ display:flex; align-items:center; gap:.5rem; overflow:hidden; }
+.station-card .current-container-info .badge{ max-width:70%; display:inline-block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+.container-name-clip { flex:1 1 auto; min-width:0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display:inline-block; }
+@media (min-width: 1200px) { .station-card .current-container-info .badge{ max-width:80%; } }
+
+/* 更强的名称截断样式（绿色胶囊） */
+.name-chip{ display:inline-flex; align-items:center; max-width:calc(100% - 90px); padding:.15rem .5rem; border-radius:.5rem; background:#198754; color:#fff; font-size:.85rem; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+
 </style>
+
+<!-- 指令发送模态框 -->
+<div class="modal fade" id="sendCommandModal" tabindex="-1" aria-labelledby="sendCommandModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sendCommandModalLabel">发送指令 - 任务ID: <span id="modal-task-id"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="targetClientId">目标客户端ID (设备ID)</label>
+                    <input type="text" class="form-control" id="targetClientId" value="gypl_station_1" readonly>
+                </div>
+                <div class="form-group mt-3">
+                    <label for="messageContent">指令内容 (JSON格式)</label>
+                    <textarea class="form-control" id="messageContent" rows="15">
+                    </textarea>
+                </div>
+                <div id="commandResult" class="alert alert-info d-none mt-3" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="sendCommandBtn"><i class="fas fa-paper-plane me-2"></i>发送指令</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 放置转移仓模态框 -->
+<div class="modal fade" id="placeContainerModal" tabindex="-1" aria-labelledby="placeContainerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="placeContainerModalLabel">选择一个转移仓放置到 <span id="position-name-in-modal"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="available-containers-list" class="list-group"> 
+                    <!-- 可用转移仓将通过JS动态加载 -->
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">正在加载...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- 工站状态 -->
 <div class="card mt-3">
@@ -84,12 +167,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -103,12 +186,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -122,12 +205,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -141,12 +224,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -160,12 +243,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -181,12 +264,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -200,12 +283,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -219,12 +302,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -238,12 +321,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -257,12 +340,12 @@
                         <p class="card-text text-muted small">转移仓</p>
                         <div class="current-container-info mb-3">
                             <div class="alert alert-light py-2 mb-2">
-                                <i class="fas fa-circle"></i>
+                                <i class="fas fa-circle text-secondary"></i>
                                 <span class="text-muted">位置空闲</span>
                             </div>
                         </div>
                         <div class="btn-group-vertical w-100" role="group">
-                            <button type="button" class="btn btn-outline-primary btn-sm" disabled>
+                            <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
                                 <i class="fas fa-plus"></i> 放置转移仓
                             </button>
                         </div>
@@ -291,10 +374,14 @@
                         <th style="width: 140px;">试管ID</th>
                         <th>物料详情</th>
                         <th style="width: 180px;">创建时间</th>
+                        <th style="width: 120px;">操作</th>
                     </tr>
                 </thead>
                 <tbody id="experiment-list-body">
-                    <!-- 任务数据将通过JavaScript动态加载 -->
+                    <!-- Tasks will be dynamically loaded here by JavaScript -->
+                    <tr>
+                        <td colspan="6" class="text-center">正在加载配料任务...</td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -317,19 +404,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const powderDispenserStatusDot = document.getElementById('powder-dispenser-status-dot');
     const powderDispenserStatusText = document.getElementById('powder-dispenser-status-text');
 
-    // 为此网页客户端定义一个唯一的ID
-    const webClientId = 'web_gypl_station';
-    const socketUrl = 'ws://' + window.location.host + '/ws/test/' + webClientId + '/';
+    // 与 test_ctrl.html 保持一致的网页客户端ID
+    const webClientId = 'web_client';
+    const wsScheme = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';
+    const socketUrl = wsScheme + window.location.host + '/ws/test/' + webClientId + '/';
     const stationSocket = new WebSocket(socketUrl);
 
     stationSocket.onopen = function(e) {
-        console.log('WebSocket 连接成功，等待设备状态更新...');
+        console.log('WebSocket 连接成功，请求初始设备状态...');
+        stationSocket.send(JSON.stringify({ type: 'get_status' }));
     };
 
     stationSocket.onmessage = function(e) {
         const data = JSON.parse(e.data);
         console.log('收到数据:', data);
-
         if (data.type === 'device_status') {
             updateDeviceStatus('arm', data.status.arm);
             updateDeviceStatus('balance', data.status.balance);
@@ -339,33 +427,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
     stationSocket.onclose = function(e) {
         console.error('WebSocket 连接已断开');
-        updateDeviceStatus('arm', false, true); // 将所有设备标记为离线
+        updateDeviceStatus('arm', false, true);
         updateDeviceStatus('balance', false, true);
         updateDeviceStatus('powder_dispenser', false, true);
     };
 
     function updateDeviceStatus(device, isOnline, isSocketClosed = false) {
         let dotElement, textElement;
-        let deviceName = '';
-
         if (device === 'arm') {
             dotElement = armStatusDot;
             textElement = armStatusText;
-            deviceName = '机械臂';
         } else if (device === 'balance') {
             dotElement = balanceStatusDot;
             textElement = balanceStatusText;
-            deviceName = '天平';
         } else if (device === 'powder_dispenser') {
             dotElement = powderDispenserStatusDot;
             textElement = powderDispenserStatusText;
-            deviceName = '铼羽加粉仪';
         }
-
         if (!dotElement || !textElement) return;
 
         dotElement.classList.remove('status-online', 'status-offline', 'status-unknown');
-        
         if (isSocketClosed) {
             dotElement.classList.add('status-offline');
             textElement.innerHTML = `<span id="${device}-status-dot" class="status-dot status-offline"></span>连接中断`;
@@ -378,7 +459,1099 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 卡片折叠动画与箭头旋转
+    // --- 放置/移除转移仓逻辑 ---
+    // 安全创建 Bootstrap 模态框（缺失时不致命）
+    let placeContainerModal;
+    try {
+        placeContainerModal = new bootstrap.Modal(document.getElementById('placeContainerModal'));
+    } catch (e) {
+        console.warn('Bootstrap 未就绪：placeContainerModal 将使用降级处理。', e);
+        placeContainerModal = {
+            show: () => alert('未加载弹窗依赖（bootstrap.bundle.js），无法显示“放置转移仓”窗口。'),
+            hide: () => {}
+        };
+    }
+    const availableContainersList = document.getElementById('available-containers-list');
+    const positionNameInModal = document.getElementById('position-name-in-modal');
+    let currentPositionId = null;
+    let currentCardElement = null;
+
+    // 页面刷新后还原当前位置占用状态
+    function refreshCurrentPositions() {
+        fetch('/api/batching-station/current-containers/')
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) return;
+                const map = {};
+                (data.containers || []).forEach(c => {
+                    map[c.position_id] = c;
+                });
+                document.querySelectorAll('.station-card').forEach(card => {
+                    const title = card.querySelector('.card-title')?.textContent?.trim() || '';
+                    const posNum = (title.split(' ')[1] || '').trim();
+                    const posId = posNum ? `prep_${posNum}` : '';
+                    if (posId && map[posId]) {
+                        const c = map[posId];
+                        const info = card.querySelector('.current-container-info');
+                        if (info) {
+                            info.innerHTML = `
+                                <div class="alert alert-light py-2 mb-2 d-flex align-items-center">
+                                    <i class="fas fa-circle text-success me-2"></i>
+                                    <span>位置占用：</span>
+                                    <span class="badge bg-success ms-2"><span class="container-name-clip" title="${c.name || '未命名转移仓'}">${c.name || '未命名转移仓'}</span></span>
+                                </div>
+                            `;
+                        }
+                        card.dataset.containerId = String(c.id);
+                        const btnGroup = card.querySelector('.btn-group-vertical');
+                        if (btnGroup) {
+                            btnGroup.innerHTML = `
+                                <button type="button" class="btn btn-outline-danger btn-sm remove-transfer-bin-btn">
+                                    <i class="fas fa-times"></i> 移除转移仓
+                                </button>
+                            `;
+                        }
+                    }
+                });
+            })
+            .catch(err => console.error('加载当前占用失败:', err));
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function placeContainer(containerId, positionId, containerName) {
+        fetch('/api/batching-station/place-container/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ container_id: containerId, position_id: positionId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success' || data.success === true) {
+                placeContainerModal.hide();
+                const containerInfo = currentCardElement.querySelector('.current-container-info');
+                const showName = (data && (data.container_name || (data.container && data.container.name))) || containerName || '';
+                containerInfo.innerHTML = `
+                    <div class="alert alert-light py-2 mb-2 d-flex align-items-center">
+                        <i class="fas fa-circle text-success me-2"></i>
+                        <span>位置占用：</span>
+                        <span class="badge bg-success ms-2">${showName || '未命名转移仓'}</span>
+                    </div>
+                `;
+                // 记住该位置当前的转移仓ID，便于后续移除
+                currentCardElement.dataset.containerId = String(containerId);
+
+                const buttonGroup = currentCardElement.querySelector('.btn-group-vertical');
+                buttonGroup.innerHTML = `
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-transfer-bin-btn">
+                        <i class="fas fa-times"></i> 移除转移仓
+                    </button>
+                `;
+
+                // 即时更新容器到工位的映射，避免必须刷新页面
+                try {
+                    const posStr = (positionId || '').split('_')[1];
+                    const posNum = posStr ? parseInt(posStr, 10) : NaN;
+                    if (!isNaN(posNum)) {
+                        const keyId = normKey(String(containerId));
+                        if (keyId) containerIdToStationPos[keyId] = posNum;
+                        // 如果接口返回了容器名称，尽量一并建立映射
+                        if (data.container && data.container.name) {
+                            const keyName = normKey(String(data.container.name));
+                            containerIdToStationPos[keyName] = posNum;
+                        }
+                    }
+                } catch (e) { console.warn('更新容器映射失败:', e); }
+            } else {
+                alert('放置失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error placing container:', error);
+            alert('放置时发生错误，请查看控制台。');
+        });
+    }
+
+    function removeContainer(positionId, cardElement) {
+        const containerId = cardElement?.dataset?.containerId;
+        if (!containerId) {
+            alert('无法确定要移除的转移仓ID，请先在本页放置后再移除。');
+            return;
+        }
+        fetch('/api/batching-station/remove-container/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ container_id: containerId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success' || data.success === true) {
+                const containerInfo = cardElement.querySelector('.current-container-info');
+                containerInfo.innerHTML = `
+                    <div class="alert alert-light py-2 mb-2">
+                        <i class="fas fa-circle text-secondary"></i>
+                        <span class="text-muted">位置空闲</span>
+                    </div>
+                `;
+                // 清除记录的 containerId
+                delete cardElement.dataset.containerId;
+                const buttonGroup = cardElement.querySelector('.btn-group-vertical');
+                buttonGroup.innerHTML = `
+                    <button type="button" class="btn btn-outline-primary btn-sm place-transfer-bin-btn">
+                        <i class="fas fa-plus"></i> 放置转移仓
+                    </button>
+                `;
+            } else {
+                alert('移除失败: ' + (data.message || '未知错误'));
+            }
+        })
+        .catch(error => {
+            console.error('Error removing container:', error);
+            alert('移除时发生错误，请查看控制台。');
+        });
+    }
+
+    document.addEventListener('click', function(event) {
+        const target = event.target;
+        const placeBtn = target.closest('.place-transfer-bin-btn');
+        const removeBtn = target.closest('.remove-transfer-bin-btn');
+
+        if (placeBtn) {
+            const card = placeBtn.closest('.station-card');
+            currentCardElement = card;
+            const positionTitle = card.querySelector('.card-title').textContent.trim();
+            const positionNumber = positionTitle.split(' ')[1];
+            currentPositionId = `prep_${positionNumber}`;
+
+            positionNameInModal.textContent = positionTitle;
+            availableContainersList.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">正在加载...</span></div></div>';
+            placeContainerModal.show();
+
+            fetch('/api/batching-station/available-containers/')
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    availableContainersList.innerHTML = '';
+                    const containers = Array.isArray(data) ? data : (data.containers || []);
+                    if (containers.length > 0) {
+                        containers.forEach(container => {
+                            const a = document.createElement('a');
+                            a.href = '#';
+                            a.className = 'list-group-item list-group-item-action';
+                            a.textContent = container.name;
+                            a.dataset.containerId = container.id;
+                            a.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                placeContainer(container.id, currentPositionId, container.name);
+                            });
+                            availableContainersList.appendChild(a);
+                        });
+                    } else {
+                        availableContainersList.innerHTML = '<p class="text-center text-muted">没有可用的转移仓。</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching containers:', error);
+                    availableContainersList.innerHTML = '<p class="text-center text-danger">加载失败，请重试。</p>';
+                });
+        } else if (removeBtn) {
+            const card = removeBtn.closest('.station-card');
+            const positionTitle = card.querySelector('.card-title').textContent.trim();
+            const positionNumber = positionTitle.split(' ')[1];
+            const positionId = `prep_${positionNumber}`;
+            
+            if (confirm(`确定要从 ${positionTitle} 移除转移仓吗？`)) {
+                removeContainer(positionId, card);
+            }
+        }
+    });
+
+    // 页面加载时拉取 current_station_id=1 的占用并还原
+    refreshCurrentPositions();
+
+    // ====== 配料任务解析与渲染（根据 调试信息.md 规则） ======
+    const experimentListBody = document.getElementById('experiment-list-body');
+
+    // 工具函数
+    const fetchJSON = (url) => fetch(url).then(r => {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    });
+
+    // 获取当前工站的容器 -> station 位置号映射
+    let containerIdToStationPos = {}; // { containerIdOrName: 4|5|6|7|8|9|10 }
+    function loadCurrentContainersMap() {
+        return fetchJSON('/api/batching-station/current-containers/?station_id=1')
+            .then(data => {
+                containerIdToStationPos = {};
+                const list = (data && data.containers) ? data.containers : [];
+                list.forEach(c => {
+                    // position_id 格式如 prep_4
+                    const posStr = (c.position_id || '').split('_')[1];
+                    const posNum = posStr ? parseInt(posStr, 10) : NaN;
+                    if (!isNaN(posNum)) {
+                        const keyId = (c.id != null) ? normKey(String(c.id)) : '';
+                        const keyName = c.name ? normKey(c.name) : '';
+                        const keyCode = c.code ? normKey(c.code) : '';
+                        if (keyId) containerIdToStationPos[keyId] = posNum;
+                        if (keyName) containerIdToStationPos[keyName] = posNum;
+                        if (keyCode) containerIdToStationPos[keyCode] = posNum; // 额外兼容
+                    }
+                });
+
+            })
+            .catch(err => { console.warn('加载容器位置映射失败:', err); containerIdToStationPos = {}; });
+    }
+
+    // 单位换算
+    function toMilliGrams(amount, unit) {
+        if (amount == null || amount === '') return 0;
+        const u = String(unit || '').toLowerCase();
+        const val = parseFloat(amount) || 0;
+        if (u === 'mg') return val;
+        if (u === 'g' || u === 'gram' || u === 'grams') return val * 1000;
+        if (u === 'kg') return val * 1000 * 1000;
+        return val; // 默认视为 mg
+    }
+    function toMicroLiters(amount, unit) {
+        if (amount == null || amount === '') return 0;
+        const u = String(unit || '').toLowerCase();
+        const val = parseFloat(amount) || 0;
+        if (u === 'ul' || u === 'μl' || u === 'ul' || u === 'μl') return val;
+        if (u === 'ml' || u === 'ml') return val * 1000;
+        if (u === 'l') return val * 1000 * 1000;
+        return val; // 默认视为 μL
+    }
+
+    // 归一化键（容器ID/名称/编码）
+    function normKey(v) {
+        return String(v ?? '').trim().toLowerCase();
+    }
+
+    // 位置索引计算（根据 调试信息.md）
+    function solidIndexBy(stationPos, slotInContainer) {
+        // 固体：4号位置 -> index 0..5；5号位置 -> index 6..11
+        let s = parseInt(slotInContainer, 10);
+        if (!Number.isFinite(s)) s = 1;
+        s = Math.min(Math.max(s, 1), 6); // clamp to 1..6
+        const slot = s - 1; // 0-based
+        if (stationPos === 4) return 0 + slot;
+        if (stationPos === 5) return 6 + slot;
+        return null;
+    }
+    function liquidIndexBy(stationPos, slotInContainer) {
+        // 液体：6,7,8,9,10 号位置 -> 每个两位
+        const baseMap = { 6: 0, 7: 2, 8: 4, 9: 6, 10: 8 };
+        const base = baseMap[stationPos];
+        if (base == null) return null;
+        let s = parseInt(slotInContainer, 10);
+        if (!Number.isFinite(s)) s = 1;
+        s = Math.min(Math.max(s, 1), 2); // clamp to 1..2
+        const slot = s - 1; // 0-based
+        return base + slot;
+    }
+
+    // 加载并渲染配料任务
+    function loadDispenseTasks() {
+        experimentListBody.innerHTML = '<tr><td colspan="6" class="text-center">正在加载配料任务...</td></tr>';
+        // 优先使用英文状态，再退回中文状态
+        const tryUrls = [
+            '/api/filter-tasks/?status=approved',
+            '/api/filter-tasks/?status=已通过'
+        ];
+        // 先确保容器映射准备好
+        loadCurrentContainersMap().then(() => {
+            // 依次尝试接口
+            const tryFetch = (idx) => {
+                if (idx >= tryUrls.length) {
+                    experimentListBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">加载失败</td></tr>';
+                    return;
+                }
+                fetchJSON(tryUrls[idx])
+                    .then(res => {
+                        const ok = res && (res.ok === true || res.success === true);
+                        const tasks = ok ? (res.tasks || []) : (res.results || res.data || []);
+                        if (!tasks || tasks.length === 0) {
+                            experimentListBody.innerHTML = '<tr><td colspan="6" class="text-center">暂无待配料的任务</td></tr>';
+                            return;
+                        }
+                        const rows = [];
+                        tasks.forEach(task => {
+                            const stations = task.stations || {};
+                            const solidLiquid = stations.solidLiquid || stations.solid_liquid || {};
+                            const enabled = !!solidLiquid.enabled;
+                            const status = task.status || '';
+                            const isApproved = (status === 'approved' || status === '已通过' || status === 'Approved');
+                            if (!isApproved) return; // 仅显示已通过任务；解析仅对启用的固液配料工站进行
+
+                            // 预计算数组
+                            const solidsArr = new Array(12).fill(0);
+                            const liquidsArr = new Array(10).fill(0);
+
+                            const reagents = Array.isArray(solidLiquid.reagents) ? solidLiquid.reagents : [];
+                            if (reagents.length > 0) {
+                                reagents.forEach(r => {
+                                    const type = (r.type || '').toLowerCase();
+                                    const amount = r.amount;
+                                    const unit = r.unit;
+                                    // 容器与槽位（尽可能从任务字段中提取）
+                                    const containerId = String(
+                                        r.container_id || r.source_container_id || r.container ||
+                                        r.container_name || r.source_container_name ||
+                                        r.container_code || r.code || r.bin_code || r.bin_name || ''
+                                    );
+                                    const slot = parseInt(r.slot || r.container_slot || r.slot_index || r.position || r.order || r.transfer_slot || r.slot_no || r.position_in_container, 10) || 1; // 兜底用 order，兼容多字段
+
+                                    const _key = normKey(containerId);
+                                    const stationPos = _key && containerIdToStationPos[_key];
+
+                                    if (type === 'solid' || type === '粉末' || type === '固体') {
+                                        const mg = toMilliGrams(amount, unit);
+                                        const idx = stationPos ? solidIndexBy(stationPos, slot) : null;
+                                        if (idx != null) solidsArr[idx] = Math.round(mg); // mg为单位
+                                    } else if (type === 'liquid' || type === '液体') {
+                                        const uL = toMicroLiters(amount, unit);
+                                        const idx = stationPos ? liquidIndexBy(stationPos, slot) : null;
+                                        if (idx != null) liquidsArr[idx] = Math.round(uL); // 转换为整数微升
+                                    }
+                                });
+                            }
+
+                            const reagentsHtml = reagents.length
+                                ? reagents.map((r, i) => {
+                                    const n = r.name || r.chemical || '-';
+                                    const a = r.amount ?? '-';
+                                    const u = r.unit || '';
+                                    return `<div class="small">${i+1}. ${n} ${a}${u}</div>`;
+                                  }).join('')
+                                : '<span class="text-muted">无</span>';
+
+                            const btnClass = enabled ? 'btn-primary' : 'btn-outline-secondary';
+                            const btnTitle = enabled ? '' : 'title="固液配料未启用（仍可测试）"';
+
+                            // 为数据属性创建安全的JSON字符串
+                            const safeReagents = JSON.stringify(reagents).replace(/"/g, '&quot;').replace(/'/g, "&#39;");
+                            const safeSolids = JSON.stringify(Array.from(solidsArr)).replace(/"/g, '&quot;').replace(/'/g, "&#39;");
+                            const safeLiquids = JSON.stringify(Array.from(liquidsArr)).replace(/"/g, '&quot;').replace(/'/g, "&#39;");
+
+                            console.log('任务数据:', {taskId: task.id, solidsArr, liquidsArr});
+
+                            rows.push(`
+                                <tr>
+                                    <td>${task.id}</td>
+                                    <td>${task.name || '-'}</td>
+                                    <td>${task.tube_id || '-'}</td>
+                                    <td>
+                                        ${reagentsHtml}
+
+                                    </td>
+                                    <td>${task.created_at || task.date || '-'}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-info view-task-btn" data-task-id="${task.id}">
+                                                <i class="fas fa-eye"></i> 查看
+                                            </button>
+                                            <button type="button" class="btn ${btnClass} send-command-modal-btn" data-task-id="${task.id}"
+                                                data-reagents="${safeReagents}"
+                                                data-solids="${safeSolids}"
+                                                data-liquids="${safeLiquids}" ${btnTitle}>发送指令</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `);
+                        });
+
+                        // 渲染表格
+                        experimentListBody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" class="text-center">暂无符合条件的任务</td></tr>';
+                        
+                        // 若物料详情为空，懒加载任务详情以获取试剂信息
+                        document.querySelectorAll('#experiment-list-body tr').forEach(tr => {
+                            const viewBtn = tr.querySelector('.view-task-btn');
+                            const detailCell = tr.children && tr.children[3]; // 第4列：物料详情
+                            if (!viewBtn || !detailCell) return;
+                            const hasContent = detailCell.textContent && detailCell.textContent.trim() && detailCell.textContent.indexOf('无') === -1;
+                            if (hasContent) return;
+                            const taskId = viewBtn.getAttribute('data-task-id');
+                            if (!taskId) return;
+                            detailCell.innerHTML = '<span class="text-muted">加载中...</span>';
+                            // 先管理员接口，再用户接口兜底
+                            fetch(`/api/task/${taskId}/`).then(r=>r.json()).then(d=>{
+                                if (d && d.ok && d.task && d.task.stations) {
+                                    const solid = d.task.stations.solidLiquid || d.task.stations.solid_liquid || {};
+                                    const reag = Array.isArray(solid.reagents) ? solid.reagents : [];
+                                    if (reag.length) {
+                                        detailCell.innerHTML = reag.map((r,i)=>{
+                                            const n = r.name || r.chemical || '-';
+                                            const a = (r.amount ?? '-') + '';
+                                            const u = r.unit || '';
+                                            return `<div class="small">${i+1}. ${n} ${a}${u}</div>`;
+                                        }).join('');
+                                        return;
+                                    }
+                                }
+                                // 兜底用户接口
+                                return fetch(`/api/user/task/${taskId}/`).then(r2=>r2.json()).then(d2=>{
+                                    if (d2 && d2.ok && d2.task && d2.task.stations) {
+                                        const solid2 = d2.task.stations.solidLiquid || d2.task.stations.solid_liquid || {};
+                                        const reag2 = Array.isArray(solid2.reagents) ? solid2.reagents : [];
+                                        if (reag2.length) {
+                                            detailCell.innerHTML = reag2.map((r,i)=>{
+                                                const n = r.name || r.chemical || '-';
+                                                const a = (r.amount ?? '-') + '';
+                                                const u = r.unit || '';
+                                                return `<div class="small">${i+1}. ${n} ${a}${u}</div>`;
+                                            }).join('');
+                                            return;
+                                        }
+                                    }
+                                    detailCell.innerHTML = '<span class="text-muted">无</span>';
+                                }).catch(()=>{ detailCell.innerHTML = '<span class="text-muted">无</span>'; });
+                            }).catch(()=>{ detailCell.innerHTML = '<span class="text-muted">无</span>'; });
+                        });
+                    })
+                    .catch(() => tryFetch(idx + 1));
+            };
+            tryFetch(0);
+        });
+    }
+
+    // 首次加载任务
+    loadDispenseTasks();
+
+    // ====== 任务详情查看逻辑 (从 experiment_tasks.html 移植) ======
+    function generateTaskSummaryHtml(task) {
+        const stations = task.stations || {};
+        const solid = stations.solidLiquid || {};
+        const glove = stations.glovebox || {};
+        const react = stations.reaction || {};
+        const gcms = stations.gcms || {};
+        const evap = stations.evaporation || {};
+        const tlc = stations.tlc || {};
+
+        const reagentRows = (solid.enabled && Array.isArray(solid.reagents) && solid.reagents.length)
+            ? solid.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+            : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+        const gloveboxReagentRows = (glove.enabled && Array.isArray(glove.reagents) && glove.reagents.length)
+            ? glove.reagents.map((r, idx) => `<tr><td>${idx + 1}</td><td>${r.name || ''}</td><td>${r.amount || ''}</td><td>${r.unit || ''}</td><td>${(r.type === 'solid') ? '固体' : (r.type === 'liquid' ? '液体' : (r.type || '-'))}</td><td>${r.order ?? '-'}</td></tr>`).join('')
+            : '<tr><td colspan="6" class="text-center">无</td></tr>';
+
+        const gp = glove.params || {};
+        const gloveboxReactionHtml = glove.enabled ? `
+            <ul class="list-group mb-3">
+                <li class="list-group-item">反应温度：${gp.temperature ?? '-'} °C</li>
+                <li class="list-group-item">搅拌速度：${gp.stirringSpeed ?? '-'} rpm</li>
+                <li class="list-group-item">反应时长：${gp.duration ?? '-'} min</li>
+                <li class="list-group-item">采样间隔：${gp.samplingInterval ?? '-'} min</li>
+                <li class="list-group-item">采样体积：${gp.samplingVolume ?? '-'} μL</li>
+                <li class="list-group-item">淬灭剂：${gp.quenchingAgent ?? '-'}</li>
+                <li class="list-group-item">淬灭剂体积：${gp.quenchingAgentVolume ?? '-'} μL</li>
+                <li class="list-group-item">采样分析方式：${gp.samplingAnalysis ?? '-'}</li>
+            </ul>
+        ` : '';
+
+        const rp = react.params || {};
+        const reactionHtml = react.enabled ? `
+            <ul class="list-group mb-3">
+                <li class="list-group-item">反应温度：${rp.temperature ?? '-'} °C</li>
+                <li class="list-group-item">搅拌速度：${rp.stirringSpeed ?? '-'} rpm</li>
+                <li class="list-group-item">反应时长：${rp.duration ?? '-'} min</li>
+                <li class="list-group-item">采样间隔：${rp.samplingInterval ?? '-'} min</li>
+                <li class="list-group-item">采样体积：${rp.samplingVolume ?? '-'} μL</li>
+                <li class="list-group-item">淬灭剂：${rp.quenchingAgent ?? '-'}</li>
+                <li class="list-group-item">淬灭剂体积：${rp.quenchingAgentVolume ?? '-'} μL</li>
+                <li class="list-group-item">采样分析方式：${rp.samplingAnalysis ?? '-'}</li>
+            </ul>
+        ` : '';
+
+        const gcp = gcms.params || {};
+        const gcmsHtml = gcms.enabled ? `<div class="mb-3">序列：${gcp.sequence || '-'}</div>` : '';
+
+        const ep = evap.params || {};
+        const evaporationHtml = evap.enabled ? `
+            <div class="mb-3">
+                <strong>旋蒸模式：</strong>${(ep.mode === 'manual') ? '手动模式' : '自动模式'}
+                ${(ep.mode === 'manual') ? `
+                    <ul class="list-group mt-2">
+                        <li class="list-group-item">旋转速度：${ep.rotationSpeed ?? '-'} rpm</li>
+                        <li class="list-group-item">浴热温度：${ep.bathTemperature ?? '-'} °C</li>
+                        <li class="list-group-item">真空压力：${ep.vacuumPressure ?? '-'} mbar</li>
+                        <li class="list-group-item">冷凝温度：${ep.condenserTemperature ?? '-'} °C</li>
+                    </ul>
+                ` : ''}
+            </div>
+        ` : '';
+
+        const tp = tlc.params || {};
+        const uv = tp.uvWavelengths || {};
+        const tlcHtml = tlc.enabled ? `
+            <div class="mb-3">
+                <strong>展开剂体系：</strong>${tp.developerSystem || '-'}
+                ${(tp.developerSystem === 'custom') ?
+                    `<br><strong>自定义展开剂：</strong>${tp.customSolvent1 || '-'} / ${tp.customSolvent2 || '-'} ${tp.customSolvent3 ? '/ ' + tp.customSolvent3 : ''}` : ''}
+                <br><strong>展开剂比例：</strong>${tp.developerRatio || '-'}
+                ${(tp.developerRatio === 'custom') ?
+                    `<br><strong>自定义比例：</strong>${tp.customRatio1 || '-'} : ${tp.customRatio2 || '-'} ${tp.customRatio3 ? ' : ' + tp.customRatio3 : ''}` : ''}
+                <br><strong>灯光波长：</strong>${uv.uv254 ? '254nm' : ''}${(uv.uv254 && uv.uv365) ? ', ' : ''}${uv.uv365 ? '365nm' : ''}
+                <br><strong>TLC板类型：</strong>${tp.plateType || '-'}
+                <br><strong>板尺寸：</strong>${tp.plateSize || '-'}
+                <br><strong>展开时间：</strong>${tp.developingTime || '-'} 分钟
+                <br><strong>展开缸类型：</strong>${tp.chamberType || '-'}
+                <br><strong>展开温度：</strong>${tp.temperature || '-'} °C
+                <br><strong>样品浓度：</strong>${tp.sampleConcentration || '-'} mg/mL
+                <br><strong>点样体积：</strong>${tp.spotVolume || '-'} μL
+                <br><strong>预期Rf值：</strong>${tp.expectedRfMin || '-'} - ${tp.expectedRfMax || '-'}
+                <br><strong>检测方法：</strong>${tp.detectionMethod || '-'}
+            </div>
+        ` : '';
+
+        const createdAt = task.created_at || task.date || '';
+        const summaryHtml = `
+            <div class="mb-3"><strong>实验名称：</strong>${task.name || '-'}</div>
+            <div class="mb-3"><strong>实验备注：</strong>${(task.remark || '').trim() || '-'}</div>
+            <div class="mb-3"><strong>提交时间：</strong>${createdAt}</div>
+            <div class="mb-3"><strong>状态：</strong>${task.status || '-'}</div>
+            <div class="mb-3"><strong>固液配料工站：</strong>${solid.enabled ? '已启用' : '未启用'}</div>
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered table-sm">
+                    <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                    <tbody>${reagentRows}</tbody>
+                </table>
+            </div>
+            <div class="mb-3"><strong>手套箱配料与反应工站：</strong>${glove.enabled ? '已启用' : '未启用'}</div>
+            ${gloveboxReactionHtml}
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered table-sm">
+                    <thead class="table-light"><tr><th>#</th><th>试剂名称</th><th>用量</th><th>单位</th><th>类型</th><th>顺序</th></tr></thead>
+                    <tbody>${gloveboxReagentRows}</tbody>
+                </table>
+            </div>
+            <div class="mb-3"><strong>反应工站：</strong>${react.enabled ? '已启用' : '未启用'}</div>
+            ${reactionHtml}
+            <div class="mb-3"><strong>GCMS工站：</strong>${gcms.enabled ? '已启用' : '未启用'}</div>
+            ${gcmsHtml}
+            <div class="mb-3"><strong>旋蒸工站：</strong>${evap.enabled ? '已启用' : '未启用'}</div>
+            ${evaporationHtml}
+            <div class="mb-3"><strong>TLC分析工站：</strong>${tlc.enabled ? '已启用' : '未启用'}</div>
+            ${tlcHtml}
+        `;
+        return summaryHtml;
+    }
+
+    function viewTask(taskId) {
+        console.log('查看任务:', taskId);
+        
+        // 显示加载状态
+        const modalBody = document.querySelector('#viewTaskModal .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">正在加载...</span></div><p class="mt-2">正在获取任务详情...</p></div>';
+        }
+        
+        // 先显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('viewTaskModal'));
+        modal.show();
+        
+        // 优先尝试管理员通用详情接口（本页为管理员页面）
+        fetch(`/api/task/${taskId}/`)
+            .then(async (r) => {
+                let data = {};
+                try { data = await r.json(); } catch(e) {}
+                if (r.ok && data && data.ok) {
+                    const html = generateTaskSummaryHtml(data.task || {});
+                    if (modalBody) modalBody.innerHTML = html;
+                    return;
+                }
+                // 若返回403/404等，尝试用户端接口（兼容非管理员或本人任务）
+                return fetch(`/api/user/task/${taskId}/`).then(async (r2) => {
+                    let d2 = {};
+                    try { d2 = await r2.json(); } catch(e) {}
+                    if (r2.ok && d2 && d2.ok) {
+                        const html2 = generateTaskSummaryHtml(d2.task || {});
+                        if (modalBody) modalBody.innerHTML = html2;
+                    } else {
+                        const errMsg = (data && data.message) || (d2 && d2.message) || `HTTP ${r.status || r2.status}`;
+                        if (modalBody) {
+                            modalBody.innerHTML = `
+                                <div class="alert alert-danger" role="alert">
+                                    <h5 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> 获取任务详情失败</h5>
+                                    <p>无法从服务器获取任务详情信息。</p>
+                                    <hr>
+                                    <p class="mb-0">
+                                        <strong>错误信息：</strong> ${errMsg}
+                                    </p>
+                                </div>
+                            `;
+                        }
+                    }
+                });
+            })
+            .catch((e) => {
+                console.error('获取任务详情异常:', e);
+                if (modalBody) {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-danger" role="alert">
+                            <h5 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> 获取任务详情失败</h5>
+                            <p>${e && e.message ? e.message : '网络异常或服务器不可用。'}</p>
+                        </div>
+                    `;
+                }
+            });
+    }
+
+    document.addEventListener('click', function(e) {
+        const viewBtn = e.target.closest('.view-task-btn');
+        if (viewBtn) {
+            const taskId = viewBtn.getAttribute('data-task-id');
+            if (taskId) {
+                viewTask(taskId);
+            }
+        }
+    });
+
+    // --- 指令发送逻辑 ---
+    // 安全创建发送指令模态框，避免 bootstrap 未加载导致脚本中断
+    let sendCommandModal;
+    try {
+        sendCommandModal = new bootstrap.Modal(document.getElementById('sendCommandModal'));
+    } catch (e) {
+        console.warn('Bootstrap 未就绪：sendCommandModal 将使用降级处理。', e);
+        sendCommandModal = {
+            show: () => alert('未加载弹窗依赖（bootstrap.bundle.js），无法显示“发送指令”窗口。'),
+            hide: () => {}
+        };
+    }
+    const modalTaskId = document.getElementById('modal-task-id');
+    const messageContentTextArea = document.getElementById('messageContent');
+    const sendCommandBtn = document.getElementById('sendCommandBtn');
+    const commandResult = document.getElementById('commandResult');
+
+    // 事件委托：查看/发送
+    document.addEventListener('click', function(e) {
+        const sendBtn = e.target.closest('.send-command-modal-btn');
+        if (sendBtn) {
+            const taskId = sendBtn.getAttribute('data-task-id');
+            modalTaskId.textContent = taskId;
+            
+            // 获取试剂信息
+            let reagents = [];
+            let solids = [];
+            let liquids = [];
+            try { 
+                reagents = JSON.parse(sendBtn.dataset.reagents || '[]');
+                solids = JSON.parse(sendBtn.dataset.solids || '[]');
+                liquids = JSON.parse(sendBtn.dataset.liquids || '[]');
+            } catch (e) {
+                console.error('解析数据失败:', e);
+            }
+
+            console.log('原始数据:', {reagents, solids, liquids});
+
+            // 按钮状态管理
+            const btnOriginalHTML = sendBtn.innerHTML;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 正在生成指令...`;
+
+            const restoreSendBtn = () => {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = btnOriginalHTML;
+            };
+
+            // 异步生成指令并发送
+            // 如果没有携带reagents，则实时获取任务详情中的 solidLiquid.reagents
+            const ensureReagents = async () => {
+                if (Array.isArray(reagents) && reagents.length > 0) return reagents;
+                try {
+                    const res = await fetch(`/api/task/${taskId}/`);
+                    const d = await res.json();
+                    if (res.ok && d && d.ok && d.task && d.task.stations) {
+                        const solid = d.task.stations.solidLiquid || d.task.stations.solid_liquid || {};
+                        if (Array.isArray(solid.reagents) && solid.reagents.length) return solid.reagents;
+                    }
+                } catch(e){}
+                try {
+                    const res2 = await fetch(`/api/user/task/${taskId}/`);
+                    const d2 = await res2.json();
+                    if (res2.ok && d2 && d2.ok && d2.task && d2.task.stations) {
+                        const solid2 = d2.task.stations.solidLiquid || d2.task.stations.solid_liquid || {};
+                        if (Array.isArray(solid2.reagents) && solid2.reagents.length) return solid2.reagents;
+                    }
+                } catch(e){}
+                return [];
+            };
+
+            ensureReagents().then(realReagents => {
+                return generateCommandForTask(taskId, realReagents, solids, liquids);
+            }).then(command => {
+                sendBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 正在发送...`;
+                const targetId = 'gypl_station_1';
+                const wsCommand = {
+                    command: 'send_to_client',
+                    target_client_id: targetId,
+                    message: command
+                };
+
+                console.log('准备发送的指令:', command);
+
+                // 在弹窗中展示完整指令
+                try {
+                    const commandPreview = JSON.stringify(command, null, 2);
+                    if (messageContentTextArea) messageContentTextArea.value = commandPreview;
+                    if (sendCommandModal && sendCommandModal.show) sendCommandModal.show();
+                } catch(e) {}
+
+                if (stationSocket.readyState === WebSocket.OPEN) {
+                    try {
+                        stationSocket.send(JSON.stringify(wsCommand));
+                        restoreSendBtn();
+                        // 同时在结果区域提示
+                        if (commandResult) {
+                            commandResult.classList.remove('d-none','alert-danger');
+                            commandResult.classList.add('alert-success');
+                            commandResult.textContent = `已向服务器发送指令，目标: ${targetId}`;
+                        }
+                    } catch (err) {
+                        console.error('发送失败:', err);
+                        restoreSendBtn();
+                        if (commandResult) {
+                            commandResult.classList.remove('d-none','alert-success');
+                            commandResult.classList.add('alert-danger');
+                            commandResult.textContent = '发送失败，请查看控制台。';
+                        }
+                    }
+                } else {
+                    restoreSendBtn();
+                    if (commandResult) {
+                        commandResult.classList.remove('d-none','alert-success');
+                        commandResult.classList.add('alert-danger');
+                        commandResult.textContent = '错误: WebSocket 连接未打开。';
+                    }
+                }
+            }).catch(err => {
+                console.error('生成指令失败:', err);
+                restoreSendBtn();
+                alert('生成指令失败: ' + (err.message || '未知错误'));
+            });
+        }
+    });
+
+    // 生成指令的核心函数
+    async function generateCommandForTask(taskId, reagents, precomputedSolids, precomputedLiquids) {
+        console.log('传入的预计算数据:', {taskId, reagents, precomputedSolids, precomputedLiquids});
+        
+        // 1. 获取当前工站的容器配置和槽位信息
+        const stationData = await fetchStationConfiguration();
+        console.log('工站配置数据:', stationData);
+        
+        // 2. 初始化列表
+        // 使用预计算的数组，如果不存在则创建新的
+        let solids_list = precomputedSolids && precomputedSolids.length ? [...precomputedSolids] : new Array(12).fill(0);
+        let liquids_list = precomputedLiquids && precomputedLiquids.length ? [...precomputedLiquids] : new Array(10).fill(0);
+        
+        // 检查预计算数据是否有效（非空且非全零）
+        const hasValidPrecomputedSolids = precomputedSolids && precomputedSolids.length && 
+                                          precomputedSolids.some(v => v !== 0);
+        const hasValidPrecomputedLiquids = precomputedLiquids && precomputedLiquids.length && 
+                                           precomputedLiquids.some(v => v !== 0);
+        
+        let bottle_15ml_pos = 1; // 默认位置1
+        const start_tip_pos = new Array(96).fill(1); // 默认全部可用
+        
+        // 3. 处理 tip 转移仓（位置1）
+        const tipContainer = stationData.positions[1];
+        if (tipContainer && tipContainer.slots) {
+            // 标记已占用的 tip 位置为 0
+            tipContainer.slots.forEach((slot, idx) => {
+                if (slot.occupied) {
+                    start_tip_pos[idx] = 0;
+                }
+            });
+        }
+        
+        // 4. 查找 15ml 小瓶位置（位置2或3）
+        for (let pos = 2; pos <= 3; pos++) {
+            const tubeContainer = stationData.positions[pos];
+            if (tubeContainer && tubeContainer.slots) {
+                // 查找第一个有空闲槽位的位置
+                const hasEmptySlot = tubeContainer.slots.some(slot => !slot.occupied);
+                if (hasEmptySlot) {
+                    bottle_15ml_pos = pos;
+                    break;
+                }
+            }
+        }
+        
+        // 5. 如果预计算数据无效且有试剂列表，则重新计算物料列表
+        if ((!hasValidPrecomputedSolids || !hasValidPrecomputedLiquids) && 
+            Array.isArray(reagents) && reagents.length > 0) {
+            console.log('重新计算物料列表');
+            
+            // 重新初始化数组
+            solids_list = new Array(12).fill(0);
+            liquids_list = new Array(10).fill(0);
+            
+            for (const reagent of reagents) {
+                const type = (reagent.type || '').toLowerCase();
+                const amount = reagent.amount;
+                const unit = reagent.unit;
+                const materialName = (reagent.name || reagent.chemical || '').trim();
+                
+                // 查找该物料在工站中的位置
+                const location = findMaterialLocation(stationData, materialName, type);
+                console.log('物料位置:', {materialName, type, location});
+                
+                if (location) {
+                    if (type === 'solid' || type === '粉末' || type === '固体') {
+                        // 固体：位置4-5，每个位置6个槽位
+                        const mg = toMilliGrams(amount, unit);
+                        const idx = calculateSolidIndex(location.position, location.slot);
+                        console.log('固体物料计算:', {materialName, mg, position: location.position, slot: location.slot, idx});
+                        if (idx !== null && idx >= 0 && idx < 12) {
+                            solids_list[idx] = Math.round(mg); // mg为单位
+                        }
+                    } else if (type === 'liquid' || type === '液体') {
+                        // 液体：位置6-10，每个位置2个槽位
+                        const microLiters = toMicroLiters(amount, unit);
+                        const idx = calculateLiquidIndex(location.position, location.slot);
+                        console.log('液体物料计算:', {materialName, microLiters, position: location.position, slot: location.slot, idx});
+                        if (idx !== null && idx >= 0 && idx < 10) {
+                            liquids_list[idx] = Math.round(microLiters); // 转换为整数微升
+                        }
+                    }
+                }
+            }
+        }
+        
+        console.log('最终生成的列表:', {solids_list, liquids_list, bottle_15ml_pos, start_tip_pos});
+        
+        // 6. 构建最终指令
+        const command = {
+            command: 'gtcl_all',
+            payload: {
+                solids_list: solids_list,
+                liquids_list: liquids_list,
+                bottle_15ml_pos: bottle_15ml_pos,
+                start_tip_pos: start_tip_pos
+            }
+        };
+        
+        return command;
+    }
+
+    // 获取工站配置信息
+    async function fetchStationConfiguration() {
+        try {
+            // 获取当前容器配置
+            const containersResp = await fetch('/api/batching-station/current-containers/?station_id=1');
+            const containersData = await containersResp.json();
+            
+            const positions = {};
+            
+            if (containersData.success && containersData.containers) {
+                // 为每个容器获取详细的槽位信息
+                for (const container of containersData.containers) {
+                    const posMatch = (container.position_id || '').match(/prep_(\d+)/);
+                    if (!posMatch) continue;
+                    
+                    const posNum = parseInt(posMatch[1], 10);
+                    
+                    // 获取容器的槽位详情
+                    const slotsResp = await fetch(`/api/containers/${container.id}/slots/`);
+                    const slotsData = await slotsResp.json();
+                    
+                    positions[posNum] = {
+                        container_id: container.id,
+                        container_name: container.name,
+                        container_code: container.code,
+                        slots: []
+                    };
+                    
+                    if (slotsData.success && Array.isArray(slotsData.slots)) {
+                        positions[posNum].slots = slotsData.slots.map(slot => ({
+                            slot_number: slot.slot_number,
+                            occupied: slot.occupied,
+                            material_name: slot.material_name || slot.powder_name || slot.liquid_name || null,
+                            material_type: slot.material_type || (slot.powder_name ? 'solid' : slot.liquid_name ? 'liquid' : null)
+                        }));
+                    }
+                }
+            }
+            
+            console.log('获取到的工站配置:', positions);
+            return { positions };
+        } catch (err) {
+            console.error('获取工站配置失败:', err);
+            // 即使获取失败，也要返回默认结构以避免程序崩溃
+            return { positions: {} };
+        }
+    }
+
+    // 物料名称标准化（处理别名/拼写差异）
+    function normalizeMaterialName(name) {
+        if (!name) return '';
+        let s = String(name).trim().toLowerCase();
+        // 去除全角/半角空格
+        s = s.replace(/\s+/g, '');
+        // 常见同义/误写映射
+        const aliasMap = new Map([
+            ['碳酸氢纳','碳酸氢钠'],
+            ['碳酸氫鈉','碳酸氢钠'],
+            ['碳酸氫钠','碳酸氢钠'],
+            ['碳酸氫納','碳酸氢钠'],
+            ['sodiumbicarbonate','碳酸氢钠'],
+            ['nahco3','碳酸氢钠'],
+            ['h2o','水'],
+            ['water','水']
+        ]);
+        if (aliasMap.has(s)) return aliasMap.get(s);
+        // 单字符替换（纳->钠等）
+        s = s.replace(/納/g, '钠').replace(/鈉/g, '钠');
+        return s;
+    }
+
+    // 查找物料在工站中的位置
+    function findMaterialLocation(stationData, materialName, materialType) {
+        if (!materialName) return null;
+        
+        const normalizedName = normalizeMaterialName(materialName);
+        const type = (materialType || '').toLowerCase();
+        
+        // 根据类型确定搜索范围
+        let searchPositions = [];
+        if (type === 'solid' || type === '粉末' || type === '固体') {
+            searchPositions = [4, 5]; // 固体在位置4-5
+        } else if (type === 'liquid' || type === '液体') {
+            searchPositions = [6, 7, 8, 9, 10]; // 液体在位置6-10
+        } else {
+            searchPositions = [4, 5, 6, 7, 8, 9, 10]; // 类型未知，搜索所有
+        }
+        
+        for (const pos of searchPositions) {
+            const container = stationData.positions[pos];
+            if (!container || !container.slots) continue;
+            
+            for (const slot of container.slots) {
+                if (slot.material_name) {
+                    const slotMaterialName = normalizeMaterialName(slot.material_name);
+                    // 更宽松的匹配：标准化后相等或包含
+                    if (slotMaterialName === normalizedName || 
+                        slotMaterialName.includes(normalizedName) || 
+                        normalizedName.includes(slotMaterialName)) {
+                        return {
+                            position: pos,
+                            slot: slot.slot_number
+                        };
+                    }
+                }
+            }
+        }
+        
+        console.log('未找到物料位置:', {materialName, normalizedName, materialType, searchPositions});
+        return null;
+    }
+
+    // 计算固体索引（位置4-5，每个6个槽位，共12个位置）
+    function calculateSolidIndex(position, slotNumber) {
+        if (position === 4) {
+            // 位置4：索引 0-5
+            return slotNumber - 1;
+        } else if (position === 5) {
+            // 位置5：索引 6-11
+            return 6 + (slotNumber - 1);
+        }
+        return null;
+    }
+
+    // 计算液体索引（位置6-10，每个2个槽位，共10个位置）
+    function calculateLiquidIndex(position, slotNumber) {
+        const positionToBaseIndex = {
+            6: 0,
+            7: 2,
+            8: 4,
+            9: 6,
+            10: 8
+        };
+        
+        const baseIndex = positionToBaseIndex[position];
+        if (baseIndex !== undefined) {
+            return baseIndex + (slotNumber - 1);
+        }
+        return null;
+    }
+
+    sendCommandBtn.addEventListener('click', function() {
+        const originalButtonHTML = sendCommandBtn.innerHTML;
+        sendCommandBtn.disabled = true;
+        sendCommandBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 正在发送...`;
+
+        const targetId = document.getElementById('targetClientId').value.trim();
+        const messageContent = messageContentTextArea.value.trim();
+
+        const restoreButton = () => {
+            sendCommandBtn.disabled = false;
+            sendCommandBtn.innerHTML = originalButtonHTML;
+        };
+
+        if (!targetId || !messageContent) {
+            alert('目标客户端ID和指令内容不能为空！');
+            restoreButton();
+            return;
+        }
+
+        let messagePayload;
+        try {
+            messagePayload = JSON.parse(messageContent);
+        } catch (e) {
+            alert('指令内容不是有效的JSON格式！请检查语法。\n错误详情: ' + e.message);
+            restoreButton();
+            return;
+        }
+
+        const command = {
+            'command': 'send_to_client',
+            'target_client_id': targetId,
+            'message': messagePayload
+        };
+
+        if (stationSocket.readyState === WebSocket.OPEN) {
+            stationSocket.send(JSON.stringify(command));
+            commandResult.classList.remove('d-none', 'alert-danger');
+            commandResult.classList.add('alert-success');
+            commandResult.textContent = `已向服务器发送指令，目标: ${targetId}`;
+        } else {
+            commandResult.classList.remove('d-none', 'alert-success');
+            commandResult.classList.add('alert-danger');
+            commandResult.textContent = '错误: WebSocket 连接未打开。';
+        }
+
+        setTimeout(function() {
+            commandResult.classList.add('d-none');
+            restoreButton();
+        }, 3000);
+    });
+
+
+    // --- 卡片折叠动画与箭头旋转 ---
     var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
     collapseElements.forEach(function(element) {
         element.addEventListener('click', function() {
