@@ -314,13 +314,12 @@
 document.addEventListener('DOMContentLoaded', function () {
     // --- 全局变量定义 ---
     let totalRuntimeInterval = null;
-    let tasks = []; // 任务的中心化状态管理
-    let taskIdCounter = 0;
+    let tasks = [];
+    let taskIdCounter = 0; // 显示ID（来自后端）
     let isWorkerBusy = false;
     let isPositionManuallyOccupied = false;
 
     // --- DOM 元素获取 ---
-
     const saveTaskBtn = document.getElementById('saveTaskBtn');
     const createTaskForm = document.getElementById('createTaskForm');
     const tasksTableBody = document.querySelector('#tasksTable tbody');
@@ -341,7 +340,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const gcmsRunStatus = document.getElementById('gcmsRunStatus');
     // 本地缓存序列映射：index->name
     let sequenceMap = {};
+    const sequenceTableBody = document.getElementById('sequenceTableBody');
+    const viewSequenceBtn = document.getElementById('viewSequenceBtn');
 
+    // --- 工具函数 ---
     function addLog(message, type = 'info') {
         const timestamp = new Date().toLocaleTimeString();
         const logEntry = document.createElement('div');
@@ -350,7 +352,23 @@ document.addEventListener('DOMContentLoaded', function () {
         logContainer.appendChild(logEntry);
         logContainer.scrollTop = logContainer.scrollHeight;
     }
+    function statusClassByCode(code){
+        switch(code){
+            case 'pending': return 'bg-secondary';
+            case 'queued': return 'bg-primary';
+            case 'task_started':
+            case 'device_preparation':
+            case 'arm_operation':
+            case 'instrument_analysis':
+            case 'waiting_completion':
+            case 'device_reset': return 'bg-info text-dark';
+            case 'completed': return 'bg-success';
+            case 'failed': return 'bg-danger';
+            default: return 'bg-secondary';
+        }
+    }
 
+    // --- WebSocket ---
     const wsProto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
     const socket = new WebSocket(wsProto + window.location.host + '/ws/gcms/');
 
@@ -365,19 +383,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // 预取序列清单，避免序列文件名为空
         sendMessage('get_sequence_list');
     };
-
     socket.onclose = function(e) {
         addLog('WebSocket 连接已断开', 'danger');
         connectionStatus.textContent = '离线';
         connectionStatus.className = 'badge bg-danger';
         connectionStatusIcon.className = 'fas fa-wifi text-danger me-2';
     };
-
-    socket.onerror = function(e) {
-        addLog('WebSocket 连接发生错误', 'danger');
-    };
-
-
+    socket.onerror = function(e) { addLog('WebSocket 连接发生错误', 'danger'); };
 
     function sendMessage(command) {
         if (socket.readyState === WebSocket.OPEN) {
@@ -388,47 +400,517 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    document.getElementById('refreshStatusBtn').addEventListener('click', () => sendMessage('get_status'));
-    document.getElementById('getInstrumentInfoBtn').addEventListener('click', () => sendMessage('get_instrument_info'));
-    const sequenceTableBody = document.getElementById('sequenceTableBody');
-    const viewSequenceBtn = document.getElementById('viewSequenceBtn');
     if (viewSequenceBtn) {
         viewSequenceBtn.addEventListener('click', () => {
             if (socket.readyState === WebSocket.OPEN) {
-                // 发送获取序列清单指令
                 sendMessage('get_sequence_list');
-                // 先显示加载中
                 if (sequenceTableBody) {
                     sequenceTableBody.innerHTML = '<tr><td colspan="2" class="text-muted">加载中...</td></tr>';
                 }
             }
         });
     }
-    document.getElementById('clearLogsBtn').addEventListener('click', () => {
-        logContainer.innerHTML = '';
-        addLog('日志已清空', 'info');
-    });
+    document.getElementById('refreshStatusBtn').addEventListener('click', () => sendMessage('get_status'));
+    document.getElementById('getInstrumentInfoBtn').addEventListener('click', () => sendMessage('get_instrument_info'));
+    document.getElementById('clearLogsBtn').addEventListener('click', () => { logContainer.innerHTML = ''; addLog('日志已清空', 'info'); });
 
-    // --- New Task Management Logic ---
-
-    // On page load, check if any task is in a running state and lock the worker
-    function initializeWorkerStatus() {
-        const isAnyTaskRunning = tasks.some(t => t.statusText !== '待运行' && t.statusText !== '排队中' && t.statusText !== '已完成' && t.statusText !== '失败');
-        if (isAnyTaskRunning) {
-            isWorkerBusy = true;
-            console.log('Worker status initialized to BUSY due to a running task on load.');
-        } else {
-            isWorkerBusy = false;
-            console.log('Worker status initialized to IDLE.');
+    // --- 与后端交互（API） ---
+    async function loadTasksFromServer(){
+        try{
+            const resp = await fetch('/api/gcms/tasks/');
+            if(!resp.ok) throw new Error('加载任务失败');
+            const data = await resp.json();
+            if(!data.success) throw new Error(data.error || '加载任务失败');
+            const list = data.tasks || [];
+            tasks = list.map(t => ({
+                id: `task-${t.id}`,
+                dbId: t.id,
+                displayId: t.displayId,
+                name: t.name,
+                bottleNum: t.bottleNum,
+                sequenceIndex: t.sequenceIndex,
+                sequenceName: t.sequenceName || '',
+                time: t.time,
+                statusText: t.statusText,
+                statusCode: t.status,
+                statusClass: statusClassByCode(t.status),
+                runButtonHTML: (t.status === 'pending' || t.status === 'failed' || t.status === 'completed') ? '<i class="fas fa-play"></i> 运行' : '<i class="fas fa-clock"></i> 排队中',
+                runButtonDisabled: !(t.status === 'pending' || t.status === 'failed' || t.status === 'completed'),
+                startTime: t.startTime,
+                endTime: t.endTime,
+                duration: t.duration || 'N/A',
+                archiveId: t.archiveId || null
+            }));
+            taskIdCounter = list.length ? Math.max(...list.map(t=>t.displayId||0)) : 0;
+            renderTasks();
+        }catch(err){
+            console.error(err);
+            addLog('从服务器加载任务失败: ' + err.message, 'danger');
         }
     }
 
-    // Position Status Elements
+    async function createTaskOnServer(payload){
+        const resp = await fetch('/api/gcms/tasks/create/', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        if(!resp.ok) throw new Error('创建任务失败');
+        const data = await resp.json();
+        if(!data.success) throw new Error(data.error || '创建任务失败');
+        return data.task;
+    }
 
+    async function updateTaskOnServer(dbId, payload){
+        try{
+            const resp = await fetch(`/api/gcms/tasks/${dbId}/update/`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload || {})
+            });
+            if(!resp.ok) throw new Error('更新任务失败');
+            const data = await resp.json();
+            if(!data.success) throw new Error(data.error || '更新任务失败');
+            return data.task;
+        }catch(err){
+            console.error('更新任务失败', err);
+            addLog('更新任务失败: ' + err.message, 'danger');
+            return null;
+        }
+    }
+
+    async function deleteTaskOnServer(dbId){
+        const resp = await fetch(`/api/gcms/tasks/${dbId}/delete/`, { method: 'DELETE' });
+        if(!resp.ok) throw new Error('删除任务失败');
+        const data = await resp.json();
+        if(!data.success) throw new Error(data.error || '删除任务失败');
+        return true;
+    }
+
+    // --- 渲染 ---
+    function renderTasks() {
+        tasksTableBody.innerHTML = '';
+        let pendingCount = 0; let completedCount = 0;
+        if (tasks.length === 0) {
+            tasksTableBody.innerHTML = `<tr id="no-tasks-row">
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                                暂无任务，请点击右上角创建
+                            </td>
+                        </tr>`;
+        } else {
+            tasks.forEach(task => {
+                if (task.statusCode === 'completed') { completedCount++; } else { pendingCount++; }
+                const newRow = document.createElement('tr');
+                newRow.id = task.id;
+                newRow.innerHTML = `
+                    <td>${task.displayId}</td>
+                    <td>${task.name}</td>
+                    <td>${task.bottleNum}</td>
+                    <td>${task.sequenceIndex}</td>
+                    <td>${task.sequenceName || 'N/A'}</td>
+                    <td>${task.time}</td>
+                    <td><span class="badge ${task.statusClass}">${task.statusText}</span></td>
+                    <td>${task.duration || 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-success btn-sm run-btn" onclick="handleRunTask('${task.id}')" ${task.runButtonDisabled ? 'disabled' : ''}>
+                            ${task.runButtonHTML}
+                        </button>
+                        <button id="viewResultBtn-${task.id}" class="btn btn-info btn-sm ms-1" onclick="handleViewResult('${task.id}')" ${task.statusCode === 'completed' ? '' : 'disabled'}>
+                            <i class="fas fa-chart-line"></i> 查看结果
+                        </button>
+                        <button class="btn btn-danger btn-sm delete-btn" onclick="handleDeleteTask('${task.id}')">
+                            <i class="fas fa-trash"></i> 删除
+                        </button>
+                    </td>`;
+                tasksTableBody.appendChild(newRow);
+            });
+        }
+        document.getElementById('pendingAnalysis').textContent = pendingCount;
+        document.getElementById('completedAnalysis').textContent = completedCount;
+    }
+
+    // --- 初始化 ---
+    async function initializeApp() {
+        await loadTasksFromServer();
+        initializeWorkerStatus();
+        const isAnyTaskRunning = tasks.some(t => !['pending','queued','completed','failed'].includes(t.statusCode));
+        if (isAnyTaskRunning) {
+            if (!localStorage.getItem('gcmsTotalRuntimeStart')) {
+                localStorage.setItem('gcmsTotalRuntimeStart', Date.now());
+            }
+            startTotalRuntime();
+        } else {
+            stopTotalRuntime();
+        }
+    }
+
+    // On page load, check if any task is in a running state and lock the worker
+    function initializeWorkerStatus() {
+        const isAnyTaskRunning = tasks.some(t => !['pending','queued','completed','failed'].includes(t.statusCode));
+        isWorkerBusy = isAnyTaskRunning;
+    }
+
+    initializeApp();
+
+    // --- 队列 ---
+    function runNextTaskInQueue() {
+        if (isWorkerBusy) return;
+        if (isPositionManuallyOccupied) return;
+        const nextTask = tasks.find(t => t.statusCode === 'queued');
+        if (nextTask) {
+            isWorkerBusy = true;
+            sendMessage(`start_analysis_${nextTask.bottleNum}_${nextTask.sequenceIndex}`);
+            nextTask.statusText = '请求运行';
+            nextTask.statusClass = 'bg-info';
+            nextTask.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
+            renderTasks();
+        }
+    }
+
+    // --- 创建任务 ---
+    saveTaskBtn.addEventListener('click', async () => {
+        const experimentName = document.getElementById('experimentName').value.trim();
+        const bottleNum = document.getElementById('bottleNum').value;
+        const sequenceIndex = document.getElementById('sequenceIndex').value;
+        const sequenceName = sequenceMap[String(sequenceIndex)] || '';
+
+        if (!experimentName || bottleNum === '' || sequenceIndex === '') {
+            alert('请填写所有字段');
+            return;
+        }
+        if (parseInt(bottleNum) < 0 || parseInt(bottleNum) > 33) {
+            alert('样品瓶号必须在 0 到 33 之间');
+            return;
+        }
+        try{
+            const t = await createTaskOnServer({
+                experimentName, bottleNum: parseInt(bottleNum), sequenceIndex: parseInt(sequenceIndex), sequenceName
+            });
+            tasks.unshift({
+                id: `task-${t.id}`,
+                dbId: t.id,
+                displayId: t.displayId,
+                name: t.name,
+                bottleNum: t.bottleNum,
+                sequenceIndex: t.sequenceIndex,
+                sequenceName: t.sequenceName || '',
+                time: t.time,
+                statusText: t.statusText,
+                statusCode: t.status,
+                statusClass: statusClassByCode(t.status),
+                runButtonHTML: '<i class="fas fa-play"></i> 运行',
+                runButtonDisabled: false,
+                startTime: null,
+                endTime: null,
+                duration: t.duration || 'N/A',
+                archiveId: null
+            });
+            taskIdCounter = Math.max(taskIdCounter, t.displayId);
+            renderTasks();
+            createTaskForm.reset();
+            createTaskModal.hide();
+            addLog('任务创建成功', 'success');
+        }catch(err){
+            console.error(err);
+            alert('创建任务失败: ' + err.message);
+        }
+    });
+
+    // --- 按钮动作 ---
+    window.handleRunTask = async function(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        task.statusCode = 'queued';
+        task.statusText = '排队中';
+        task.statusClass = 'bg-primary';
+        task.runButtonHTML = '<i class="fas fa-clock"></i> 排队中';
+        task.runButtonDisabled = true;
+        renderTasks();
+        await updateTaskOnServer(task.dbId, { status: 'queued' });
+        runNextTaskInQueue();
+    }
+
+    window.handleDeleteTask = async function(taskId) {
+        if (!confirm('您确定要删除这个任务吗？')) return;
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        const isRunning = !['pending','queued','completed','failed'].includes(task.statusCode);
+        try{
+            await deleteTaskOnServer(task.dbId);
+            tasks = tasks.filter(t => t.id !== taskId);
+            renderTasks();
+            addLog(`删除了任务: ${task.name} (瓶号: ${task.bottleNum})`, 'info');
+            if (isRunning) {
+                isWorkerBusy = false;
+                updatePositionStatus('idle');
+                stopTotalRuntime();
+                sendMessage('force_stop');
+                addLog('由于删除了正在运行的任务，已重置工位状态。', 'warning');
+            }
+        }catch(err){
+            console.error(err);
+            alert('删除任务失败: ' + err.message);
+        }
+    }
+
+    // 查看结果按钮
+    const resultModalEl = document.getElementById('resultModal');
+    const resultModal = new bootstrap.Modal(resultModalEl);
+    const resultChartCanvas = document.getElementById('resultChart');
+    const resultLoading = document.getElementById('resultLoading');
+    const resultMessage = document.getElementById('resultMessage');
+    let resultChartInstance = null;
+    const resultCache = {};
+    let activeResultTaskId = null;
+    const downloadPngBtn = document.getElementById('downloadPngBtn');
+
+    function showResultLoading(text) {
+        resultLoading.style.display = '';
+        resultLoading.textContent = text || '正在加载数据，请稍候...';
+        resultChartCanvas.style.display = 'none';
+        resultMessage.style.display = 'none';
+    }
+    function showResultMessage(text, level='warning') {
+        resultLoading.style.display = 'none';
+        resultChartCanvas.style.display = 'none';
+        resultMessage.style.display = '';
+        resultMessage.className = `alert alert-${level} mt-2`;
+        resultMessage.textContent = text || '无可显示的数据';
+    }
+    function renderResultChart(xArr, yArr, titleText) {
+        resultLoading.style.display = 'none';
+        resultMessage.style.display = 'none';
+        resultChartCanvas.style.display = '';
+        const ctx = resultChartCanvas.getContext('2d');
+        if (resultChartInstance) { resultChartInstance.destroy(); }
+        resultChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { labels: xArr, datasets: [{ label: 'GCMS色谱', data: yArr, borderColor: 'rgba(54, 162, 235, 1)', backgroundColor: 'rgba(54, 162, 235, 0.1)', borderWidth: 1, pointRadius: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, title: { display: !!titleText, text: titleText || '' }, tooltip: { callbacks: { title: function(items){ return items && items.length ? `时间: ${items[0].label}` : ''; }, label: function(){ return ''; } } } }, scales: { x: { title: { display: true, text: '时间' }, ticks: { autoSkip: true, maxTicksLimit: 12 } }, y: { title: { display: true, text: '强度' }, beginAtZero: false, type: 'linear' } } }
+        });
+    }
+
+    function setViewResultButtonState(taskId, state, messageText){
+        const btn = document.getElementById(`viewResultBtn-${taskId}`);
+        if (!btn) return;
+        switch(state){
+            case 'loading': btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载中'; break;
+            case 'noresult': btn.disabled = false; btn.innerHTML = '<i class="fas fa-exclamation-circle"></i> 无结果'; break;
+            case 'error': btn.disabled = false; btn.innerHTML = '<i class="fas fa-times-circle"></i> 加载失败'; break;
+            default: btn.disabled = false; btn.innerHTML = '<i class="fas fa-chart-line"></i> 查看结果';
+        }
+        if (messageText) btn.setAttribute('title', messageText);
+    }
+
+    function saveResultToCache(taskId, series){ try{ resultCache[taskId] = series; localStorage.setItem(`gcmsResult_${taskId}`, JSON.stringify(series)); }catch(e){} }
+    function loadResultFromCache(taskId){ if (resultCache[taskId]) return resultCache[taskId]; try{ const s = localStorage.getItem(`gcmsResult_${taskId}`); if (s){ const series = JSON.parse(s); resultCache[taskId] = series; return series; } }catch(e){} return null; }
+
+    window.handleViewResult = function(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        resultModal.show();
+        activeResultTaskId = taskId;
+        const cached = loadResultFromCache(taskId);
+        if (cached && Array.isArray(cached.x) && Array.isArray(cached.y)){
+            renderResultChart(cached.x, cached.y, `序列 ${task.sequenceIndex} 结果（缓存）`);
+            setViewResultButtonState(taskId, '');
+            return;
+        }
+        showResultLoading('正在请求结果数据...');
+        setViewResultButtonState(taskId, 'loading');
+        if (task.archiveId){
+            sendMessage(`get_result_${task.bottleNum}_${task.sequenceIndex}_${task.archiveId}`);
+        } else {
+            sendMessage(`get_result_${task.bottleNum}_${task.sequenceIndex}`);
+        }
+    }
+
+    if (downloadPngBtn){
+        downloadPngBtn.addEventListener('click', function(){
+            if (!resultChartInstance) return;
+            const link = document.createElement('a');
+            link.href = resultChartInstance.toBase64Image();
+            link.download = `gcms_result_${Date.now()}.png`;
+            link.click();
+        });
+    }
+
+    // Enhanced onmessage to update state array and handle queue（并写回数据库）
+    socket.onmessage = async function(e) {
+        const data = JSON.parse(e.data);
+        const message = data.message;
+        const sender = data.sender;
+
+        addLog(`收到消息: ${JSON.stringify(message)}`, 'primary');
+        if (sender !== 'worker') return;
+
+        const task = tasks.find(t => (
+            t.bottleNum == message.bottle_num &&
+            (message.sequence_index === undefined || t.sequenceIndex == message.sequence_index) &&
+            t.statusCode !== 'completed' && t.statusCode !== 'failed'
+        ));
+
+        switch (message.type) {
+            case 'worker_connected':
+                gcmsStatus.textContent = message.status;
+                armStatus.textContent = '待获取';
+                break;
+            case 'status_update':
+                gcmsStatus.textContent = message.status;
+                gcmsRunMode.textContent = message.run_mode || '未知';
+                gcmsRunStatus.textContent = message.run_status || '未知';
+                break;
+            case 'arm_status':
+                armStatus.textContent = message.status;
+                break;
+            case 'analysis_started':
+                if (task) {
+                    task.statusCode = 'task_started';
+                    task.statusText = '任务开始';
+                    task.statusClass = statusClassByCode('task_started');
+                    task.startTime = Date.now();
+                    await updateTaskOnServer(task.dbId, { status: 'task_started', startTime: task.startTime });
+                }
+                updatePositionStatus('running');
+                startTotalRuntime();
+                break;
+            case 'analysis_progress':
+                if (task) {
+                    task.statusText = message.stage;
+                    task.statusClass = 'bg-info text-dark';
+                    const statusMap = { '设备准备':'device_preparation','机械臂操作':'arm_operation','仪器分析':'instrument_analysis','等待分析完成':'waiting_completion','设备复位':'device_reset' };
+                    const code = statusMap[message.stage] || 'task_started';
+                    task.statusCode = code;
+                    await updateTaskOnServer(task.dbId, { status: code });
+                }
+                updatePositionStatus('running');
+                break;
+            case 'analysis_complete':
+                if (task) {
+                    task.statusCode = 'completed';
+                    task.statusText = '已完成';
+                    task.statusClass = statusClassByCode('completed');
+                    task.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行';
+                    task.runButtonDisabled = false;
+                    task.endTime = Date.now();
+                    if (message.archive_id){ task.archiveId = message.archive_id; }
+                    if (task.startTime) {
+                        const durationSeconds = Math.round((task.endTime - task.startTime) / 1000);
+                        const minutes = Math.floor(durationSeconds / 60);
+                        const seconds = durationSeconds % 60;
+                        task.duration = `${minutes}分${seconds}秒`;
+                    }
+                    await updateTaskOnServer(task.dbId, { status: 'completed', endTime: task.endTime, archiveId: task.archiveId });
+                }
+                isWorkerBusy = false;
+                updatePositionStatus('complete');
+                runNextTaskInQueue();
+                stopTotalRuntime();
+                break;
+            case 'analysis_error':
+                if (task) {
+                    task.statusCode = 'failed';
+                    task.statusText = '失败';
+                    task.statusClass = statusClassByCode('failed');
+                    task.runButtonHTML = '<i class="fas fa-redo"></i> 重试';
+                    task.runButtonDisabled = false;
+                    task.endTime = Date.now();
+                    await updateTaskOnServer(task.dbId, { status: 'failed', endTime: task.endTime });
+                }
+                isWorkerBusy = false;
+                updatePositionStatus('error');
+                runNextTaskInQueue();
+                stopTotalRuntime();
+                break;
+            case 'sequence_list':
+                if (Array.isArray(message.items) && sequenceTableBody) {
+                    sequenceMap = {};
+                    message.items.forEach(it => { sequenceMap[String(it.index)] = it.name; });
+                    if (message.items.length === 0) {
+                        sequenceTableBody.innerHTML = '<tr><td colspan="2" class="text-muted">未发现任何序列</td></tr>';
+                    } else {
+                        sequenceTableBody.innerHTML = message.items.map(item => `
+                            <tr>
+                                <td>${item.index}</td>
+                                <td>${item.name}</td>
+                            </tr>
+                        `).join('');
+                    }
+                    // 补全已有任务的序列名并回写数据库
+                    tasks.forEach(async t => {
+                        if (t.sequenceIndex != null && t.sequenceIndex !== '' && sequenceMap[String(t.sequenceIndex)]) {
+                            const newName = sequenceMap[String(t.sequenceIndex)];
+                            if (t.sequenceName !== newName){
+                                t.sequenceName = newName;
+                                await updateTaskOnServer(t.dbId, { sequenceName: newName });
+                            }
+                        }
+                    });
+                    renderTasks();
+                }
+                break;
+            case 'analysis_result':
+                if (!message.available) {
+                    showResultMessage(message.message || '未找到结果文件');
+                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'noresult', message.message);
+                } else if (message.series && Array.isArray(message.series.x) && Array.isArray(message.series.y)) {
+                    const x = message.series.x; const y = message.series.y;
+                    renderResultChart(x, y, `序列 ${message.sequence_index} 结果`);
+                    if (activeResultTaskId) {
+                        saveResultToCache(activeResultTaskId, {x, y});
+                        setViewResultButtonState(activeResultTaskId, '');
+                        const t = tasks.find(tt => tt.id === activeResultTaskId);
+                        if (t && message.archive_id) {
+                            t.archiveId = message.archive_id;
+                            await updateTaskOnServer(t.dbId, { archiveId: t.archiveId });
+                        }
+                    }
+                } else {
+                    showResultMessage('结果数据格式不正确');
+                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'error');
+                }
+                break;
+        }
+        if (task) renderTasks();
+    };
+
+    // 面包屑高亮“GCMS”
+    setTimeout(function() {
+        var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
+        if (breadcrumb) {
+            var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
+            var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
+            var target = null;
+            for (var i = 0; i < links.length; i++) {
+                if (links[i].textContent.trim() === 'GCMS') { target = links[i]; break; }
+            }
+            if (target) {
+                links.forEach(function(a){ a.classList.remove('active'); });
+                target.classList.add('active');
+                if (indicator) {
+                    indicator.style.width = target.offsetWidth + 'px';
+                    indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
+                }
+            }
+        }
+    }, 100);
+
+    // 卡片折叠图标旋转
+    var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    collapseElements.forEach(function(element) {
+        element.addEventListener('click', function() {
+            var icon = this.querySelector('.collapse-icon');
+            var target = document.querySelector(this.getAttribute('data-bs-target'));
+            setTimeout(function() {
+                if (target && target.classList.contains('show')) {
+                    icon.style.transform = 'rotate(0deg)';
+                } else if (icon) {
+                    icon.style.transform = 'rotate(180deg)';
+                }
+            }, 50);
+        });
+    });
+
+    // --- 位置状态 ---
     function updatePositionStatus(status) {
-        // idle, running, complete, error, manual_occupied
         if (!pos1Alert) return;
-
         switch (status) {
             case 'running':
                 isWorkerBusy = true;
@@ -460,553 +942,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 break;
         }
     }
-
     pos1Card.addEventListener('click', () => {
         if (!isWorkerBusy) {
-            if (isPositionManuallyOccupied) {
-                updatePositionStatus('idle');
-            } else {
-                updatePositionStatus('manual_occupied');
-            }
+            if (isPositionManuallyOccupied) { updatePositionStatus('idle'); }
+            else { updatePositionStatus('manual_occupied'); }
         }
-    });
-
-    function saveTasks() {
-        localStorage.setItem('gcmsTasks', JSON.stringify(tasks));
-    }
-
-    function renderTasks() {
-        tasksTableBody.innerHTML = ''; // Clear the table
-
-        let pendingCount = 0;
-        let completedCount = 0;
-
-        if (tasks.length === 0) {
-            tasksTableBody.innerHTML = `<tr id="no-tasks-row">
-                            <td colspan="9" class="text-center text-muted py-4">
-                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
-                                暂无任务，请点击右上角创建
-                            </td>
-                        </tr>`;
-        } else {
-             tasks.forEach(task => {
-                if (task.statusText === '已完成') {
-                    completedCount++;
-                } else {
-                    pendingCount++;
-                }
-
-                const newRow = document.createElement('tr');
-                newRow.id = task.id;
-                newRow.innerHTML = `
-                    <td>${task.displayId}</td>
-                    <td>${task.name}</td>
-                    <td>${task.bottleNum}</td>
-                    <td>${task.sequenceIndex}</td>
-                    <td>${task.sequenceName || 'N/A'}</td>
-                    <td>${task.time}</td>
-                    <td><span class="badge ${task.statusClass}">${task.statusText}</span></td>
-                    <td>${task.duration || 'N/A'}</td>
-                    <td>
-                        <button class="btn btn-success btn-sm run-btn" onclick="handleRunTask('${task.id}')" ${task.runButtonDisabled ? 'disabled' : ''}>
-                            ${task.runButtonHTML}
-                        </button>
-                        <button id="viewResultBtn-${task.id}" class="btn btn-info btn-sm ms-1" onclick="handleViewResult('${task.id}')" ${task.statusText === '已完成' ? '' : 'disabled'}>
-                            <i class="fas fa-chart-line"></i> 查看结果
-                        </button>
-                        <button class="btn btn-danger btn-sm delete-btn" onclick="handleDeleteTask('${task.id}')">
-                            <i class="fas fa-trash"></i> 删除
-                        </button>
-                    </td>
-                `;
-                tasksTableBody.appendChild(newRow);
-            });
-        }
-
-        // Update counters
-        document.getElementById('pendingAnalysis').textContent = pendingCount;
-        document.getElementById('completedAnalysis').textContent = completedCount;
-    }
-
-    function loadTasks() {
-        const savedTasks = localStorage.getItem('gcmsTasks');
-        if (savedTasks) {
-            tasks = JSON.parse(savedTasks);
-            // Restore counter to avoid duplicate IDs
-            taskIdCounter = tasks.length > 0 ? Math.max(...tasks.map(t => t.displayId)) : 0;
-            renderTasks();
-        }
-    }
-
-    // --- Initialization on page load ---
-    function initializeApp() {
-        loadTasks();
-        initializeWorkerStatus();
-
-        // Now that tasks are loaded, check if the runtime timer should be active
-        const isAnyTaskRunning = tasks.some(t => !['待运行', '排队中', '已完成', '失败'].includes(t.statusText));
-        
-        if (isAnyTaskRunning) {
-            // If any task is running, the master timer MUST be running.
-            if (!localStorage.getItem('gcmsTotalRuntimeStart')) {
-                addLog('警告：有任务在运行但未找到计时起点，将从现在开始计时。', 'warning');
-                // We set it here so startTotalRuntime can pick it up.
-                localStorage.setItem('gcmsTotalRuntimeStart', Date.now());
-            }
-            startTotalRuntime();
-            addLog('恢复总运行计时器。', 'info');
-        } else {
-            // If no tasks are running, ensure the timer is stopped and reset.
-            stopTotalRuntime();
-        }
-    }
-
-    initializeApp();
-
-    function runNextTaskInQueue() {
-        if (isWorkerBusy) {
-            console.log('Queue check: Aborted, worker is busy.');
-            return;
-        }
-        if (isPositionManuallyOccupied) {
-            console.log('Queue check: Aborted, position is manually occupied.');
-            return;
-        }
-
-        const nextTask = tasks.find(t => t.statusText === '排队中');
-
-        if (nextTask) {
-            console.log(`Queue check: Found next task ${nextTask.id}, preparing to run.`);
-            isWorkerBusy = true; // Set busy flag immediately
-            sendMessage(`start_analysis_${nextTask.bottleNum}_${nextTask.sequenceIndex}`);
-            
-            // Visually update the task to show it's being sent
-            nextTask.statusText = '请求运行';
-            nextTask.statusClass = 'bg-info';
-            nextTask.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
-            saveTasks();
-            renderTasks();
-        } else {
-            console.log('Queue check: No tasks in queue.');
-        }
-    }
-
-    saveTaskBtn.addEventListener('click', () => {
-        const experimentName = document.getElementById('experimentName').value.trim();
-        const bottleNumInput = document.getElementById('bottleNum');
-        const bottleNum = bottleNumInput.value;
-        const sequenceIndexInput = document.getElementById('sequenceIndex');
-        const sequenceIndex = sequenceIndexInput.value;
-
-        if (!experimentName || bottleNum === '' || sequenceIndex === '') {
-            alert('请填写所有字段');
-            return;
-        }
-
-        if (parseInt(bottleNum) < 0 || parseInt(bottleNum) > 33) {
-            alert('样品瓶号必须在 0 到 33 之间');
-            return;
-        }
-
-        taskIdCounter++;
-        const taskId = `task-${taskIdCounter}`;
-        const currentTime = new Date().toLocaleTimeString();
-
-        const newTask = {
-            id: taskId,
-            displayId: taskIdCounter,
-            name: experimentName,
-            bottleNum: bottleNum,
-            sequenceIndex: sequenceIndex,
-            sequenceName: sequenceMap[String(sequenceIndex)] || '',
-            time: currentTime,
-            statusText: '待运行',
-            statusClass: 'bg-secondary',
-            runButtonHTML: '<i class="fas fa-play"></i> 运行',
-            runButtonDisabled: false,
-            startTime: null, // Add startTime
-            endTime: null, // Add endTime
-            duration: '' // Add duration
-        };
-        
-        tasks.push(newTask);
-        saveTasks();
-        renderTasks();
-
-        // 若本地尚无序列清单或缺少该序列项，则请求一次以便回填
-        if (!sequenceMap || !sequenceMap[String(sequenceIndex)]) {
-            sendMessage('get_sequence_list');
-        }
-
-        createTaskForm.reset();
-        createTaskModal.hide();
-    });
-
-    // --- Button Action Handlers ---
-    window.handleRunTask = function(taskId) {
-        const task = tasks.find(t => t.id === taskId);
-        if (!task) return;
-
-        task.statusText = '排队中';
-        task.statusClass = 'bg-primary';
-        task.runButtonHTML = '<i class="fas fa-clock"></i> 排队中';
-        task.runButtonDisabled = true;
-        saveTasks();
-        renderTasks();
-        runNextTaskInQueue();
-    }
-
-    // 查看结果按钮
-    const resultModalEl = document.getElementById('resultModal');
-    const resultModal = new bootstrap.Modal(resultModalEl);
-    const resultChartCanvas = document.getElementById('resultChart');
-    const resultLoading = document.getElementById('resultLoading');
-    const resultMessage = document.getElementById('resultMessage');
-    let resultChartInstance = null;
-    // 结果缓存：内存 + localStorage
-    const resultCache = {};
-    let activeResultTaskId = null;
-    const downloadPngBtn = document.getElementById('downloadPngBtn');
-
-    function showResultLoading(text) {
-        resultLoading.style.display = '';
-        resultLoading.textContent = text || '正在加载数据，请稍候...';
-        resultChartCanvas.style.display = 'none';
-        resultMessage.style.display = 'none';
-    }
-    function showResultMessage(text, level='warning') {
-        resultLoading.style.display = 'none';
-        resultChartCanvas.style.display = 'none';
-        resultMessage.style.display = '';
-        resultMessage.className = `alert alert-${level} mt-2`;
-        resultMessage.textContent = text || '无可显示的数据';
-    }
-    function renderResultChart(xArr, yArr, titleText) {
-        resultLoading.style.display = 'none';
-        resultMessage.style.display = 'none';
-        resultChartCanvas.style.display = '';
-        const ctx = resultChartCanvas.getContext('2d');
-        if (resultChartInstance) {
-            resultChartInstance.destroy();
-        }
-        resultChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: xArr,
-                datasets: [{
-                    label: 'GCMS色谱',
-                    data: yArr,
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                    borderWidth: 1,
-                    pointRadius: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { display: false },
-                    title: { display: !!titleText, text: titleText || '' },
-                    tooltip: {
-                        callbacks: {
-                            title: function(items){ return items && items.length ? `时间: ${items[0].label}` : ''; },
-                            label: function(){ return ''; }
-                        }
-                    }
-                },
-                scales: {
-                    x: { title: { display: true, text: '时间' }, ticks: { autoSkip: true, maxTicksLimit: 12 } },
-                    y: { title: { display: true, text: '强度' }, beginAtZero: false, type: 'linear' }
-                }
-            }
-        });
-    }
-
-    function setViewResultButtonState(taskId, state, messageText){
-        const btn = document.getElementById(`viewResultBtn-${taskId}`);
-        if (!btn) return;
-        switch(state){
-            case 'loading':
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载中';
-                break;
-            case 'noresult':
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-exclamation-circle"></i> 无结果';
-                break;
-            case 'error':
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-times-circle"></i> 加载失败';
-                break;
-            default:
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-chart-line"></i> 查看结果';
-        }
-        if (messageText) btn.setAttribute('title', messageText);
-    }
-
-    function saveResultToCache(taskId, series){
-        try{
-            resultCache[taskId] = series;
-            localStorage.setItem(`gcmsResult_${taskId}`, JSON.stringify(series));
-        }catch(e){ }
-    }
-    function loadResultFromCache(taskId){
-        if (resultCache[taskId]) return resultCache[taskId];
-        try{
-            const s = localStorage.getItem(`gcmsResult_${taskId}`);
-            if (s){
-                const series = JSON.parse(s);
-                resultCache[taskId] = series;
-                return series;
-            }
-        }catch(e){ }
-        return null;
-    }
-
-    window.handleViewResult = function(taskId) {
-        const task = tasks.find(t => t.id === taskId);
-        if (!task) return;
-        resultModal.show();
-        activeResultTaskId = taskId;
-        const cached = loadResultFromCache(taskId);
-        if (cached && Array.isArray(cached.x) && Array.isArray(cached.y)){
-            renderResultChart(cached.x, cached.y, `序列 ${task.sequenceIndex} 结果（缓存）`);
-            setViewResultButtonState(taskId, '');
-            return;
-        }
-        showResultLoading('正在请求结果数据...');
-        setViewResultButtonState(taskId, 'loading');
-        if (task.archiveId){
-            sendMessage(`get_result_${task.bottleNum}_${task.sequenceIndex}_${task.archiveId}`);
-        } else {
-            sendMessage(`get_result_${task.bottleNum}_${task.sequenceIndex}`);
-        }
-    }
-
-    // 导出PNG
-    if (downloadPngBtn){
-        downloadPngBtn.addEventListener('click', function(){
-            if (!resultChartInstance) return;
-            const link = document.createElement('a');
-            link.href = resultChartInstance.toBase64Image();
-            link.download = `gcms_result_${Date.now()}.png`;
-            link.click();
-        });
-    }
-
-    window.handleDeleteTask = function(taskId) {
-        if (confirm('您确定要删除这个任务吗？')) {
-            const task = tasks.find(t => t.id === taskId);
-            if (!task) return;
-
-            const isRunning = !['待运行', '排队中', '已完成', '失败'].includes(task.statusText);
-
-            tasks = tasks.filter(t => t.id !== taskId);
-            saveTasks();
-            renderTasks();
-            addLog(`删除了任务: ${task.name} (瓶号: ${task.bottleNum})`, 'info');
-
-            if (isRunning) {
-                isWorkerBusy = false;
-                updatePositionStatus('idle');
-                stopTotalRuntime();
-                sendMessage('force_stop');
-                addLog('由于删除了正在运行的任务，已重置工位状态。', 'warning');
-            }
-        }
-    }
-
-
-
-    // Enhanced onmessage to update state array and handle queue
-    socket.onmessage = function(e) {
-        const data = JSON.parse(e.data);
-        const message = data.message;
-        const sender = data.sender;
-
-        addLog(`收到消息: ${JSON.stringify(message)}`, 'primary');
-
-        if (sender !== 'worker') return;
-
-        const task = tasks.find(t => (
-            t.bottleNum == message.bottle_num &&
-            (message.sequence_index === undefined || t.sequenceIndex == message.sequence_index) &&
-            !['待运行', '排队中', '已完成', '失败'].includes(t.statusText)
-        ));
-
-        switch (message.type) {
-            case 'worker_connected':
-                gcmsStatus.textContent = message.status;
-                armStatus.textContent = '待获取';
-                break;
-            case 'status_update':
-                gcmsStatus.textContent = message.status;
-                gcmsRunMode.textContent = message.run_mode || '未知';
-                gcmsRunStatus.textContent = message.run_status || '未知';
-                break;
-            case 'arm_status':
-                armStatus.textContent = message.status;
-                break;
-            case 'analysis_started':
-                if (task) {
-                    task.statusText = '任务开始';
-                    task.statusClass = 'bg-info';
-                    task.startTime = Date.now(); // 记录开始时间
-                }
-                updatePositionStatus('running');
-                startTotalRuntime(); // 启动总计时器
-                break;
-            case 'analysis_progress':
-                if (task) {
-                    task.statusText = message.stage;
-                    task.statusClass = 'bg-info text-dark';
-                }
-                updatePositionStatus('running');
-                break;
-            case 'analysis_complete':
-                if (task) {
-                    task.statusText = '已完成';
-                    task.statusClass = 'bg-success';
-                    task.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行';
-                    task.runButtonDisabled = false;
-                    task.endTime = Date.now();
-                    if (message.archive_id){
-                        task.archiveId = message.archive_id;
-                    }
-                    if (task.startTime) {
-                        const durationSeconds = Math.round((task.endTime - task.startTime) / 1000);
-                        const minutes = Math.floor(durationSeconds / 60);
-                        const seconds = durationSeconds % 60;
-                        task.duration = `${minutes}分${seconds}秒`;
-                    }
-                }
-                isWorkerBusy = false; // Explicitly unlock the worker
-                updatePositionStatus('complete');
-                runNextTaskInQueue(); // Check for next task
-                stopTotalRuntime(); // Check if we should stop the main timer
-                break;
-            case 'analysis_error':
-                if (task) {
-                    task.statusText = '失败';
-                    task.statusClass = 'bg-danger';
-                    task.runButtonHTML = '<i class="fas fa-redo"></i> 重试';
-                    task.runButtonDisabled = false;
-                    task.endTime = Date.now();
-                    if (task.startTime) {
-                        const durationSeconds = Math.round((task.endTime - task.startTime) / 1000);
-                        const minutes = Math.floor(durationSeconds / 60);
-                        const seconds = durationSeconds % 60;
-                        task.duration = `${minutes}分${seconds}秒`;
-                    }
-                }
-                isWorkerBusy = false; // Explicitly unlock the worker
-                updatePositionStatus('error');
-                runNextTaskInQueue(); // Check for next task
-                stopTotalRuntime(); // Check if we should stop the main timer
-                break;
-            case 'sequence_list':
-                // 渲染序列清单
-                if (Array.isArray(message.items) && sequenceTableBody) {
-                    // 刷新本地缓存
-                    sequenceMap = {};
-                    message.items.forEach(it => { sequenceMap[String(it.index)] = it.name; });
-                    if (message.items.length === 0) {
-                        sequenceTableBody.innerHTML = '<tr><td colspan="2" class="text-muted">未发现任何序列</td></tr>';
-                    } else {
-                        sequenceTableBody.innerHTML = message.items.map(item => `
-                            <tr>
-                                <td>${item.index}</td>
-                                <td>${item.name}</td>
-                            </tr>
-                        `).join('');
-                    }
-                    // 尝试为现有任务补全序列文件名
-                    tasks.forEach(t => {
-                        if (t.sequenceIndex != null && t.sequenceIndex !== '' && sequenceMap[String(t.sequenceIndex)]) {
-                            t.sequenceName = sequenceMap[String(t.sequenceIndex)];
-                        }
-                    });
-                    saveTasks();
-                    renderTasks();
-                }
-                break;
-            case 'analysis_result':
-                if (!message.available) {
-                    showResultMessage(message.message || '未找到结果文件');
-                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'noresult', message.message);
-                } else if (message.series && Array.isArray(message.series.x) && Array.isArray(message.series.y)) {
-                    const x = message.series.x;
-                    const y = message.series.y;
-                    renderResultChart(x, y, `序列 ${message.sequence_index} 结果`);
-                    if (activeResultTaskId) {
-                        saveResultToCache(activeResultTaskId, {x, y});
-                        setViewResultButtonState(activeResultTaskId, '');
-                        // 若返回了归档ID，补充保存到任务，增强刷新后的可追溯
-                        const t = tasks.find(tt => tt.id === activeResultTaskId);
-                        if (t && message.archive_id) {
-                            t.archiveId = message.archive_id;
-                            saveTasks();
-                        }
-                    }
-                } else {
-                    showResultMessage('结果数据格式不正确');
-                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'error');
-                }
-                break;
-            default:
-                // Handle other message types if necessary
-                break;
-        }
-
-        // After any potential change, save and re-render
-        if (task) {
-            saveTasks();
-            renderTasks();
-        }
-    };
-
-    // 面包屑高亮“GCMS”
-    setTimeout(function() {
-        var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
-        if (breadcrumb) {
-            var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
-            var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
-            var target = null;
-            for (var i = 0; i < links.length; i++) {
-                if (links[i].textContent.trim() === 'GCMS') { target = links[i]; break; }
-            }
-            if (target) {
-                links.forEach(function(a){ a.classList.remove('active'); });
-                target.classList.add('active');
-                if (indicator) {
-                    indicator.style.width = target.offsetWidth + 'px';
-                    indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
-                }
-            }
-        }
-    }, 100); // 延迟100毫秒执行，确保元素渲染完成
-
-    // 卡片折叠图标旋转
-    var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
-    collapseElements.forEach(function(element) {
-        element.addEventListener('click', function() {
-            var icon = this.querySelector('.collapse-icon');
-            var target = document.querySelector(this.getAttribute('data-bs-target'));
-            setTimeout(function() {
-                if (target && target.classList.contains('show')) {
-                    icon.style.transform = 'rotate(0deg)';
-                } else if (icon) {
-                    icon.style.transform = 'rotate(180deg)';
-                }
-            }, 50);
-        });
     });
 
     // --- 全局运行时间管理 ---
-
     function updateTotalRuntimeDisplay() {
         const startTime = localStorage.getItem('gcmsTotalRuntimeStart');
         if (!startTime) {
@@ -1014,39 +957,28 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('runtimeMinutes').textContent = '00';
             return;
         }
-
         const diff = Date.now() - parseInt(startTime, 10);
         const hours = Math.floor(diff / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        
         document.getElementById('runtimeHours').textContent = hours;
         document.getElementById('runtimeMinutes').textContent = String(minutes).padStart(2, '0');
     }
-
     function startTotalRuntime() {
-        if (totalRuntimeInterval) return; // 已经在运行
-
-        if (!localStorage.getItem('gcmsTotalRuntimeStart')) {
-            localStorage.setItem('gcmsTotalRuntimeStart', Date.now());
-        }
-        
+        if (totalRuntimeInterval) return;
+        if (!localStorage.getItem('gcmsTotalRuntimeStart')) { localStorage.setItem('gcmsTotalRuntimeStart', Date.now()); }
         updateTotalRuntimeDisplay();
-        totalRuntimeInterval = setInterval(updateTotalRuntimeDisplay, 10000); // 每10秒更新一次以减少消耗
+        totalRuntimeInterval = setInterval(updateTotalRuntimeDisplay, 10000);
     }
-
     function stopTotalRuntime() {
-        // 仅当没有其他任务在运行时才停止
-        const isAnyTaskRunning = tasks.some(t => !['待运行', '排队中', '已完成', '失败'].includes(t.statusText));
+        const isAnyTaskRunning = tasks.some(t => !['pending','queued','completed','failed'].includes(t.statusCode));
         if (!isAnyTaskRunning) {
             clearInterval(totalRuntimeInterval);
             totalRuntimeInterval = null;
             localStorage.removeItem('gcmsTotalRuntimeStart');
-            updateTotalRuntimeDisplay(); // 重置为0
+            updateTotalRuntimeDisplay();
             addLog('所有任务完成，总运行计时器已停止。', 'success');
         }
     }
-
-
 });
 </script>
 
@@ -1080,5 +1012,3 @@ document.addEventListener('DOMContentLoaded', function () {
 #gcmsStatusCard .card-header { transition: background 0.3s ease; }
 </style>
 {% endblock %}
-
-

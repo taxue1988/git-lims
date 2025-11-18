@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path
 from app01 import views
+from app01 import views_station_tasks as station_views
 
 urlpatterns = [
     # ==================== 管理后台页面（自定义） - 必须在 admin.site.urls 之前 ====================
@@ -185,4 +186,16 @@ urlpatterns = [
     path('api/materials/<str:kind>/<int:mat_id>/delete/', views.api_material_delete, name='api_material_delete'),
     # 导出
     path('api/materials/export/names/', views.api_materials_export_names, name='api_materials_export_names'),
+
+    # ==================== 工站任务 API（HPLC/GCMS） ====================
+    # HPLC
+    path('api/hplc/tasks/', station_views.hplc_task_list, name='hplc_task_list'),
+    path('api/hplc/tasks/create/', station_views.hplc_task_create, name='hplc_task_create'),
+    path('api/hplc/tasks/<int:task_id>/update/', station_views.hplc_task_update, name='hplc_task_update'),
+    path('api/hplc/tasks/<int:task_id>/delete/', station_views.hplc_task_delete, name='hplc_task_delete'),
+    # GCMS（备用，前端改造时可直接使用）
+    path('api/gcms/tasks/', station_views.gcms_task_list, name='gcms_task_list'),
+    path('api/gcms/tasks/create/', station_views.gcms_task_create, name='gcms_task_create'),
+    path('api/gcms/tasks/<int:task_id>/update/', station_views.gcms_task_update, name='gcms_task_update'),
+    path('api/gcms/tasks/<int:task_id>/delete/', station_views.gcms_task_delete, name='gcms_task_delete'),
 ]

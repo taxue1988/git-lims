@@ -1498,3 +1498,72 @@ class BOTrial(models.Model):
 
     def __str__(self):
         return f"Trial@{self.iteration.task.task_name}#R{self.iteration.round_index}"
+
+
+# ==================== 工站任务（HPLC/GCMS） ====================
+
+class StationTaskBase(models.Model):
+    """HPLC/GCMS 任务基类"""
+
+    STATUS_CHOICES = (
+        ('pending', '待运行'),
+        ('queued', '排队中'),
+        ('task_started', '任务开始'),
+        ('device_preparation', '设备准备'),
+        ('arm_operation', '机械臂操作'),
+        ('instrument_analysis', '仪器分析'),
+        ('waiting_completion', '等待分析完成'),
+        ('device_reset', '设备复位'),
+        ('completed', '已完成'),
+        ('failed', '失败'),
+    )
+
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name='创建人')
+    display_id = models.IntegerField(verbose_name='展示ID(用户内自增)')
+    experiment_name = models.CharField(max_length=255, verbose_name='实验名称')
+    bottle_num = models.IntegerField(verbose_name='样品瓶号')
+
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default='pending', verbose_name='状态')
+    start_time = models.DateTimeField(null=True, blank=True, verbose_name='开始时间')
+    end_time = models.DateTimeField(null=True, blank=True, verbose_name='结束时间')
+    duration_seconds = models.IntegerField(null=True, blank=True, verbose_name='用时(秒)')
+    archive_id = models.CharField(max_length=128, blank=True, null=True, verbose_name='归档ID')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        abstract = True
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_by', 'created_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def get_status_display(self):
+        return dict(self.STATUS_CHOICES).get(self.status, self.status)
+
+    def get_duration_display(self):
+        if self.start_time:
+            end = self.end_time or timezone.now()
+            seconds = int((end - self.start_time).total_seconds())
+            m, s = divmod(seconds, 60)
+            return f"{m}分{s}秒"
+        return 'N/A'
+
+
+class HPLCTask(StationTaskBase):
+    class Meta(StationTaskBase.Meta):
+        db_table = 'hplc_task'
+        verbose_name = 'HPLC任务'
+        verbose_name_plural = 'HPLC任务'
+
+
+class GCMSTask(StationTaskBase):
+    sequence_index = models.IntegerField(verbose_name='序列号')
+    sequence_name = models.CharField(max_length=255, blank=True, null=True, verbose_name='序列文件名')
+
+    class Meta(StationTaskBase.Meta):
+        db_table = 'gcms_task'
+        verbose_name = 'GCMS任务'
+        verbose_name_plural = 'GCMS任务'
