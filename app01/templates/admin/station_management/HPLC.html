@@ -228,6 +228,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let resultChartInstance = null;
     let stationRuntimeStart = null;
     let stationRuntimeTimer = null;
+    let taskDurationTimer = null;
 
     // --- DOM 元素获取 ---
     const logContainer = document.getElementById('logContainer');
@@ -426,6 +427,27 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- 渲染 ---
+    function updateTaskDurations() {
+        let hasRunningTasks = false;
+        tasks.forEach(task => {
+            if (task.startTime && !task.endTime) {
+                hasRunningTasks = true;
+                const duration = Math.round((Date.now() - task.startTime) / 1000);
+                task.duration = `${Math.floor(duration / 60)}分${duration % 60}秒`;
+                const taskRow = document.getElementById(task.id);
+                if (taskRow) {
+                    const durationCell = taskRow.cells[5];
+                    if (durationCell) durationCell.textContent = task.duration;
+                }
+            }
+        });
+
+        if (!hasRunningTasks && taskDurationTimer) {
+            clearInterval(taskDurationTimer);
+            taskDurationTimer = null;
+        }
+    }
+
     function renderTasks() {
         tasksTableBody.innerHTML = '';
         let pending = 0, completed = 0;
@@ -515,9 +537,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isWorkerBusy) { alert('已有任务在运行中，请稍候'); return; }
         isWorkerBusy = true;
         task.statusCode = 'queued';
-        task.statusText = '排队中';
-        task.statusClass = statusClassByCode('queued');
-        task.runButtonHTML = '<i class="fas fa-clock"></i> 排队中';
+        task.statusText = '运行中';
+        task.statusClass = statusClassByCode('task_started');
+        task.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
         task.runButtonDisabled = true;
         renderTasks();
         await updateTaskOnServer(task.dbId, { status: 'queued' });
@@ -650,6 +672,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     taskToUpdate.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
                     await updateTaskOnServer(taskToUpdate.dbId, { status: 'task_started', startTime: taskToUpdate.startTime });
                     startStationRuntime(taskToUpdate.startTime);
+                    if (!taskDurationTimer) {
+                        taskDurationTimer = setInterval(updateTaskDurations, 1000);
+                    }
                 }
                 break;
             case 'analysis_progress':
@@ -711,7 +736,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         const duration = Math.round((taskToUpdate.endTime - taskToUpdate.startTime) / 1000);
                         taskToUpdate.duration = `${Math.floor(duration / 60)}分${duration % 60}秒`;
                     }
-                    await updateTaskOnServer(taskToUpdate.dbId, { status: 'completed', endTime: taskToUpdate.endTime, archiveId: taskToUpdate.archiveId });
+                    await updateTaskOnServer(taskToUpdate.dbId, { status: 'completed', endTime: taskToUpdate.endTime, duration: taskToUpdate.duration, archiveId: taskToUpdate.archiveId });
                     stopStationRuntime(taskToUpdate.endTime);
                 }
                 break;
@@ -724,7 +749,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     taskToUpdate.runButtonHTML = '<i class="fas fa-redo"></i> 重试';
                     taskToUpdate.runButtonDisabled = false;
                     taskToUpdate.endTime = Date.now();
-                    await updateTaskOnServer(taskToUpdate.dbId, { status: 'failed', endTime: taskToUpdate.endTime });
+                    if (taskToUpdate.startTime) {
+                        const duration = Math.round((taskToUpdate.endTime - taskToUpdate.startTime) / 1000);
+                        taskToUpdate.duration = `${Math.floor(duration / 60)}分${duration % 60}秒`;
+                    }
+                    await updateTaskOnServer(taskToUpdate.dbId, { status: 'failed', endTime: taskToUpdate.endTime, duration: taskToUpdate.duration });
                     stopStationRuntime(Date.now());
                 }
                 break;
