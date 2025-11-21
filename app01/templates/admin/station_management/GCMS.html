@@ -282,28 +282,74 @@
 
 <!-- 查看结果 Modal -->
 <div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header position-relative">
-                <h5 class="modal-title" id="resultModalLabel">分析结果</h5>
-                <div class="position-absolute start-50 translate-middle-x d-flex gap-2 align-items-center">
-                    <button type="button" class="btn btn-primary btn-sm" id="downloadPngBtn">
-                        <i class="fas fa-download"></i> 导出 PNG
+            <div class="modal-header">
+                <h5 class="modal-title" id="resultModalLabel">分析结果 - 色谱图与质谱图</h5>
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-primary btn-sm" id="downloadChromatogramPngBtn">
+                        <i class="fas fa-download"></i> 导出色谱图
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="downloadMassSpectrumPngBtn" style="display:none;">
+                        <i class="fas fa-download"></i> 导出质谱图
                     </button>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <div id="resultLoading" class="text-muted">正在加载数据，请稍候...</div>
-                <canvas id="resultChart" style="width:100%; height:420px; display:none;"></canvas>
-                <div id="resultMessage" class="alert alert-warning mt-2" style="display:none;"></div>
+            <div class="modal-body p-4 results-body">
+                <div id="resultLoading" class="text-muted text-center py-5">
+                    <i class="fas fa-spinner fa-spin fa-2x mb-3"></i><br>
+                    正在加载数据，请稍候...
+                </div>
+                
+                <!-- 主容器：上下布局 -->
+                <div id="resultContainer" style="display:none;">
+                    <!-- 上半部分：色谱图 -->
+                    <div class="section-half section-top">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">色谱图（TIC - 总离子流）</h6>
+                            <small class="text-muted">
+                                保留时间: <span id="currentRetentionTime" class="badge bg-info">--</span> 分钟
+                            </small>
+                        </div>
+                        <div class="panel">
+                            <canvas id="resultChart" class="chart-canvas" style="width:100%; height:100%; display:block;"></canvas>
+                        </div>
+                        <!-- 滑块容器 -->
+                        <div class="slider-wrap mt-2">
+                            <input type="range" id="retentionTimeSlider" 
+                                   class="form-range" 
+                                   min="0" max="100" value="0" 
+                                   style="width: 100%; cursor: pointer;">
+                            <div class="d-flex justify-content-between mt-1 slider-range-labels">
+                                <span id="sliderMinLabel">0.00</span>
+                                <span id="sliderMaxLabel">100.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 下半部分：质谱图 -->
+                    <div class="section-half">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">质谱图（MS）</h6>
+                            <small class="text-muted" id="massSpectrumStatus">
+                                <i class="fas fa-info-circle"></i> 在上方色谱图上拖动滑块加载质谱数据
+                            </small>
+                        </div>
+                        <div class="panel">
+                            <canvas id="massSpectrumChart" class="chart-canvas" style="width:100%; height:100%; display:block;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="resultMessage" class="alert alert-warning mt-3" style="display:none;"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
             </div>
         </div>
     </div>
-    </div>
+</div>
 
 
 {% endblock %}
@@ -653,38 +699,238 @@ document.addEventListener('DOMContentLoaded', function () {
     // 查看结果按钮
     const resultModalEl = document.getElementById('resultModal');
     const resultModal = new bootstrap.Modal(resultModalEl);
+// 弹窗显示后再对齐一次，避免字体/布局异步导致的微小偏差
+resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
     const resultChartCanvas = document.getElementById('resultChart');
+    const massSpectrumCanvas = document.getElementById('massSpectrumChart');
     const resultLoading = document.getElementById('resultLoading');
     const resultMessage = document.getElementById('resultMessage');
+    const resultContainer = document.getElementById('resultContainer');
+    const retentionTimeSlider = document.getElementById('retentionTimeSlider');
+    const sliderWrapEl = document.querySelector('.slider-wrap');
+    const currentRetentionTimeDisplay = document.getElementById('currentRetentionTime');
+    const sliderMinLabel = document.getElementById('sliderMinLabel');
+    const sliderMaxLabel = document.getElementById('sliderMaxLabel');
+    const massSpectrumStatus = document.getElementById('massSpectrumStatus');
+    const downloadChromatogramPngBtn = document.getElementById('downloadChromatogramPngBtn');
+    const downloadMassSpectrumPngBtn = document.getElementById('downloadMassSpectrumPngBtn');
+    
     let resultChartInstance = null;
+    let massSpectrumChartInstance = null;
     const resultCache = {};
     let activeResultTaskId = null;
-    const downloadPngBtn = document.getElementById('downloadPngBtn');
+    let activeSequenceIndex = null;
+    let activeBottleNum = null;
+    let activeArchiveId = null;
+    let chromatogramXData = [];  // 保存色谱图的 X 数据用于滑块映射
+    let chromatogramYData = [];  // 保存色谱图的 Y 数据
+    let sliderTimeout = null;    // 防止频繁请求
+    let currentRtValue = null;   // 当前滑块对应的RT值（分钟）
+    // 对齐滑块与图表绘图区：直接设置滑块宽度与左边距，保证拇指与红线同列
+    function alignSliderWithYAxis(){
+        if (!resultChartInstance || !sliderWrapEl || !retentionTimeSlider) return;
+        try {
+            const ca = resultChartInstance.chartArea;
+            if (!ca) return;
+            const plotWidth = Math.max(0, ca.right - ca.left);
+            const left = Math.max(0, ca.left);
+            // 使滑块轨道与绘图区完全重合
+            sliderWrapEl.style.paddingLeft = '0px';
+            sliderWrapEl.style.paddingRight = '0px';
+            retentionTimeSlider.style.width = plotWidth + 'px';
+            retentionTimeSlider.style.marginLeft = left + 'px';
+            // 同步下方刻度标签对齐
+            const labels = sliderWrapEl.querySelector('.slider-range-labels');
+            if (labels) {
+                labels.style.paddingLeft = left + 'px';
+                labels.style.paddingRight = (resultChartInstance.width - ca.right) + 'px';
+            }
+        } catch(e){}
+    }
+    window.addEventListener('resize', alignSliderWithYAxis);
+
+    //（已禁用）垂直参考线插件，避免个别环境下 Chart.js 抛出 “class does not have id” 的兼容性错误。
+    // 如需开启，可引入 chartjs-plugin-annotation 或改为内置 dataset 方案绘制垂直线。
 
     function showResultLoading(text) {
         resultLoading.style.display = '';
-        resultLoading.textContent = text || '正在加载数据，请稍候...';
-        resultChartCanvas.style.display = 'none';
+        resultLoading.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x mb-3"></i><br>' + (text || '正在加载数据，请稍候...');
+        resultContainer.style.display = 'none';
         resultMessage.style.display = 'none';
     }
+    
     function showResultMessage(text, level='warning') {
         resultLoading.style.display = 'none';
-        resultChartCanvas.style.display = 'none';
+        resultContainer.style.display = 'none';
         resultMessage.style.display = '';
-        resultMessage.className = `alert alert-${level} mt-2`;
+        resultMessage.className = `alert alert-${level} mt-3`;
         resultMessage.textContent = text || '无可显示的数据';
     }
-    function renderResultChart(xArr, yArr, titleText) {
+    
+    function renderChromatogramChart(xArr, yArr, titleText) {
         resultLoading.style.display = 'none';
         resultMessage.style.display = 'none';
-        resultChartCanvas.style.display = '';
+        resultContainer.style.display = '';
+        
+        // 全量绘制：按 x 升序排序，不做阈值裁剪/抽样，保持与 CSV 一致
+        const pairs = xArr.map((x,i)=>({x: Number(x), y: Number(yArr[i])})).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
+        pairs.sort((a,b)=>a.x-b.x);
+        const xSlice = pairs.map(p=>p.x);
+        const ySlice = pairs.map(p=>p.y);
+        // 保存数据用于滑块映射
+        chromatogramXData = xSlice;
+        chromatogramYData = ySlice;
+        
+        // 更新滑块范围
+        const minX = Math.min(...xSlice);
+        const maxX = Math.max(...xSlice);
+        retentionTimeSlider.min = 0;
+        retentionTimeSlider.max = 100;
+        retentionTimeSlider.value = 0;
+        sliderMinLabel.textContent = minX.toFixed(2);
+        sliderMaxLabel.textContent = maxX.toFixed(2);
+        currentRetentionTimeDisplay.textContent = minX.toFixed(2);
+        currentRtValue = minX;
+        
         const ctx = resultChartCanvas.getContext('2d');
         if (resultChartInstance) { resultChartInstance.destroy(); }
+        // 计算固定的Y轴范围，避免进入页面时Y轴抖动（基于有效区间）
+        const yMin = Math.min(...ySlice);
+        const yMax = Math.max(...ySlice);
+        const yPadding = (yMax - yMin) * 0.1;
+        const fixedYMin = Math.max(0, yMin - yPadding);
+        const fixedYMax = yMax + yPadding;
+        
+        // 构造主数据集（仅使用有效区间，线性x坐标的 {x,y} 点）
+        const mainSeries = xSlice.map((x,i) => ({ x: Number(x), y: Number(ySlice[i]) }));
+        // 构造初始竖线数据集（无插件方案：叠加一个line数据集，x固定为 currentRtValue，y从min到max）
+        const vlineSeries = [
+            { x: currentRtValue, y: fixedYMin },
+            { x: currentRtValue, y: fixedYMax }
+        ];
+        
         resultChartInstance = new Chart(ctx, {
             type: 'line',
-            data: { labels: xArr, datasets: [{ label: 'GCMS色谱', data: yArr, borderColor: 'rgba(54, 162, 235, 1)', backgroundColor: 'rgba(54, 162, 235, 0.1)', borderWidth: 1, pointRadius: 0 }] },
-            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, title: { display: !!titleText, text: titleText || '' }, tooltip: { callbacks: { title: function(items){ return items && items.length ? `时间: ${items[0].label}` : ''; }, label: function(){ return ''; } } } }, scales: { x: { title: { display: true, text: '时间' }, ticks: { autoSkip: true, maxTicksLimit: 12 } }, y: { title: { display: true, text: '强度' }, beginAtZero: false, type: 'linear' } } }
+            data: { 
+                datasets: [
+                    { 
+                        label: 'TIC 色谱', 
+                        data: mainSeries, 
+                        borderColor: 'rgba(54, 162, 235, 1)', 
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)', 
+                        borderWidth: 2, 
+                        pointRadius: 0,
+                        tension: 0.1,
+                        parsing: false,
+                        xAxisID: 'x',
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: '当前位置',
+                        data: vlineSeries,
+                        borderColor: 'rgba(255,0,0,0.9)',
+                        backgroundColor: 'rgba(255,0,0,0.9)',
+                        borderWidth: 1,
+                        pointRadius: 0,
+                        showLine: true,
+                        parsing: false,
+                        xAxisID: 'x',
+                        yAxisID: 'y',
+                        _isVLine: true // 自定义标记，便于后续更新
+                    }
+                ] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                animation: false,
+                interaction: { mode: 'nearest', intersect: false }, 
+                plugins: { 
+                    legend: { display: false }, 
+                    title: { display: false },
+                    tooltip: { 
+                        callbacks: { 
+                            title: function(items){ return items && items.length ? `时间: ${Number(items[0].parsed.x).toFixed(2)} 分钟` : ''; }, 
+                            label: function(context){ return `强度: ${Number(context.parsed.y).toFixed(0)}`; } 
+                        } 
+                    } 
+                }, 
+                scales: { 
+                    x: { 
+                        type: 'linear',
+                        min: minX,
+                        max: maxX,
+                        title: { display: true, text: '保留时间 (分钟)' }
+                    }, 
+                    y: { 
+                        type: 'linear',
+                        title: { display: true, text: '强度' }, 
+                        beginAtZero: false, 
+                        min: fixedYMin,
+                        max: fixedYMax
+                    } 
+                } 
+            }
         });
+        // 让滑块左右内边距与图表绘图区对齐，使滑块起点位于色谱图y轴正下方
+        setTimeout(alignSliderWithYAxis, 0);
+        
+        downloadMassSpectrumPngBtn.style.display = 'none';
+    }
+    
+    function renderMassSpectrumChart(mzArr, intensityArr, rtValue) {
+        const ctx = massSpectrumCanvas.getContext('2d');
+        if (massSpectrumChartInstance) { massSpectrumChartInstance.destroy(); }
+        
+        // 限制显示的数据点数量
+        let displayMz = mzArr;
+        let displayIntensity = intensityArr;
+        if (mzArr.length > 500) {
+            const step = Math.ceil(mzArr.length / 500);
+            displayMz = mzArr.filter((_, i) => i % step === 0);
+            displayIntensity = intensityArr.filter((_, i) => i % step === 0);
+        }
+        
+        massSpectrumChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: { 
+                labels: displayMz.map(v => v.toFixed(1)), 
+                datasets: [{ 
+                    label: '强度', 
+                    data: displayIntensity, 
+                    backgroundColor: 'rgba(75, 192, 75, 0.7)', 
+                    borderColor: 'rgba(75, 192, 75, 1)', 
+                    borderWidth: 0.5
+                }] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { 
+                    legend: { display: false }, 
+                    title: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function(items){ return items && items.length ? `m/z: ${items[0].label}` : ''; },
+                            label: function(context){ return `强度: ${context.parsed.y.toFixed(0)}`; }
+                        }
+                    }
+                }, 
+                scales: { 
+                    x: { 
+                        title: { display: true, text: 'm/z 值' }, 
+                        ticks: { autoSkip: true, maxTicksLimit: 20 }
+                    }, 
+                    y: { 
+                        title: { display: true, text: '强度' }, 
+                        beginAtZero: true 
+                    } 
+                } 
+            }
+        });
+        
+        downloadMassSpectrumPngBtn.style.display = '';
+        massSpectrumStatus.innerHTML = `<i class="fas fa-check-circle text-success"></i> 保留时间: ${rtValue.toFixed(2)} 分钟`;
     }
 
     function setViewResultButtonState(taskId, state, messageText){
@@ -699,17 +945,66 @@ document.addEventListener('DOMContentLoaded', function () {
         if (messageText) btn.setAttribute('title', messageText);
     }
 
-    function saveResultToCache(taskId, series){ try{ resultCache[taskId] = series; localStorage.setItem(`gcmsResult_${taskId}`, JSON.stringify(series)); }catch(e){} }
-    function loadResultFromCache(taskId){ if (resultCache[taskId]) return resultCache[taskId]; try{ const s = localStorage.getItem(`gcmsResult_${taskId}`); if (s){ const series = JSON.parse(s); resultCache[taskId] = series; return series; } }catch(e){} return null; }
+    function getResultCacheKey(task){ const aid = (task && task.archiveId) ? task.archiveId : 'na'; return `gcmsResult_${task.id}_${aid}`; }
+    function saveResultToCache(task, series){ try{ const key = getResultCacheKey(task); resultCache[key] = series; localStorage.setItem(key, JSON.stringify(series)); }catch(e){} }
+    function loadResultFromCache(task){ const key = getResultCacheKey(task); if (resultCache[key]) return resultCache[key]; try{ const s = localStorage.getItem(key); if (s){ const series = JSON.parse(s); resultCache[key] = series; return series; } }catch(e){} return null; }
+
+    // 滑块事件监听
+    retentionTimeSlider.addEventListener('input', function() {
+        if (!chromatogramXData || chromatogramXData.length === 0) return;
+        // 按“数据点索引”与滑块百分比对应，确保滚轴从色谱图横坐标起点开始，并精确对齐到某个采样点
+        const n = chromatogramXData.length;
+        const rawPercent = Math.max(0, Math.min(1, parseFloat(this.value) / 100));
+        // 将滑块位置“吸附”到最近的数据点，保证滑块拇指与红线严格同一竖线
+        const idx = Math.max(0, Math.min(n - 1, Math.round(rawPercent * (n - 1))));
+        const snappedPercent = (idx / (n - 1)) * 100;
+        // 回写滑块值（让拇指位置与数据点像素对齐）
+        this.value = snappedPercent.toFixed(2);
+        const rtValue = chromatogramXData[idx];
+        
+        // 更新显示（对齐到采样点）
+        currentRtValue = rtValue;
+        currentRetentionTimeDisplay.textContent = Number(rtValue).toFixed(2);
+
+        // 更新色谱图中的竖直指示线（更新第二个数据集）
+        try {
+            const ds = resultChartInstance && resultChartInstance.data && resultChartInstance.data.datasets && resultChartInstance.data.datasets.find(d => d && d._isVLine);
+            if (ds) {
+                const yScale = resultChartInstance.scales && resultChartInstance.scales.y;
+                const ymin = yScale ? yScale.min : Math.min(...chromatogramYData);
+                const ymax = yScale ? yScale.max : Math.max(...chromatogramYData);
+                ds.data = [ { x: rtValue, y: ymin }, { x: rtValue, y: ymax } ];
+                resultChartInstance.update('none');
+            }
+        } catch(e) {}
+
+        // 防抖后请求质谱
+        clearTimeout(sliderTimeout);
+        sliderTimeout = setTimeout(() => {
+            if (activeSequenceIndex !== null) {
+                massSpectrumStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载质谱数据中...';
+                sendMessage(`get_mass_spectrum_${activeSequenceIndex}_${rtValue}`);
+            }
+        }, 300);
+    });
 
     window.handleViewResult = function(taskId) {
         const task = tasks.find(t => t.id === taskId);
         if (!task) return;
+        // 仅允许“已完成”的任务查看结果
+        if (task.statusCode !== 'completed') {
+            addLog(`任务 ${task.displayId || ''} 尚未完成，无法查看结果`, 'warning');
+            return;
+        }
         resultModal.show();
         activeResultTaskId = taskId;
+        activeSequenceIndex = task.sequenceIndex;
+        activeBottleNum = task.bottleNum;
+        activeArchiveId = task.archiveId || null;
+        downloadMassSpectrumPngBtn.style.display = 'none';
         const cached = loadResultFromCache(taskId);
         if (cached && Array.isArray(cached.x) && Array.isArray(cached.y)){
-            renderResultChart(cached.x, cached.y, `序列 ${task.sequenceIndex} 结果（缓存）`);
+            renderChromatogramChart(cached.x, cached.y, `序列 ${task.sequenceIndex} 结果（缓存）`);
             setViewResultButtonState(taskId, '');
             return;
         }
@@ -722,12 +1017,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    if (downloadPngBtn){
-        downloadPngBtn.addEventListener('click', function(){
+    if (downloadChromatogramPngBtn){
+        downloadChromatogramPngBtn.addEventListener('click', function(){
             if (!resultChartInstance) return;
             const link = document.createElement('a');
             link.href = resultChartInstance.toBase64Image();
-            link.download = `gcms_result_${Date.now()}.png`;
+            link.download = `gcms_chromatogram_${Date.now()}.png`;
+            link.click();
+        });
+    }
+    
+    if (downloadMassSpectrumPngBtn){
+        downloadMassSpectrumPngBtn.addEventListener('click', function(){
+            if (!massSpectrumChartInstance) return;
+            const link = document.createElement('a');
+            link.href = massSpectrumChartInstance.toBase64Image();
+            link.download = `gcms_mass_spectrum_${Date.now()}.png`;
             link.click();
         });
     }
@@ -735,11 +1040,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // Enhanced onmessage to update state array and handle queue（并写回数据库）
     socket.onmessage = async function(e) {
         const data = JSON.parse(e.data);
-        const message = data.message;
-        const sender = data.sender;
-
+        const message = (data && data.message && typeof data.message === 'object' && data.message.type) ? data.message : data;
         addLog(`收到消息: ${JSON.stringify(message)}`, 'primary');
-        if (sender !== 'worker') return;
 
         const task = tasks.find(t => (
             t.bottleNum == message.bottle_num &&
@@ -852,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'noresult', message.message);
                 } else if (message.series && Array.isArray(message.series.x) && Array.isArray(message.series.y)) {
                     const x = message.series.x; const y = message.series.y;
-                    renderResultChart(x, y, `序列 ${message.sequence_index} 结果`);
+                    renderChromatogramChart(x, y, `序列 ${message.sequence_index} 结果`);
                     if (activeResultTaskId) {
                         saveResultToCache(activeResultTaskId, {x, y});
                         setViewResultButtonState(activeResultTaskId, '');
@@ -865,6 +1167,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     showResultMessage('结果数据格式不正确');
                     if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'error');
+                }
+                break;
+            case 'mass_spectrum_result':
+                if (!message.available) {
+                    massSpectrumStatus.innerHTML = `<i class="fas fa-exclamation-triangle text-warning"></i> ${message.message || '未找到质谱数据'}`;
+                } else if (message.series && Array.isArray(message.series.mz) && Array.isArray(message.series.intensity)) {
+                    const mz = message.series.mz;
+                    const intensity = message.series.intensity;
+                    renderMassSpectrumChart(mz, intensity, message.retention_time);
+                } else {
+                    massSpectrumStatus.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> 质谱数据格式不正确';
                 }
                 break;
         }
@@ -1010,5 +1323,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
 #gcmsStatusCard { border-left: 4px solid #0dcaf0; box-shadow: 0 2px 10px rgba(13, 202, 240, 0.1); }
 #gcmsStatusCard .card-header { transition: background 0.3s ease; }
+
+/* 结果弹窗布局（上下各占一半）*/
+.results-body { max-height: 80vh; }
+#resultContainer { display: flex; flex-direction: column; gap: 12px; height: 75vh; }
+.section-half { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+.panel { background: #f8f9fa; border-radius: 8px; padding: 12px; flex: 1; display: flex; min-height: 0; }
+.chart-canvas { width: 100%; height: 100% !important; }
+/* 让上半区（色谱图）稍高一些，提升视觉效果 */
+.section-top { flex: 0 0 62%; }
+/* 下半区自动占剩余空间 */
+.slider-wrap { padding: 0 4px; }
+.slider-range-labels { font-size: 12px; color: #666; }
 </style>
 {% endblock %}

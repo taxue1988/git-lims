@@ -253,15 +253,15 @@ def main():
     主函数，演示整个GCMS数据处理流程
     """
     # 步骤1: 转换数据为mzML格式
-    input_folder = r"D:\MassHunter\GCMS\1\data\20241016\14LBEA003.D"  # 替换为实际的文件夹路径
-    output_file = "D:/Python项目/GCMS模块本地客户端版本/Mzml格式文件/14LBEA003.mzML"  # 替换为实际的输出文件路径
+    input_folder = r"D:\MassHunter\GCMS\1\data\20241204\Test.D"  # 替换为实际的文件夹路径
+    output_file = "D:/Python项目/GCMS模块本地客户端版本/Mzml格式文件/Test.mzML"  # 替换为实际的输出文件路径
 
     print("开始转换数据为mzML格式...")
     convert_to_mzml(input_folder, output_file)
 
     # 步骤2: 可视化GCMS数据
-    mzml_file_path = r'D:\Python项目\GCMS模块本地客户端版本\Mzml格式文件\14LBEA003.mzML'
-    csv_file_path = r'D:\Python项目\GCMS模块本地客户端版本\tic_front.csv'
+    mzml_file_path = r'D:/Python项目/GCMS模块本地客户端版本/Mzml格式文件/Test.mzML'
+    csv_file_path = r'D:\MassHunter\GCMS\1\data\20241204\Test.D\tic_front.csv'
 
     print("开始可视化GCMS数据...")
     plotter = GCMSPlotter(mzml_file_path, csv_file_path)
