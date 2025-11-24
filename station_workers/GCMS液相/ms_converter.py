@@ -22,6 +22,12 @@ try:
 except ImportError:
     pymzml = None
 
+# 可选的 numpy 支持（用于更健壮地处理 peaks 的返回类型）
+try:
+    import numpy as np
+except Exception:
+    np = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -151,7 +157,16 @@ class MSDataExtractor:
             rts = []
             tmp_map = {}
             for spectrum in run:
-                spectrum_id = spectrum.get('ID', None)
+                spectrum_id = None
+                try:
+                    spectrum_id = spectrum.get('id', None)
+                except Exception:
+                    pass
+                if not spectrum_id:
+                    try:
+                        spectrum_id = getattr(spectrum, 'ID', None) or spectrum.ID
+                    except Exception:
+                        spectrum_id = None
                 if spectrum_id:
                     self.spectra_cache[spectrum_id] = spectrum
                     rt = self._extract_retention_time(spectrum)
@@ -159,17 +174,30 @@ class MSDataExtractor:
                         tmp_map[spectrum_id] = rt
                         rts.append(rt)
             # 规范化单位：若绝大多数 RT > 100，视为秒，将其转换为分钟
+            factor = 1.0
             if rts:
                 count_over_100 = sum(1 for v in rts if v > 100)
                 if count_over_100 / len(rts) > 0.5:
                     factor = 1.0 / 60.0
-                else:
-                    factor = 1.0
                 for sid, rt in tmp_map.items():
                     norm_rt = rt * factor
                     self.retention_time_map[norm_rt] = sid
                     logger.debug(f"Spectrum {sid}: RT(raw)={rt}, RT(norm_min)={norm_rt}")
-            logger.info(f"加载了 {len(self.spectra_cache)} 个光谱，含 RT 条目 {len(self.retention_time_map)}")
+            # 统计信息
+            try:
+                rts_norm = sorted(self.retention_time_map.keys())
+                if rts_norm:
+                    rt_min = rts_norm[0]
+                    rt_max = rts_norm[-1]
+                    sample = rts_norm[:5]
+                    logger.info(f"mzML加载完成: 光谱数={len(self.spectra_cache)}, RT条目={len(self.retention_time_map)}, RT范围(分钟)=[{rt_min:.4f}, {rt_max:.4f}], 示例={sample}")
+                    # 同时打印到控制台，便于在 Worker 控制台可见
+                    print(f"[MSDataExtractor] 加载 {os.path.basename(self.mzml_file_path)}: 光谱数={len(self.spectra_cache)}, RT范围(分)=[{rt_min:.4f}, {rt_max:.4f}]，示例={sample}")
+                else:
+                    logger.warning("mzML加载完成，但未解析到任何RT条目")
+                    print("[MSDataExtractor] 警告：未解析到任何RT条目")
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"加载 mzML 文件失败: {e}")
             raise
@@ -245,32 +273,85 @@ class MSDataExtractor:
     
     def _extract_spectrum_data(self, spectrum) -> Dict:
         """
-        从光谱对象中提取 m/z 和强度数据
-        
-        Args:
-            spectrum: pymzml 光谱对象
-            
-        Returns:
-            包含 m/z 和强度列表的字典
+        从光谱对象中提取 m/z 和强度数据（兼容多种 peaks 返回结构：二维数组、(mzs,ints) 二元组、列表/迭代器等）
         """
-        mz_values = []
-        intensity_values = []
-        
+        mz_values: List[float] = []
+        intensity_values: List[float] = []
+
         try:
-            # 尝试获取 centroided peaks
-            peaks = spectrum.peaks('centroided')
+            peaks = None
+            # 优先 centroided
+            try:
+                peaks = spectrum.peaks('centroided')
+            except Exception:
+                peaks = None
+            # 为空或长度为 0 则回退 raw
+            need_fallback = (peaks is None)
+            try:
+                if not need_fallback and hasattr(peaks, '__len__'):
+                    need_fallback = (len(peaks) == 0)
+            except Exception:
+                pass
+            if need_fallback:
+                try:
+                    peaks = spectrum.peaks('raw')
+                except Exception:
+                    peaks = None
+            # 无可用 peaks
             if peaks is None:
-                # 回退到原始 peaks
-                peaks = spectrum.peaks('raw')
-            
-            if peaks:
+                return {'mz': [], 'intensity': [], 'peak_count': 0}
+
+            # 情形1：(mzs, intensities) 二元组/列表
+            try:
+                if isinstance(peaks, (tuple, list)) and len(peaks) == 2:
+                    mzs, ints = peaks[0], peaks[1]
+                    if hasattr(mzs, '__len__') and hasattr(ints, '__len__') and len(mzs) == len(ints):
+                        for idx in range(len(mzs)):
+                            mz_values.append(float(mzs[idx]))
+                            intensity_values.append(float(ints[idx]))
+                        return {
+                            'mz': mz_values,
+                            'intensity': intensity_values,
+                            'peak_count': len(mz_values)
+                        }
+            except Exception:
+                pass
+
+            # 情形2：二维数组/可索引序列，形如 [[mz,int], [mz,int], ...]
+            try:
+                first = peaks[0]
+                if hasattr(first, '__len__') and len(first) >= 2:
+                    for pair in peaks:
+                        try:
+                            mz_values.append(float(pair[0]))
+                            intensity_values.append(float(pair[1]))
+                        except Exception:
+                            continue
+                    return {
+                        'mz': mz_values,
+                        'intensity': intensity_values,
+                        'peak_count': len(mz_values)
+                    }
+            except Exception:
+                pass
+
+            # 情形3：迭代器（逐个元素为二元）
+            try:
                 for peak in peaks:
-                    if len(peak) >= 2:
-                        mz_values.append(float(peak[0]))
-                        intensity_values.append(float(peak[1]))
+                    try:
+                        m = float(peak[0])
+                        i = float(peak[1])
+                        mz_values.append(m)
+                        intensity_values.append(i)
+                    except Exception:
+                        continue
+            except Exception:
+                # peaks 不可迭代，直接返回空
+                return {'mz': [], 'intensity': [], 'peak_count': 0}
+
         except Exception as e:
             logger.warning(f"提取光谱峰失败: {e}")
-        
+
         return {
             'mz': mz_values,
             'intensity': intensity_values,
@@ -356,7 +437,7 @@ class GCMSDataProcessor:
         self.converter = MSConverter()
         self.extractor = None
     
-    def process_data_folder(self, data_folder: str, force_reconvert: bool = False) -> Tuple[bool, Optional[str], Optional[str]]:
+    def process_data_folder(self, data_folder: str, force_reconvert: bool = False, output_dir: Optional[str] = None, output_filename: Optional[str] = None) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         处理数据文件夹，转换为 mzML 并返回路径
         
@@ -371,40 +452,47 @@ class GCMSDataProcessor:
             return False, None, f"数据文件夹不存在: {data_folder}"
         
         try:
-            # 生成输出文件名，使用目录的最后修改时间作为指纹，避免复用旧数据
             folder_name = os.path.basename(data_folder).replace('.D', '').replace('.d', '')
-            try:
-                mtime = int(os.path.getmtime(data_folder))
-            except Exception:
-                mtime = int(time.time())  # 兜底
-            output_file = os.path.join(self.temp_dir, f"{folder_name}_{mtime}.mzML")
-            
-            # 若非强制，且目标文件已存在，则直接复用
-            if (not force_reconvert) and os.path.exists(output_file):
-                logger.info(f"使用已存在的 mzML 文件: {output_file}")
-                self.extractor = MSDataExtractor(output_file)
-                return True, output_file, None
-            
-            # 清理该样品的旧缓存，防止缓存堆积
-            try:
-                prefix = os.path.join(self.temp_dir, f"{folder_name}_")
-                for p in os.listdir(self.temp_dir):
-                    if p.startswith(f"{folder_name}_") and p.endswith('.mzML'):
-                        fullp = os.path.join(self.temp_dir, p)
-                        try:
-                            os.remove(fullp)
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-            
+            # 确定输出目标路径：优先使用传入的 output_dir/output_filename，否则回退至缓存目录+mtime 指纹
+            if output_dir or output_filename:
+                out_dir = output_dir or self.temp_dir
+                os.makedirs(out_dir, exist_ok=True)
+                target_name = output_filename or f"{folder_name}.mzML"
+                output_file = os.path.join(out_dir, target_name)
+                # 当明确指定输出文件名时，不清理旧文件；若文件已存在且不强制，则直接复用
+                if (not force_reconvert) and os.path.exists(output_file):
+                    logger.info(f"使用已存在的 mzML 文件: {output_file}")
+                    self.extractor = MSDataExtractor(output_file)
+                    return True, output_file, None
+            else:
+                # 使用目录的最后修改时间作为指纹，避免复用旧数据
+                try:
+                    mtime = int(os.path.getmtime(data_folder))
+                except Exception:
+                    mtime = int(time.time())  # 兜底
+                output_file = os.path.join(self.temp_dir, f"{folder_name}_{mtime}.mzML")
+                # 若非强制，且目标文件已存在，则直接复用
+                if (not force_reconvert) and os.path.exists(output_file):
+                    logger.info(f"使用已存在的 mzML 文件: {output_file}")
+                    self.extractor = MSDataExtractor(output_file)
+                    return True, output_file, None
+                # 仅在未指定固定输出名时，为避免缓存堆积，清理同前缀的旧缓存
+                try:
+                    for p in os.listdir(self.temp_dir):
+                        if p.startswith(f"{folder_name}_") and p.endswith('.mzML'):
+                            fullp = os.path.join(self.temp_dir, p)
+                            try:
+                                os.remove(fullp)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
             # 执行转换
             logger.info(f"开始转换: {data_folder} -> {output_file}")
             success = self.converter.convert_to_mzml(data_folder, output_file)
-            
             if not success:
                 return False, None, "mzML 转换失败"
-            
             # 加载提取器
             self.extractor = MSDataExtractor(output_file)
             return True, output_file, None

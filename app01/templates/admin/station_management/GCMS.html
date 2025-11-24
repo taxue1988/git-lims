@@ -983,7 +983,11 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
         sliderTimeout = setTimeout(() => {
             if (activeSequenceIndex !== null) {
                 massSpectrumStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载质谱数据中...';
-                sendMessage(`get_mass_spectrum_${activeSequenceIndex}_${rtValue}`);
+                if (activeArchiveId) {
+                    sendMessage(`get_mass_spectrum_${activeSequenceIndex}_${rtValue}_${activeArchiveId}`);
+                } else {
+                    sendMessage(`get_mass_spectrum_${activeSequenceIndex}_${rtValue}`);
+                }
             }
         }, 300);
     });
@@ -1002,7 +1006,7 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
         activeBottleNum = task.bottleNum;
         activeArchiveId = task.archiveId || null;
         downloadMassSpectrumPngBtn.style.display = 'none';
-        const cached = loadResultFromCache(taskId);
+        const cached = loadResultFromCache(task);
         if (cached && Array.isArray(cached.x) && Array.isArray(cached.y)){
             renderChromatogramChart(cached.x, cached.y, `序列 ${task.sequenceIndex} 结果（缓存）`);
             setViewResultButtonState(taskId, '');
@@ -1156,9 +1160,11 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
                     const x = message.series.x; const y = message.series.y;
                     renderChromatogramChart(x, y, `序列 ${message.sequence_index} 结果`);
                     if (activeResultTaskId) {
-                        saveResultToCache(activeResultTaskId, {x, y});
-                        setViewResultButtonState(activeResultTaskId, '');
                         const t = tasks.find(tt => tt.id === activeResultTaskId);
+                        if (t) {
+                            saveResultToCache(t, {x, y});
+                        }
+                        setViewResultButtonState(activeResultTaskId, '');
                         if (t && message.archive_id) {
                             t.archiveId = message.archive_id;
                             await updateTaskOnServer(t.dbId, { archiveId: t.archiveId });

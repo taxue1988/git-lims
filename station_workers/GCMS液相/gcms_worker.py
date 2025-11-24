@@ -29,13 +29,14 @@ except Exception:
 
 # 导入质谱数据处理模块
 try:
-    from station_workers.GCMS液相.ms_converter import GCMSDataProcessor
+    from station_workers.GCMS液相.ms_converter import GCMSDataProcessor, MSPlotter
 except Exception:
     try:
-        from ms_converter import GCMSDataProcessor
+        from ms_converter import GCMSDataProcessor, MSPlotter
     except ImportError:
-        print("警告: 无法导入 GCMSDataProcessor，质谱功能将不可用")
+        print("警告: 无法导入 GCMSDataProcessor/MSPlotter，质谱功能将不可用")
         GCMSDataProcessor = None
+        MSPlotter = None
 
 import csv
 
@@ -257,6 +258,7 @@ class GcmsWorker:
 
             # 1) 若提供了归档ID，优先使用归档同名 meta.json 指定的 .D 数据目录
             data_folder_from_meta = None
+            archive_dir = None
             if archive_id:
                 try:
                     archive_dir = self._ensure_archive_dir()
@@ -308,7 +310,17 @@ class GcmsWorker:
                 except Exception:
                     data_mtime = None
                 # 按需强制重转（相同序列但数据更新时也会重转）
-                success, mzml_path, error = self.ms_processor.process_data_folder(data_folder, force_reconvert=True)
+                # 为避免覆盖历史文件，使用唯一文件名（优先 archive_id）
+                folder_base = os.path.basename(data_folder).replace('.D','').replace('.d','')
+                out_name = f"{folder_base}_{archive_id}.mzML" if archive_id else f"{folder_base}_{int(time.time()*1000)}.mzML"
+                target_path = os.path.join(self.ms_processor.temp_dir, out_name)
+                force_flag = not os.path.exists(target_path)
+                success, mzml_path, error = self.ms_processor.process_data_folder(
+                    data_folder,
+                    force_reconvert=force_flag,
+                    output_dir=self.ms_processor.temp_dir,
+                    output_filename=out_name
+                )
                 if not success:
                     raise RuntimeError(f"处理数据文件夹失败: {error}")
                 print(f"mzML 转换完成: {mzml_path}")
@@ -324,18 +336,29 @@ class GcmsWorker:
                 self.current_data_folder = data_folder
                 self.current_data_mtime = data_mtime
             else:
-                # 即使是同一序列/同一路径，也检测目录是否更新，若更新则重转
+                # 使用归档指定的目录
+                self.current_sequence_index = sequence_index
+                self.current_data_folder = data_folder
                 try:
                     current_mtime = int(os.path.getmtime(self.current_data_folder)) if self.current_data_folder else None
                 except Exception:
                     current_mtime = None
                 need_reconvert = (self.current_data_mtime is None) or (current_mtime is None) or (current_mtime != self.current_data_mtime)
                 if need_reconvert:
-                    print(f"检测到数据文件夹已更新，执行重新转换: {self.current_data_folder}")
-                    success, mzml_path, error = self.ms_processor.process_data_folder(self.current_data_folder, force_reconvert=True)
+                    print(f"使用归档目录进行转换: {self.current_data_folder}")
+                    folder_base = os.path.basename(self.current_data_folder).replace('.D','').replace('.d','')
+                    out_name = f"{folder_base}_{archive_id}.mzML" if archive_id else f"{folder_base}_{int(time.time()*1000)}.mzML"
+                    target_path = os.path.join(self.ms_processor.temp_dir, out_name)
+                    force_flag = not os.path.exists(target_path)
+                    success, mzml_path, error = self.ms_processor.process_data_folder(
+                        self.current_data_folder,
+                        force_reconvert=force_flag,
+                        output_dir=self.ms_processor.temp_dir,
+                        output_filename=out_name
+                    )
                     if not success:
                         raise RuntimeError(f"处理数据文件夹失败: {error}")
-                    print(f"mzML 重新转换完成: {mzml_path}")
+                    print(f"mzML 转换完成: {mzml_path}")
                     self.send_response({
                         'type': 'msconvert_info',
                         'sequence_index': sequence_index,
@@ -362,7 +385,17 @@ class GcmsWorker:
             if not spectrum_data:
                 spectrum_data = self.ms_processor.get_mass_spectrum_at_retention_time(retention_time/60.0, tolerance=0.1)
             if not spectrum_data:
-                spectrum_data = self.ms_processor.get_mass_spectrum_at_retention_time(retention_time, tolerance=0.3)
+                spectrum_data = self.ms_processor.get_mass_spectrum_at_retention_time(retention_time, tolerance=0.5)
+            if not spectrum_data:
+                # 兜底：不设容差限制，取最近的一个光谱
+                try:
+                    if self.ms_processor and self.ms_processor.extractor:
+                        matched_rt, spec_raw = self.ms_processor.extractor.get_nearest_spectrum_any(rt_query)
+                        if spec_raw:
+                            spectrum_data = MSPlotter.prepare_mass_spectrum_data(spec_raw.get('mz', []), spec_raw.get('intensity', []))
+                            rt_query = matched_rt if matched_rt is not None else rt_query
+                except Exception:
+                    pass
 
             if not spectrum_data:
                 self.send_response({
@@ -370,7 +403,7 @@ class GcmsWorker:
                     'sequence_index': sequence_index,
                     'retention_time': retention_time,
                     'available': False,
-                    'message': f'在保留时间 {retention_time:.2f} 附近未找到质谱数据（已尝试单位换算与扩大容差）'
+                    'message': f'在保留时间 {retention_time:.2f} 附近未找到质谱数据（已尝试单位换算、扩大容差与就近匹配）'
                 })
                 return
 
@@ -399,14 +432,6 @@ class GcmsWorker:
                 'type': 'error',
                 'message': f'获取质谱图失败: {str(e)}'
             })
-            
-        except Exception as e:
-            error_info = {
-                "type": "error",
-                "message": f"获取状态失败: {str(e)}",
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-            }
-            self.send_response(error_info)
     
     def handle_get_arm_status(self):
         """获取机械臂状态"""
