@@ -18,12 +18,26 @@ except ImportError:
 
 # 导入序列管理器
 try:
-    from .sequence_manager import get_sequence_file
-    from .sequence_manager import get_result_csv_path
+    from station_workers.GCMS液相.sequence_manager import get_sequence_file
+    from station_workers.GCMS液相.sequence_manager import get_result_csv_path
+    from station_workers.GCMS液相.sequence_manager import load_sequence_params_map
 except Exception:
     # 兼容直接运行
     from sequence_manager import get_sequence_file
     from sequence_manager import get_result_csv_path
+    from sequence_manager import load_sequence_params_map
+
+# 导入质谱数据处理模块
+try:
+    from station_workers.GCMS液相.ms_converter import GCMSDataProcessor, MSPlotter
+except Exception:
+    try:
+        from ms_converter import GCMSDataProcessor, MSPlotter
+    except ImportError:
+        print("警告: 无法导入 GCMSDataProcessor/MSPlotter，质谱功能将不可用")
+        GCMSDataProcessor = None
+        MSPlotter = None
+
 import csv
 
 class GcmsWorker:
@@ -40,9 +54,18 @@ class GcmsWorker:
         self.arm_is_connected = False
         self.instrument_is_connected = False
         self.current_status = "离线"
+        
+        # 质谱数据处理器
+        self.ms_processor = None
+        self.current_sequence_index = None
+        self.current_data_folder = None
+        self.current_data_mtime = None
 
         # 初始化 GCMS 模块
         self.init_gcms_module()
+        
+        # 初始化质谱处理器
+        self.init_ms_processor()
 
     def init_gcms_module(self):
         """初始化 GCMS 模块并独立检查其组件"""
@@ -76,6 +99,18 @@ class GcmsWorker:
             print(f"GCMS 模块初始化失败: {e}")
             self.gcms_module = None
             self.current_status = "初始化失败"
+    
+    def init_ms_processor(self):
+        """初始化质谱数据处理器"""
+        try:
+            if GCMSDataProcessor:
+                self.ms_processor = GCMSDataProcessor()
+                print("质谱数据处理器初始化完成")
+            else:
+                print("警告: GCMSDataProcessor 未可用，质谱功能将不可用")
+        except Exception as e:
+            print(f"质谱处理器初始化失败: {e}")
+            self.ms_processor = None
     
     def on_message(self, ws, message):
         """处理从服务器接收到的消息"""
@@ -135,6 +170,22 @@ class GcmsWorker:
                     self.send_response({'type': 'error', 'message': f"指令格式错误: {command}"})
                     return
                 self.handle_get_result(bottle_num, sequence_index, archive_id)
+            elif command.startswith("get_mass_spectrum_"):
+                # 支持两种格式:
+                # 1) get_mass_spectrum_{sequence_index}_{retention_time}
+                # 2) get_mass_spectrum_{sequence_index}_{retention_time}_{archiveId...}
+                try:
+                    payload = command[len("get_mass_spectrum_"):]
+                    parts = payload.split("_")
+                    if len(parts) < 2:
+                        raise ValueError("参数数量不正确")
+                    sequence_index = int(parts[0])
+                    retention_time = float(parts[1])
+                    archive_id = "_".join(parts[2:]) if len(parts) > 2 else None
+                except Exception:
+                    self.send_response({'type': 'error', 'message': f"质谱请求指令格式错误: {command}"})
+                    return
+                self.handle_get_mass_spectrum(sequence_index, retention_time, archive_id)
             else:
                 self.send_response({'type': 'error', 'message': f"未知指令: {command}"})
                 
@@ -191,14 +242,196 @@ class GcmsWorker:
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             self.send_response(error_info)
-            
+
+    def handle_get_mass_spectrum(self, sequence_index, retention_time, archive_id=None):
+        """处理获取质谱图的请求"""
+        try:
+            if not self.ms_processor:
+                self.send_response({
+                    'type': 'mass_spectrum_result',
+                    'sequence_index': sequence_index,
+                    'retention_time': retention_time,
+                    'available': False,
+                    'message': '质谱处理器未初始化'
+                })
+                return
+
+            # 1) 若提供了归档ID，优先使用归档同名 meta.json 指定的 .D 数据目录
+            data_folder_from_meta = None
+            archive_dir = None
+            if archive_id:
+                try:
+                    archive_dir = self._ensure_archive_dir()
+                    meta_path = os.path.join(archive_dir, f"{archive_id}.meta.json")
+                    if os.path.isfile(meta_path):
+                        with open(meta_path, 'r', encoding='utf-8') as mf:
+                            meta = json.load(mf)
+                            if isinstance(meta, dict) and meta.get('data_folder'):
+                                data_folder_from_meta = os.path.normpath(meta['data_folder'])
+                except Exception as e:
+                    print(f"读取归档元数据失败: {e}")
+
+            # 2) 决定本次要用的数据文件夹
+            data_folder = data_folder_from_meta
+            if not data_folder:
+                # 回退到参数表
+                params = load_sequence_params_map()
+                triple = params.get(sequence_index)
+                if not triple:
+                    raise RuntimeError(f"未找到序列 {sequence_index} 的参数")
+                _seq_file, data_name, data_path = triple
+                folder_name = data_name if data_name.lower().endswith('.d') else f"{data_name}.D"
+                data_folder = os.path.normpath(os.path.join(data_path, folder_name))
+
+                if not os.path.isdir(data_folder):
+                    try:
+                        candidates = []
+                        for entry in os.listdir(data_path):
+                            if entry.lower().startswith(data_name.lower()) and entry.lower().endswith('.d'):
+                                p = os.path.join(data_path, entry)
+                                try:
+                                    mtime = os.path.getmtime(p)
+                                    candidates.append((mtime, os.path.normpath(p)))
+                                except Exception:
+                                    pass
+                        if candidates:
+                            candidates.sort(reverse=True)
+                            data_folder = candidates[0][1]
+                    except Exception:
+                        pass
+
+                if not os.path.isdir(data_folder):
+                    raise RuntimeError(f"未找到序列 {sequence_index} 对应的数据文件夹: {data_folder}")
+
+                print(f"为序列 {sequence_index} 加载新的数据文件夹: {data_folder}")
+                # 记录当前数据文件夹的修改时间，用于判断是否需要重新转换
+                try:
+                    data_mtime = int(os.path.getmtime(data_folder))
+                except Exception:
+                    data_mtime = None
+                # 按需强制重转（相同序列但数据更新时也会重转）
+                # 为避免覆盖历史文件，使用唯一文件名（优先 archive_id）
+                folder_base = os.path.basename(data_folder).replace('.D','').replace('.d','')
+                out_name = f"{folder_base}_{archive_id}.mzML" if archive_id else f"{folder_base}_{int(time.time()*1000)}.mzML"
+                target_path = os.path.join(self.ms_processor.temp_dir, out_name)
+                force_flag = not os.path.exists(target_path)
+                success, mzml_path, error = self.ms_processor.process_data_folder(
+                    data_folder,
+                    force_reconvert=force_flag,
+                    output_dir=self.ms_processor.temp_dir,
+                    output_filename=out_name
+                )
+                if not success:
+                    raise RuntimeError(f"处理数据文件夹失败: {error}")
+                print(f"mzML 转换完成: {mzml_path}")
+                # 通知前端缓存位置
+                self.send_response({
+                    'type': 'msconvert_info',
+                    'sequence_index': sequence_index,
+                    'data_folder': data_folder,
+                    'mzml_path': mzml_path
+                })
+                
+                self.current_sequence_index = sequence_index
+                self.current_data_folder = data_folder
+                self.current_data_mtime = data_mtime
+            else:
+                # 使用归档指定的目录
+                self.current_sequence_index = sequence_index
+                self.current_data_folder = data_folder
+                try:
+                    current_mtime = int(os.path.getmtime(self.current_data_folder)) if self.current_data_folder else None
+                except Exception:
+                    current_mtime = None
+                need_reconvert = (self.current_data_mtime is None) or (current_mtime is None) or (current_mtime != self.current_data_mtime)
+                if need_reconvert:
+                    print(f"使用归档目录进行转换: {self.current_data_folder}")
+                    folder_base = os.path.basename(self.current_data_folder).replace('.D','').replace('.d','')
+                    out_name = f"{folder_base}_{archive_id}.mzML" if archive_id else f"{folder_base}_{int(time.time()*1000)}.mzML"
+                    target_path = os.path.join(self.ms_processor.temp_dir, out_name)
+                    force_flag = not os.path.exists(target_path)
+                    success, mzml_path, error = self.ms_processor.process_data_folder(
+                        self.current_data_folder,
+                        force_reconvert=force_flag,
+                        output_dir=self.ms_processor.temp_dir,
+                        output_filename=out_name
+                    )
+                    if not success:
+                        raise RuntimeError(f"处理数据文件夹失败: {error}")
+                    print(f"mzML 转换完成: {mzml_path}")
+                    self.send_response({
+                        'type': 'msconvert_info',
+                        'sequence_index': sequence_index,
+                        'data_folder': self.current_data_folder,
+                        'mzml_path': mzml_path
+                    })
+                    self.current_data_mtime = current_mtime
+
+            # 获取质谱数据（单位自适应 + 扩大容差提升命中率）
+            rt_query = retention_time
+            try:
+                # 若 mzML 的 RT（分钟）最大值明显小于请求值，说明前端传的是秒，先换算为分钟
+                if self.ms_processor and self.ms_processor.extractor:
+                    rts_all = list(self.ms_processor.extractor.retention_time_map.keys())
+                    if rts_all:
+                        rt_max = max(rts_all)
+                        if rt_max and retention_time > (rt_max * 2):
+                            rt_query = retention_time / 60.0
+            except Exception:
+                rt_query = retention_time
+
+            spectrum_data = self.ms_processor.get_mass_spectrum_at_retention_time(rt_query, tolerance=0.1)
+            # 若仍未命中，尝试备用换算（双向尝试）
+            if not spectrum_data:
+                spectrum_data = self.ms_processor.get_mass_spectrum_at_retention_time(retention_time/60.0, tolerance=0.1)
+            if not spectrum_data:
+                spectrum_data = self.ms_processor.get_mass_spectrum_at_retention_time(retention_time, tolerance=0.5)
+            if not spectrum_data:
+                # 兜底：不设容差限制，取最近的一个光谱
+                try:
+                    if self.ms_processor and self.ms_processor.extractor:
+                        matched_rt, spec_raw = self.ms_processor.extractor.get_nearest_spectrum_any(rt_query)
+                        if spec_raw:
+                            spectrum_data = MSPlotter.prepare_mass_spectrum_data(spec_raw.get('mz', []), spec_raw.get('intensity', []))
+                            rt_query = matched_rt if matched_rt is not None else rt_query
+                except Exception:
+                    pass
+
+            if not spectrum_data:
+                self.send_response({
+                    'type': 'mass_spectrum_result',
+                    'sequence_index': sequence_index,
+                    'retention_time': retention_time,
+                    'available': False,
+                    'message': f'在保留时间 {retention_time:.2f} 附近未找到质谱数据（已尝试单位换算、扩大容差与就近匹配）'
+                })
+                return
+
+            # 计算最接近的实际 RT（分钟）用于显示
+            nearest_rt = None
+            try:
+                if self.ms_processor and self.ms_processor.extractor:
+                    rts = list(self.ms_processor.extractor.retention_time_map.keys())
+                    if rts:
+                        nearest_rt = min(rts, key=lambda v: abs(v - rt_query))
+            except Exception:
+                nearest_rt = None
+
+            self.send_response({
+                'type': 'mass_spectrum_result',
+                'sequence_index': sequence_index,
+                'retention_time': nearest_rt if nearest_rt is not None else rt_query,
+                'requested_rt': retention_time,
+                'available': True,
+                'series': spectrum_data,
+                'archive_id': archive_id
+            })
+
         except Exception as e:
-            error_info = {
-                "type": "error",
-                "message": f"获取状态失败: {str(e)}",
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-            }
-            self.send_response(error_info)
+            self.send_response({
+                'type': 'error',
+                'message': f'获取质谱图失败: {str(e)}'
+            })
     
     def handle_get_arm_status(self):
         """获取机械臂状态"""
@@ -348,12 +581,24 @@ class GcmsWorker:
             except Exception:
                 from sequence_manager import get_result_csv_path as _find_result
 
+            last_result_path = None
             max_waits = 30
             for _ in range(max_waits):
                 path_try = _find_result(int(sequence_index)) if sequence_index is not None else None
                 if path_try and os.path.isfile(path_try):
+                    last_result_path = path_try
                     try:
                         archive_id = self.archive_result(sequence_index)
+                        # 写入本次运行的元数据（记录本次使用的 .D 路径）
+                        if archive_id and last_result_path:
+                            try:
+                                archive_dir = self._ensure_archive_dir()
+                                meta_path = os.path.join(archive_dir, f"{archive_id}.meta.json")
+                                meta = {"data_folder": os.path.dirname(last_result_path)}
+                                with open(meta_path, 'w', encoding='utf-8') as mf:
+                                    json.dump(meta, mf, ensure_ascii=False)
+                            except Exception as _e:
+                                print(f"写入归档元数据失败: {_e}")
                     except Exception:
                         archive_id = None
                     break
@@ -473,25 +718,30 @@ class GcmsWorker:
             })
 
     def handle_get_result(self, bottle_num, sequence_index, archive_id=None):
-        """读取对应序列的 tic_front.csv（或归档文件），返回裁剪后的 x/y 数据。"""
+        """读取归档结果（必须提供 archive_id），返回裁剪后的 x/y 数据。
+        为避免在任务未运行/未完成时误读旧文件，这里强制要求提供 archive_id。
+        """
         try:
-            path = None
-            if archive_id:
-                path = self.get_archive_file_path(archive_id)
-            if not path:
-                path = get_result_csv_path(int(sequence_index))
-            if not path:
-                # 返回详细提示，便于排查：包含用于解析的参数与基础路径（不含敏感数据名）
+            # 必须提供归档ID
+            if not archive_id:
                 self.send_response({
                     'type': 'analysis_result',
                     'bottle_num': bottle_num,
                     'sequence_index': sequence_index,
                     'available': False,
-                    'message': '未找到结果文件 tic_front.csv',
-                    'debug': {
-                        'archive_id': archive_id,
-                        'note': '按参数表解析 data_path + data_name(.D)/tic_front.csv 与前缀匹配回退均未命中'
-                    }
+                    'message': '任务未完成或未归档，无法查看结果（缺少归档ID）'
+                })
+                return
+
+            path = self.get_archive_file_path(archive_id)
+            if not path:
+                self.send_response({
+                    'type': 'analysis_result',
+                    'bottle_num': bottle_num,
+                    'sequence_index': sequence_index,
+                    'available': False,
+                    'message': '归档结果不存在或已被清理',
+                    'debug': { 'archive_id': archive_id }
                 })
                 return
 
@@ -531,13 +781,10 @@ class GcmsWorker:
                 })
                 return
 
-            # 限制数据量，简单抽样（如超过 8000 点则等距采样至 2000 点）
+            # 不再在后端做抽样，完整返回数据点（由前端按需降采样显示）
+            # 如需保护带宽，可在此处加更高阈值再做抽样，例如 > 200000 点再抽样。
             n = len(x_vals)
-            if n > 8000:
-                target = 2000
-                step = max(1, n // target)
-                x_vals = x_vals[::step]
-                y_vals = y_vals[::step]
+            # 保留原顺序与完整形状
 
             self.send_response({
                 'type': 'analysis_result',

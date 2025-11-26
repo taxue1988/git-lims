@@ -21,19 +21,19 @@
             <div class="row">
                 <div class="col-md-4">
                     <div class="d-flex align-items-center mb-3">
-                        <i class="fas fa-hand-rock text-success me-3 fa-lg"></i>
+                        <i id="armStatusIcon" class="fas fa-hand-rock text-secondary me-3 fa-lg"></i>
                         <div>
                             <h6 class="mb-1 text-muted">机械臂</h6>
-                            <p class="mb-0 fw-bold text-success">正常</p>
+                            <p id="armStatus" class="mb-0 fw-bold text-secondary">连接中...</p>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="d-flex align-items-center mb-3">
-                        <i class="fas fa-vials text-primary me-3 fa-lg"></i>
+                        <i id="hplcStatusIcon" class="fas fa-vials text-secondary me-3 fa-lg"></i>
                         <div>
                             <h6 class="mb-1 text-muted">HPLC</h6>
-                            <p class="mb-0 fw-bold text-primary">待机</p>
+                            <p id="hplcStatus" class="mb-0 fw-bold text-secondary">连接中...</p>
                         </div>
                     </div>
                 </div>
@@ -67,35 +67,52 @@
                         <span class="badge bg-success" id="completedAnalysis">0</span>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="alert alert-light py-2 mb-0 d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <i id="connectionStatusIcon" class="fas fa-wifi text-danger me-2"></i>
+                            <span class="text-muted">连接状态</span>
+                        </div>
+                        <span class="badge bg-danger" id="connectionStatus">离线</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="d-flex flex-wrap gap-2">
+                        <button id="refreshStatusBtn" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-sync-alt me-1"></i>刷新状态
+                        </button>
+
+                        <button id="getInstrumentInfoBtn" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-info-circle me-1"></i>仪器信息
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 当前仓位卡片 -->
+<!-- 实时日志卡片 -->
 <div class="card mt-4">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
-         data-bs-toggle="collapse" data-bs-target="#hplcPositions"
-         aria-expanded="true" aria-controls="hplcPositions" style="cursor: pointer;">
-        <h4 class="mb-0"><i class="fas fa-boxes"></i> 当前仓位（1）</h4>
-        <i class="fas fa-chevron-down collapse-icon"></i>
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse" data-bs-target="#hplcLogs"
+         aria-expanded="true" aria-controls="hplcLogs" style="cursor: pointer;">
+        <h4 class="mb-0"><i class="fas fa-terminal"></i> 实时日志</h4>
+        <div class="d-flex align-items-center">
+            <button id="clearLogsBtn" class="btn btn-outline-light btn-sm me-2" onclick="event.stopPropagation();">
+                <i class="fas fa-trash"></i> 清空
+            </button>
+            <i class="fas fa-chevron-down collapse-icon"></i>
+        </div>
     </div>
-    <div class="collapse show" id="hplcPositions">
-        <div class="card-body">
-            <div class="row">
-                <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
-                    <div class="card h-100 position-card border-light">
-                        <div class="card-body text-center">
-                            <h5 class="card-title text-primary">仓位 1</h5>
-                            <p class="card-text text-muted small">HPLC 工站</p>
-                            <div class="position-status">
-                                <div class="alert alert-light py-2 mb-0">
-                                    <i class="fas fa-circle"></i>
-                                    <span class="text-muted">位置空闲</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    <div class="collapse show" id="hplcLogs">
+        <div class="card-body p-0">
+            <div id="logContainer" class="log-container" style="height: 300px; overflow-y: auto; background-color: #1e1e1e; color: #ffffff; font-family: 'Courier New', monospace; font-size: 12px; padding: 10px;">
+                <div class="log-entry text-info">
+                    <span class="timestamp">[系统]</span> 等待连接到 HPLC Worker...
                 </div>
             </div>
         </div>
@@ -108,24 +125,33 @@
          data-bs-toggle="collapse" data-bs-target="#hplcTasks"
          aria-expanded="true" aria-controls="hplcTasks" style="cursor: pointer;">
         <h4 class="mb-0"><i class="fas fa-tasks"></i> HPLC 分析任务列表</h4>
-        <i class="fas fa-chevron-down collapse-icon"></i>
+        <div class="d-flex align-items-center">
+            <button class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+                <i class="fas fa-plus-circle me-1"></i> 创建分析任务
+            </button>
+            <i class="fas fa-chevron-down collapse-icon ms-3"></i>
+        </div>
     </div>
     <div class="collapse show" id="hplcTasks">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover" id="tasksTable">
                     <thead class="table-light">
                         <tr>
-                            <th>实验任务ID</th>
+                            <th>任务ID</th>
                             <th>实验名称</th>
+                            <th>样品瓶号</th>
                             <th>创建时间</th>
+                            <th>状态</th>
+                            <th>任务用时</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td colspan="3" class="text-center text-muted py-4">
+                        <tr id="no-tasks-row">
+                            <td colspan="7" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-2x mb-2"></i><br>
-                                暂无任务
+                                暂无任务，请点击右上角创建
                             </td>
                         </tr>
                     </tbody>
@@ -135,62 +161,622 @@
     </div>
 </div>
 
+<!-- 创建任务 Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1" aria-labelledby="createTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createTaskModalLabel">创建新的分析任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createTaskForm">
+                    <div class="mb-3">
+                        <label for="experimentName" class="form-label">实验名称</label>
+                        <input type="text" class="form-control" id="experimentName" placeholder="例如：样品批次H-01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bottleNum" class="form-label">样品瓶号 (0-33)</label>
+                        <input type="number" class="form-control" id="bottleNum" min="0" max="33" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveTaskBtn">创建任务</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 查看结果 Modal -->
+<div class="modal fade" id="resultModal" tabindex="-1" aria-labelledby="resultModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header position-relative">
+                <h5 class="modal-title" id="resultModalLabel">分析结果</h5>
+                <div class="position-absolute start-50 translate-middle-x d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-primary btn-sm" id="downloadPngBtn">
+                        <i class="fas fa-download"></i> 导出 PNG
+                    </button>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resultLoading" class="text-muted">正在加载数据，请稍候...</div>
+                <canvas id="resultChart" style="width:100%; height:420px; display:none;"></canvas>
+                <div id="resultMessage" class="alert alert-warning mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // 面包屑高亮“HPLC”
-    var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
-    if (breadcrumb) {
-        var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
-        var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
-        var target = null;
-        for (var i = 0; i < links.length; i++) {
-            if (links[i].textContent.trim() === 'HPLC') { target = links[i]; break; }
+    // --- 全局变量定义 ---
+    let tasks = [];
+    let taskIdCounter = 0; // 对应 displayId（来自后端）
+    let isWorkerBusy = false;
+    let activeResultTaskId = null;
+    let resultChartInstance = null;
+    let stationRuntimeStart = null;
+    let stationRuntimeTimer = null;
+    let taskDurationTimer = null;
+
+    // --- DOM 元素获取 ---
+    const logContainer = document.getElementById('logContainer');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const connectionStatusIcon = document.getElementById('connectionStatusIcon');
+    const armStatus = document.getElementById('armStatus');
+    const hplcStatus = document.getElementById('hplcStatus');
+    const saveTaskBtn = document.getElementById('saveTaskBtn');
+    const createTaskForm = document.getElementById('createTaskForm');
+    const tasksTableBody = document.querySelector('#tasksTable tbody');
+    const createTaskModalEl = document.getElementById('createTaskModal');
+    const createTaskModal = new bootstrap.Modal(createTaskModalEl);
+    const resultModalEl = document.getElementById('resultModal');
+    const resultModal = new bootstrap.Modal(resultModalEl);
+    const resultChartCanvas = document.getElementById('resultChart');
+    const resultLoading = document.getElementById('resultLoading');
+    const resultMessage = document.getElementById('resultMessage');
+    const downloadPngBtn = document.getElementById('downloadPngBtn');
+    const runtimeHours = document.getElementById('runtimeHours');
+    const runtimeMinutes = document.getElementById('runtimeMinutes');
+
+    // --- 工具函数 ---
+    function addLog(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry text-${type}`;
+        logEntry.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+        logContainer.appendChild(logEntry);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function statusClassByCode(code){
+        switch(code){
+            case 'pending': return 'bg-secondary';
+            case 'queued': return 'bg-primary';
+            case 'task_started':
+            case 'device_preparation':
+            case 'arm_operation':
+            case 'instrument_analysis':
+            case 'waiting_completion':
+            case 'device_reset': return 'bg-info text-dark';
+            case 'completed': return 'bg-success';
+            case 'failed': return 'bg-danger';
+            default: return 'bg-secondary';
         }
+    }
+
+    // --- 运行时间显示 ---
+    function setRuntimeFromDuration(durationMs) {
+        const safeDuration = Math.max(0, durationMs || 0);
+        const hours = Math.floor(safeDuration / 3600000);
+        const minutes = Math.floor((safeDuration % 3600000) / 60000);
+        runtimeHours.textContent = hours;
+        runtimeMinutes.textContent = minutes.toString().padStart(2, '0');
+    }
+    function updateRuntimeDisplay() {
+        if (!stationRuntimeStart) return;
+        const elapsed = Date.now() - stationRuntimeStart;
+        setRuntimeFromDuration(elapsed);
+    }
+    function startStationRuntime(startTimestamp) {
+        const startTs = typeof startTimestamp === 'number' ? startTimestamp : Date.now();
+        stationRuntimeStart = startTs;
+        localStorage.setItem('hplcStationRuntimeStart', String(startTs));
+        localStorage.removeItem('hplcStationRuntimeLastDuration');
+        updateRuntimeDisplay();
+        if (stationRuntimeTimer) clearInterval(stationRuntimeTimer);
+        stationRuntimeTimer = setInterval(updateRuntimeDisplay, 1000);
+    }
+    function stopStationRuntime(endTimestamp) {
+        const endTs = typeof endTimestamp === 'number' ? endTimestamp : Date.now();
+        if (!stationRuntimeStart) {
+            const storedStart = parseInt(localStorage.getItem('hplcStationRuntimeStart') || '', 10);
+            if (!Number.isNaN(storedStart) && storedStart > 0) {
+                stationRuntimeStart = storedStart;
+            }
+        }
+        if (stationRuntimeTimer) {
+            clearInterval(stationRuntimeTimer);
+            stationRuntimeTimer = null;
+        }
+        let duration = 0;
+        if (stationRuntimeStart) {
+            duration = Math.max(0, endTs - stationRuntimeStart);
+        }
+        setRuntimeFromDuration(duration);
+        localStorage.removeItem('hplcStationRuntimeStart');
+        localStorage.setItem('hplcStationRuntimeLastDuration', String(duration));
+        stationRuntimeStart = null;
+    }
+    function initializeRuntime() {
+        const storedStart = parseInt(localStorage.getItem('hplcStationRuntimeStart') || '', 10);
+        const storedDuration = parseInt(localStorage.getItem('hplcStationRuntimeLastDuration') || '', 10);
+        const runningTask = tasks.find(t => t.startTime && !['已完成', '失败'].includes(t.statusText));
+        if (!Number.isNaN(storedStart) && storedStart > 0) {
+            startStationRuntime(storedStart);
+        } else if (runningTask && typeof runningTask.startTime === 'number') {
+            startStationRuntime(runningTask.startTime);
+        } else if (!Number.isNaN(storedDuration) && storedDuration > 0) {
+            setRuntimeFromDuration(storedDuration);
+        } else {
+            setRuntimeFromDuration(0);
+        }
+    }
+
+    // --- WebSocket ---
+    const wsProto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const socket = new WebSocket(wsProto + window.location.host + '/ws/hplc/');
+
+    socket.onopen = function(e) {
+        addLog('成功连接到 HPLC WebSocket 服务器', 'success');
+        connectionStatus.textContent = '在线';
+        connectionStatus.className = 'badge bg-success';
+        connectionStatusIcon.className = 'fas fa-wifi text-success me-2';
+        sendMessage('get_status');
+        sendMessage('get_arm_status');
+    };
+    socket.onclose = function(e) {
+        addLog('WebSocket 连接已断开', 'danger');
+        connectionStatus.textContent = '离线';
+        connectionStatus.className = 'badge bg-danger';
+        connectionStatusIcon.className = 'fas fa-wifi text-danger me-2';
+    };
+    socket.onerror = function(e) { addLog('WebSocket 连接发生错误', 'danger'); };
+
+    function sendMessage(command) {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({'message': command}));
+            addLog(`发送指令: ${command}`, 'info');
+        } else {
+            addLog('WebSocket 未连接，无法发送指令', 'warning');
+        }
+    }
+
+    document.getElementById('refreshStatusBtn').addEventListener('click', () => sendMessage('get_status'));
+    document.getElementById('getInstrumentInfoBtn').addEventListener('click', () => sendMessage('get_instrument_info'));
+    document.getElementById('clearLogsBtn').addEventListener('click', () => { logContainer.innerHTML = ''; addLog('日志已清空', 'info'); });
+
+    // --- 与后端交互（API） ---
+    async function loadTasksFromServer(){
+        try{
+            const resp = await fetch('/api/hplc/tasks/');
+            if(!resp.ok) throw new Error('加载任务失败');
+            const data = await resp.json();
+            if(!data.success) throw new Error(data.error || '加载任务失败');
+            const list = data.tasks || [];
+            tasks = list.map(t => ({
+                id: `task-${t.id}`,
+                dbId: t.id,
+                displayId: t.displayId,
+                name: t.name,
+                bottleNum: t.bottleNum,
+                time: t.time,
+                statusText: t.statusText,
+                statusCode: t.status,
+                statusClass: statusClassByCode(t.status),
+                runButtonHTML: (t.status === 'pending' || t.status === 'failed' || t.status === 'completed') ? '<i class="fas fa-play"></i> 运行' : '<i class="fas fa-clock"></i> 排队中',
+                runButtonDisabled: !(t.status === 'pending' || t.status === 'failed' || t.status === 'completed'),
+                startTime: t.startTime,
+                endTime: t.endTime,
+                duration: t.duration || 'N/A',
+                archiveId: t.archiveId || null
+            }));
+            taskIdCounter = list.length ? Math.max(...list.map(t=>t.displayId||0)) : 0;
+            renderTasks();
+        }catch(err){
+            console.error(err);
+            addLog('从服务器加载任务失败: ' + err.message, 'danger');
+        }
+    }
+
+    async function updateTaskOnServer(dbId, payload){
+        try{
+            const resp = await fetch(`/api/hplc/tasks/${dbId}/update/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload || {})
+            });
+            if(!resp.ok) throw new Error('更新任务失败');
+            const data = await resp.json();
+            if(!data.success) throw new Error(data.error || '更新任务失败');
+            return data.task;
+        }catch(err){
+            console.error('更新任务失败', err);
+            addLog('更新任务失败: ' + err.message, 'danger');
+            return null;
+        }
+    }
+
+    async function deleteTaskOnServer(dbId){
+        const resp = await fetch(`/api/hplc/tasks/${dbId}/delete/`, { method: 'DELETE' });
+        if(!resp.ok) throw new Error('删除任务失败');
+        const data = await resp.json();
+        if(!data.success) throw new Error(data.error || '删除任务失败');
+        return true;
+    }
+
+    // --- 渲染 ---
+    function updateTaskDurations() {
+        let hasRunningTasks = false;
+        tasks.forEach(task => {
+            if (task.startTime && !task.endTime) {
+                hasRunningTasks = true;
+                const duration = Math.round((Date.now() - task.startTime) / 1000);
+                task.duration = `${Math.floor(duration / 60)}分${duration % 60}秒`;
+                const taskRow = document.getElementById(task.id);
+                if (taskRow) {
+                    const durationCell = taskRow.cells[5];
+                    if (durationCell) durationCell.textContent = task.duration;
+                }
+            }
+        });
+
+        if (!hasRunningTasks && taskDurationTimer) {
+            clearInterval(taskDurationTimer);
+            taskDurationTimer = null;
+        }
+    }
+
+    function renderTasks() {
+        tasksTableBody.innerHTML = '';
+        let pending = 0, completed = 0;
+        if (tasks.length === 0) {
+            tasksTableBody.innerHTML = `<tr id="no-tasks-row"><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-inbox fa-2x mb-2"></i><br>暂无任务</td></tr>`;
+        } else {
+            tasks.forEach(task => {
+                if (task.statusCode === 'completed') completed++; else pending++;
+                const tr = document.createElement('tr');
+                tr.id = task.id;
+                tr.innerHTML = `
+                    <td>${task.displayId}</td>
+                    <td>${task.name}</td>
+                    <td>${task.bottleNum}</td>
+                    <td>${task.time}</td>
+                    <td><span class="badge ${task.statusClass}">${task.statusText}</span></td>
+                    <td>${task.duration || 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-success btn-sm" onclick="handleRunTask('${task.id}')" ${task.runButtonDisabled ? 'disabled' : ''}>${task.runButtonHTML}</button>
+                        <button id="viewResultBtn-${task.id}" class="btn btn-info btn-sm ms-1" onclick="handleViewResult('${task.id}')" ${task.statusCode === 'completed' ? '' : 'disabled'}> <i class="fas fa-chart-line"></i> 查看结果 </button>
+                        <button class="btn btn-danger btn-sm" onclick="handleDeleteTask('${task.id}')"><i class="fas fa-trash"></i> 删除</button>
+                    </td>`;
+                tasksTableBody.appendChild(tr);
+            });
+        }
+        document.getElementById('pendingAnalysis').textContent = pending;
+        document.getElementById('completedAnalysis').textContent = completed;
+    }
+
+    // --- 初始化 ---
+    async function initializeApp() {
+        await loadTasksFromServer();
+        isWorkerBusy = tasks.some(t => !['completed','failed','pending'].includes(t.statusCode));
+    }
+
+    initializeApp();
+    initializeRuntime();
+
+    // --- 创建任务 ---
+    saveTaskBtn.addEventListener('click', async () => {
+        const experimentName = document.getElementById('experimentName').value.trim();
+        const bottleNum = document.getElementById('bottleNum').value;
+        if (!experimentName || bottleNum === '') { alert('请填写所有字段'); return; }
+        if (parseInt(bottleNum) < 0 || parseInt(bottleNum) > 33) { alert('样品瓶号必须在 0 到 33 之间'); return; }
+        try{
+            const resp = await fetch('/api/hplc/tasks/create/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ experimentName, bottleNum: parseInt(bottleNum) })
+            });
+            if(!resp.ok) throw new Error('创建任务失败');
+            const data = await resp.json();
+            if(!data.success) throw new Error(data.error || '创建任务失败');
+            const t = data.task;
+            tasks.unshift({
+                id: `task-${t.id}`,
+                dbId: t.id,
+                displayId: t.displayId,
+                name: t.name,
+                bottleNum: t.bottleNum,
+                time: t.time,
+                statusText: t.statusText,
+                statusCode: t.status,
+                statusClass: statusClassByCode(t.status),
+                runButtonHTML: '<i class="fas fa-play"></i> 运行',
+                runButtonDisabled: false,
+                startTime: null,
+                endTime: null,
+                duration: t.duration || 'N/A',
+                archiveId: null
+            });
+            taskIdCounter = Math.max(taskIdCounter, t.displayId);
+            renderTasks();
+            createTaskForm.reset();
+            createTaskModal.hide();
+            addLog('任务创建成功', 'success');
+        }catch(err){
+            console.error(err);
+            alert('创建任务失败: ' + err.message);
+        }
+    });
+
+    // --- 运行任务 ---
+    window.handleRunTask = async function(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        if (isWorkerBusy) { alert('已有任务在运行中，请稍候'); return; }
+        isWorkerBusy = true;
+        task.statusCode = 'queued';
+        task.statusText = '运行中';
+        task.statusClass = statusClassByCode('task_started');
+        task.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
+        task.runButtonDisabled = true;
+        renderTasks();
+        await updateTaskOnServer(task.dbId, { status: 'queued' });
+        sendMessage(`start_analysis_${task.bottleNum}`);
+    }
+
+    // --- 删除任务 ---
+    window.handleDeleteTask = async function(taskId) {
+        if (!confirm('您确定要删除这个任务吗？')) return;
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        try{
+            await deleteTaskOnServer(task.dbId);
+            tasks = tasks.filter(t => t.id !== taskId);
+            renderTasks();
+            addLog('任务已删除', 'info');
+        }catch(err){
+            console.error(err);
+            alert('删除任务失败: ' + err.message);
+        }
+    }
+
+    // --- 结果查看与缓存（仍保留本地缓存加速） ---
+    function saveResultToCache(taskId, series) {
+        try { localStorage.setItem(`hplcResult_${taskId}`, JSON.stringify(series)); } catch (e) {}
+    }
+    function loadResultFromCache(taskId) {
+        try { const s = localStorage.getItem(`hplcResult_${taskId}`); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+    }
+    function showResultLoading(text) {
+        resultLoading.style.display = '';
+        resultLoading.textContent = text || '正在加载数据...';
+        resultChartCanvas.style.display = 'none';
+        resultMessage.style.display = 'none';
+    }
+    function showResultMessage(text, level = 'warning') {
+        resultLoading.style.display = 'none';
+        resultChartCanvas.style.display = 'none';
+        resultMessage.style.display = '';
+        resultMessage.className = `alert alert-${level} mt-2`;
+        resultMessage.textContent = text || '无可用数据';
+    }
+    function renderResultChart(xArr, yArr, titleText) {
+        resultLoading.style.display = 'none';
+        resultMessage.style.display = 'none';
+        resultChartCanvas.style.display = '';
+        const ctx = resultChartCanvas.getContext('2d');
+        if (resultChartInstance) resultChartInstance.destroy();
+        resultChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { labels: xArr, datasets: [{ label: 'HPLC色谱', data: yArr, borderColor: 'rgba(25, 135, 84, 1)', backgroundColor: 'rgba(25, 135, 84, 0.1)', borderWidth: 1, pointRadius: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: !!titleText, text: titleText } } }
+        });
+    }
+    function setViewResultButtonState(taskId, state, messageText){
+        const btn = document.getElementById(`viewResultBtn-${taskId}`);
+        if (!btn) return;
+        switch(state){
+            case 'loading':
+                btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载中';
+                break;
+            case 'noresult':
+                btn.disabled = false; btn.innerHTML = '<i class="fas fa-exclamation-circle"></i> 无结果';
+                break;
+            case 'error':
+                btn.disabled = false; btn.innerHTML = '<i class="fas fa-times-circle"></i> 加载失败';
+                break;
+            default:
+                btn.disabled = false; btn.innerHTML = '<i class="fas fa-chart-line"></i> 查看结果';
+        }
+        if (messageText) btn.setAttribute('title', messageText);
+    }
+
+    window.handleViewResult = function(taskId) {
+        activeResultTaskId = taskId;
+        resultModal.show();
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) { showResultMessage('找不到任务'); return; }
+
+        const cachedResult = loadResultFromCache(taskId);
+        if (cachedResult && cachedResult.x && cachedResult.y) {
+            renderResultChart(cachedResult.x, cachedResult.y, `任务 ${task.displayId} 结果 (缓存)`);
+            setViewResultButtonState(taskId, '');
+        } else {
+            showResultLoading('正在请求结果数据...');
+            setViewResultButtonState(taskId, 'loading');
+            if (task.archiveId){
+                sendMessage(`get_result_${task.archiveId}`);
+            } else {
+                sendMessage(`get_result_${task.bottleNum}`);
+            }
+        }
+    }
+    if (downloadPngBtn) {
+        downloadPngBtn.addEventListener('click', function() {
+            if (!resultChartInstance) return;
+            const link = document.createElement('a');
+            link.href = resultChartInstance.toBase64Image();
+            link.download = `hplc_result_${activeResultTaskId || Date.now()}.png`;
+            link.click();
+        });
+    }
+
+    // --- WebSocket 消息处理（并同步数据库） ---
+    socket.onmessage = async function(e) {
+        const data = JSON.parse(e.data);
+        const message = data.message;
+        if (data.sender !== 'worker') return;
+
+        addLog(`收到消息: ${JSON.stringify(message)}`, 'primary');
+
+        let taskToUpdate = tasks.find(t => t.bottleNum == message.bottle_num && t.statusCode !== 'completed' && t.statusCode !== 'failed');
+
+        switch (message.type) {
+            case 'worker_connected':
+                hplcStatus.textContent = message.status || '就绪';
+                break;
+            case 'status_update':
+                hplcStatus.textContent = message.status || '未知';
+                break;
+            case 'arm_status':
+                armStatus.textContent = message.status || '未知';
+                break;
+            case 'analysis_started':
+                if (taskToUpdate) {
+                    taskToUpdate.statusCode = 'task_started';
+                    taskToUpdate.statusText = '任务开始';
+                    taskToUpdate.statusClass = statusClassByCode('task_started');
+                    taskToUpdate.startTime = Date.now();
+                    taskToUpdate.runButtonHTML = '<i class="fas fa-spinner fa-spin"></i> 运行中';
+                    await updateTaskOnServer(taskToUpdate.dbId, { status: 'task_started', startTime: taskToUpdate.startTime });
+                    startStationRuntime(taskToUpdate.startTime);
+                    if (!taskDurationTimer) {
+                        taskDurationTimer = setInterval(updateTaskDurations, 1000);
+                    }
+                }
+                break;
+            case 'analysis_progress':
+                if (taskToUpdate) {
+                    // 仅更新显示
+                    taskToUpdate.statusText = message.stage || '进行中';
+                    taskToUpdate.statusClass = 'bg-info text-dark';
+                    // 可选：映射阶段到状态码并入库
+                    const statusMap = { '设备准备':'device_preparation','机械臂操作':'arm_operation','仪器分析':'instrument_analysis','等待分析完成':'waiting_completion','设备复位':'device_reset' };
+                    const code = statusMap[message.stage] || 'task_started';
+                    taskToUpdate.statusCode = code;
+                    await updateTaskOnServer(taskToUpdate.dbId, { status: code });
+                }
+                break;
+            case 'analysis_result':
+                if (!message.available) {
+                    showResultMessage(message.message || '未找到结果文件');
+                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'noresult', message.message);
+                } else if (message.series && Array.isArray(message.series.x) && Array.isArray(message.series.y)) {
+                    // 优先使用当前查看的任务ID进行渲染与缓存，避免已完成任务无法匹配 taskToUpdate 的问题
+                    const x = message.series.x; const y = message.series.y;
+                    if (activeResultTaskId) {
+                        const t = tasks.find(tt => tt.id === activeResultTaskId);
+                        renderResultChart(x, y, t ? `任务 ${t.displayId} 结果` : '任务结果');
+                        saveResultToCache(activeResultTaskId, {x, y});
+                        setViewResultButtonState(activeResultTaskId, '');
+                        if (t && message.archive_id) {
+                            t.archiveId = message.archive_id;
+                            await updateTaskOnServer(t.dbId, { archiveId: t.archiveId });
+                        }
+                    } else if (taskToUpdate) {
+                        // 兼容：如果正好匹配到运行中的任务
+                        saveResultToCache(taskToUpdate.id, message.series);
+                        if (message.archive_id) {
+                            taskToUpdate.archiveId = message.archive_id;
+                            await updateTaskOnServer(taskToUpdate.dbId, { archiveId: message.archive_id });
+                        }
+                        addLog(`任务 ${taskToUpdate.displayId} 的结果已缓存`, 'success');
+                    } else {
+                        // 未定位到具体任务，也渲染一次
+                        renderResultChart(x, y, '任务结果');
+                    }
+                } else {
+                    showResultMessage('结果数据格式不正确');
+                    if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'error');
+                }
+                break;
+            case 'analysis_complete':
+                if (taskToUpdate) {
+                    isWorkerBusy = false;
+                    taskToUpdate.statusCode = 'completed';
+                    taskToUpdate.statusText = '已完成';
+                    taskToUpdate.statusClass = statusClassByCode('completed');
+                    taskToUpdate.runButtonHTML = '<i class="fas fa-redo"></i> 重新运行';
+                    taskToUpdate.runButtonDisabled = false;
+                    taskToUpdate.endTime = Date.now();
+                    // 用时显示
+                    if (taskToUpdate.startTime) {
+                        const duration = Math.round((taskToUpdate.endTime - taskToUpdate.startTime) / 1000);
+                        taskToUpdate.duration = `${Math.floor(duration / 60)}分${duration % 60}秒`;
+                    }
+                    await updateTaskOnServer(taskToUpdate.dbId, { status: 'completed', endTime: taskToUpdate.endTime, duration: taskToUpdate.duration, archiveId: taskToUpdate.archiveId });
+                    stopStationRuntime(taskToUpdate.endTime);
+                }
+                break;
+            case 'analysis_error':
+                if (taskToUpdate) {
+                    isWorkerBusy = false;
+                    taskToUpdate.statusCode = 'failed';
+                    taskToUpdate.statusText = '失败';
+                    taskToUpdate.statusClass = statusClassByCode('failed');
+                    taskToUpdate.runButtonHTML = '<i class="fas fa-redo"></i> 重试';
+                    taskToUpdate.runButtonDisabled = false;
+                    taskToUpdate.endTime = Date.now();
+                    if (taskToUpdate.startTime) {
+                        const duration = Math.round((taskToUpdate.endTime - taskToUpdate.startTime) / 1000);
+                        taskToUpdate.duration = `${Math.floor(duration / 60)}分${duration % 60}秒`;
+                    }
+                    await updateTaskOnServer(taskToUpdate.dbId, { status: 'failed', endTime: taskToUpdate.endTime, duration: taskToUpdate.duration });
+                    stopStationRuntime(Date.now());
+                }
+                break;
+        }
+        if (taskToUpdate) renderTasks();
+    };
+
+    // --- 页面辅助函数 ---
+    (function() {
+        var breadcrumb = document.querySelector('nav[aria-label="breadcrumb"] .breadcrumb');
+        if (!breadcrumb) return;
+        var links = breadcrumb.querySelectorAll('.breadcrumb-item a');
+        var target = Array.from(links).find(link => link.textContent.trim() === 'HPLC');
         if (target) {
-            links.forEach(function(a){ a.classList.remove('active'); });
+            links.forEach(a => a.classList.remove('active'));
             target.classList.add('active');
+            var indicator = breadcrumb.querySelector('.breadcrumb-indicator');
             if (indicator) {
                 indicator.style.width = target.offsetWidth + 'px';
                 indicator.style.transform = 'translateX(' + target.offsetLeft + 'px)';
             }
         }
-    }
-
-    // 卡片折叠图标旋转
-    var collapseElements = document.querySelectorAll('[data-bs-toggle="collapse"]');
-    collapseElements.forEach(function(element) {
-        element.addEventListener('click', function() {
-            var icon = this.querySelector('.collapse-icon');
-            var target = document.querySelector(this.getAttribute('data-bs-target'));
-            setTimeout(function() {
-                if (target && target.classList.contains('show')) {
-                    icon.style.transform = 'rotate(0deg)';
-                } else if (icon) {
-                    icon.style.transform = 'rotate(180deg)';
-                }
-            }, 50);
-        });
-    });
-
-    // 运行时间示例计时器（每分钟+1 分）
-    var minutes = 0;
-    var hours = 0;
-    function updateRuntime() {
-        minutes += 1;
-        if (minutes >= 60) { hours += 1; minutes = 0; }
-        var m = minutes < 10 ? '0' + minutes : String(minutes);
-        var hoursEl = document.getElementById('runtimeHours');
-        var minutesEl = document.getElementById('runtimeMinutes');
-        if (hoursEl && minutesEl) {
-            hoursEl.textContent = String(hours);
-            minutesEl.textContent = m;
-        }
-    }
-    setInterval(updateRuntime, 60000);
+    })();
 });
 </script>
 
@@ -203,26 +789,8 @@ document.addEventListener('DOMContentLoaded', function () {
     transform: translateY(-2px); 
     box-shadow: 0 4px 8px rgba(0,0,0,.1); 
 }
-
-.card-header:hover ~ .card-body .station-card,
-.card-header:hover ~ .card-body .position-card {
-    transform: none !important;
-    box-shadow: none !important;
-}
-
-.card-header[data-bs-toggle="collapse"] { transition: none; }
 .card-header[data-bs-toggle="collapse"]:hover { cursor: pointer; }
-
-.card-header.bg-primary:hover { background-color: var(--bs-primary) !important; }
-.card-header.bg-warning:hover { background-color: var(--bs-warning) !important; }
-.card-header.bg-info:hover { background-color: var(--bs-info) !important; }
-
-.position-card.border-light { border-color: #dee2e6 !important; }
 .collapse-icon { transition: transform 0.3s ease; }
-
-#hplcStatusCard { border-left: 4px solid #0dcaf0; box-shadow: 0 2px 10px rgba(13, 202, 240, 0.1); }
-#hplcStatusCard .card-header { transition: background 0.3s ease; }
+#hplcStatusCard { border-left: 4px solid #0dcaf0; }
 </style>
 {% endblock %}
-
-

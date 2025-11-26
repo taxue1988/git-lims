@@ -891,6 +891,57 @@
             </div>
         </section>
 
+        <!-- HPLC分析页面 -->
+        <section id="hplc-content" class="content-section" style="display: none;">
+            <div class="container-fluid">
+                <h1 class="h3 mb-4 text-gray-800">HPLC分析</h1>
+
+                <!-- 工站启用选项 -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="hplc-station-enable" role="switch">
+                            <label class="form-check-label fw-bold" for="hplc-station-enable">启用HPLC分析工站</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HPLC方法选择 -->
+                <div class="card shadow mb-4" id="hplc-method-card" style="display: none;">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">选择采集方法</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label for="hplc-method-selector" class="form-label">选择采集方法</label>
+                                <select class="form-select" id="hplc-method-selector">
+                                    <option value="">请选择方法</option>
+                                    <!-- Options will be populated by JavaScript -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 方法详细信息显示区域 -->
+                        <div class="row g-3" id="hplc-method-details" style="display: none;">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="m-0 font-weight-bold">方法详细信息</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="hplc-method-details-content">
+                                            <!-- 方法详细信息将在这里显示 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- GCMS分析 -->
         <section id="gcms-content" class="content-section" style="display:none">
             <div class="container-fluid">
@@ -976,6 +1027,113 @@
     <script src="{% static 'js/jquery-3.7.1.js' %}"></script>
     <script src="{% static 'js/user-common.js' %}"></script>
     <script>$(document).ready(function () {
+    // HPLC 数据
+    const hplcMethodData = {
+        "方法1": {
+            "四元泵流量压力梯度": "流量：0.000mL/min；低压限值：0.00bar；高压限值：400.00bar；最大流量梯度：100.000mL/min2；",
+            "溶剂组成": "A：100%；B：0%；C：0%；D：0%；",
+            "四元泵停止时间": "0.5min",
+            "四元泵后运行时间": "关闭",
+            "VWD停止时间": "与泵/进样器时间一致",
+            "VWD后运行时间": "关闭",
+            "扫描变量": "扫描范围起始值：190nm；扫描范围终止值：400nm；扫描范围步进值：2nm",
+            "双波长已启用": "否",
+            "左侧温度控制": "未控制",
+            "右侧温度控制": "未控制",
+            "柱温箱停止时间": "与泵/进样器时间一致",
+            "柱温箱后运行时间": "关闭",
+            "采样速度": "抽取速度：100.0uL/min；排除速度：400.0uL/min；抽取后等待时间：1.2s",
+            "进样": "针清洗模式：关闭；进样量：5.00uL"
+        },
+        "方法2": {
+            "四元泵流量压力梯度": "流量：0.000mL/min；低压限值：0.00bar；高压限值：400.00bar；最大流量梯度：100.000mL/min2；",
+            "溶剂组成": "A：80%；B：20%；C：0%；D：0%；",
+            "四元泵停止时间": "1.00min",
+            "四元泵后运行时间": "关闭",
+            "VWD停止时间": "与泵/进样器时间一致",
+            "VWD后运行时间": "关闭",
+            "扫描变量": "扫描范围起始值：190nm；扫描范围终止值：400nm；扫描范围步进值：2nm",
+            "双波长已启用": "否",
+            "左侧温度控制": "未控制",
+            "右侧温度控制": "未控制",
+            "柱温箱停止时间": "与泵/进样器时间一致",
+            "柱温箱后运行时间": "关闭",
+            "采样速度": "抽取速度：100.0uL/min；排除速度：400.0uL/min；抽取后等待时间：1.2s",
+            "进样": "针清洗模式：关闭；进样量：5.00uL"
+        },
+        "方法3": {
+            "四元泵流量压力梯度": "流量：0.000mL/min；低压限值：0.00bar；高压限值：400.00bar；最大流量梯度：100.000mL/min2；",
+            "溶剂组成": "A：100%；B：0%；C：0%；D：0%；",
+            "四元泵停止时间": "5.00min",
+            "四元泵后运行时间": "关闭",
+            "VWD停止时间": "与泵/进样器时间一致",
+            "VWD后运行时间": "关闭",
+            "扫描变量": "扫描范围起始值：190nm；扫描范围终止值：400nm；扫描范围步进值：2nm",
+            "双波长已启用": "否",
+            "左侧温度控制": "25°C",
+            "右侧温度控制": "组合",
+            "柱温箱停止时间": "与泵/进样器时间一致",
+            "柱温箱后运行时间": "关闭",
+            "采样速度": "抽取速度：100.0uL/min；排除速度：400.0uL/min；抽取后等待时间：1.2s",
+            "进样": "针清洗模式：标准清洗；进样量：5.00uL； 标准针清洗模式：冲洗端口；持续时间：3s"
+        },
+        "20250523新方法": {
+            "四元泵流量压力梯度": "流量：1.000mL/min；低压限值：30.00bar；高压限值：400.00bar；最大流量梯度：100.000mL/min2；",
+            "溶剂组成": "A：5%；B：95%；C：0%；D：0%；",
+            "四元泵停止时间": "30min",
+            "四元泵后运行时间": "1.00min",
+            "VWD停止时间": "与泵/进样器时间一致",
+            "VWD后运行时间": "关闭",
+            "扫描变量": "扫描范围起始值：190nm；扫描范围终止值：400nm；扫描范围步进值：2nm",
+            "双波长已启用": "否",
+            "左侧温度控制": "20°C",
+            "右侧温度控制": "组合",
+            "柱温箱停止时间": "与泵/进样器时间一致",
+            "柱温箱后运行时间": "关闭",
+            "采样速度": "抽取速度：100.0uL/min；排除速度：400.0uL/min；抽取后等待时间：1.2s",
+            "进样": "针清洗模式：标准清洗；进样量：15.00uL； 标准针清洗模式：冲洗端口；持续时间：3s"
+        }
+    };
+
+    function initHplcMethods() {
+        const selector = $('#hplc-method-selector');
+        selector.html('<option value="">请选择方法</option>'); // 重置
+        for (const methodName in hplcMethodData) {
+            selector.append(`<option value="${methodName}">${methodName}</option>`);
+        }
+    }
+
+    initHplcMethods();
+
+    $('#hplc-method-selector').on('change', function () {
+        const methodName = $(this).val();
+        const method = hplcMethodData[methodName];
+
+        if (method) {
+            let detailsHtml = '<div class="table-responsive"><table class="table table-bordered"><tbody>';
+            for (const key in method) {
+                // 将参数中的分号替换为换行，以便更好地显示
+                const formattedValue = method[key].replace(/；/g, '<br>');
+                detailsHtml += `<tr><td class="fw-bold">${key}</td><td>${formattedValue}</td></tr>`;
+            }
+            detailsHtml += '</tbody></table></div>';
+            
+            $('#hplc-method-details-content').html(detailsHtml);
+            $('#hplc-method-details').show();
+        } else {
+            $('#hplc-method-details').hide();
+        }
+    });
+
+    $('#hplc-station-enable').on('change', function () {
+        if ($(this).is(':checked')) {
+            $('#hplc-method-card').show();
+        } else {
+            $('#hplc-method-card').hide();
+            $('#hplc-method-details').hide();
+        }
+    });
+
     // GCMS序列数据
     const gcmsSequenceData = [
         {
@@ -1867,6 +2025,24 @@
                                 updateDeveloperInfo(tp.developerSystem);
                             }, 100);
                         }
+
+                        // HPLC分析工站
+                        if (task.stations && task.stations.hplc && task.stations.hplc.enabled) {
+                            console.log('启用HPLC分析工站，数据：', task.stations.hplc);
+                            
+                            // HPLC工站可以与其他工站同时使用，不需要禁用其他工站
+                            $('#hplc-station-enable').prop('checked', true);
+                            
+                            // 手动显示相关表单，避免触发change事件
+                            $('#hplc-method-card').show();
+                            
+                            // 等待DOM更新后再填充数据
+                            setTimeout(() => {
+                                const hp = task.stations.hplc.params || {};
+                                $('#hplc-method-selector').val(hp.method || '');
+                                $('#hplc-method-selector').trigger('change');
+                            }, 100);
+                        }
                     }).catch(function() { console.warn('获取任务详情异常，进入新建模式'); });
                 } else {
                     // 新建模式：确保所有工站都是禁用状态，清空所有数据
@@ -1879,6 +2055,7 @@
                     $('#gcms-station-enable').prop('checked', false);
                     $('#evaporation-station-enable').prop('checked', false);
                     $('#tlc-station-enable').prop('checked', false);
+                    $('#hplc-station-enable').prop('checked', false);
                     
                     // 隐藏所有工站相关表单
                     $('#reagent-form-card').hide();
@@ -1890,6 +2067,7 @@
                     $('#gcms-sequence-card').hide();
                     $('#evaporation-mode-card').hide();
                     $('#evaporation-manual-params-card').hide();
+                    $('#hplc-method-card').hide();
                     
                     // 清空所有数组数据
                     reagents.length = 0;
@@ -1907,6 +2085,7 @@
                     $('#tlc-developer-form')[0].reset();
                     $('#tlc-detection-form')[0].reset();
                     $('#tlc-sample-form')[0].reset();
+                    $('#hplc-method-selector').val('');
                     
                     // 清空新增的采样分析字段
                     $('#glovebox-sampling-analysis').val('');
@@ -2000,6 +2179,7 @@
                 const gcmsEnabled = $('#gcms-station-enable').is(':checked');
                 const evaporationEnabled = $('#evaporation-station-enable').is(':checked');
                 const tlcEnabled = $('#tlc-station-enable').is(':checked');
+                const hplcEnabled = $('#hplc-station-enable').is(':checked');
 
                 // 采集固液配料列表（使用已有reagents数组，如未启用则为空）
                 let solidReagents = [];
@@ -2082,6 +2262,11 @@
                     detectionMethod: $('#tlc-detection-method').val() || null
                 } : null;
 
+                // 采集HPLC参数
+                const hplcParams = hplcEnabled ? {
+                    method: $('#hplc-method-selector').val() || null
+                } : null;
+
                 // 元信息：名称/日期/状态
                 const now = new Date();
                 const two = n => (n < 10 ? '0' + n : '' + n);
@@ -2105,7 +2290,8 @@
                         reaction: { enabled: reactionEnabled, params: reactionParams },
                         gcms: { enabled: gcmsEnabled, params: gcmsParams },
                         evaporation: { enabled: evaporationEnabled, params: evaporationParams },
-                        tlc: { enabled: tlcEnabled, params: tlcParams }
+                        tlc: { enabled: tlcEnabled, params: tlcParams },
+                        hplc: { enabled: hplcEnabled, params: hplcParams }
                     }
                 };
                 // 生成摘要HTML
@@ -2193,6 +2379,20 @@
                     </div>
                 ` : '';
 
+                const hplcHtml = task.stations.hplc.enabled ? (() => {
+                    const methodName = hplcParams.method || '';
+                    const methodInfo = hplcMethodData[methodName];
+                    if (methodInfo) {
+                        return `
+                    <div class="mb-3">
+                        <strong>采集方法：</strong>${methodName}
+                    </div>
+                `;
+                    } else {
+                        return `<div class="mb-3">采集方法：${methodName || '-'}</div>`;
+                    }
+                })() : '';
+
                 const remark = ($('#experiment-remark-input').val() || '').trim();
 
                 const summaryHtml = `
@@ -2223,6 +2423,8 @@
                     ${evaporationHtml}
                     <div class="mb-3"><strong>TLC分析工站：</strong>${task.stations.tlc.enabled ? '已启用' : '未启用'}</div>
                     ${tlcHtml}
+                    <div class="mb-3"><strong>HPLC分析工站：</strong>${task.stations.hplc.enabled ? '已启用' : '未启用'}</div>
+                    ${hplcHtml}
                 `;
 
                 // 暂存任务，等待确认

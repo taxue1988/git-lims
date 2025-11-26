@@ -221,6 +221,11 @@ def admin_station_hplc(request):
 
 @login_required
 @ensure_csrf_cookie
+
+
+
+@login_required
+@ensure_csrf_cookie
 def admin_station_agv(request):
     """
     管理端 - 工站管理 - AGV 子页面
