@@ -55,7 +55,7 @@ class HplcWorker:
         self.batch_id = os.environ.get('HPLC_BATCH_ID', '20240619135729')
         self.injectorId = os.environ.get('HPLC_INJECTOR_ID', 'fec9d7cd-e0c0-45ab-b82e-468f0d52a38b')
         self.analysis_job_parameters = None
-        self.remote_folder_path = os.environ.get('HPLC_REMOTE_DATA', r'\\192.168.58.132\Data')
+        self.remote_folder_path = os.environ.get('HPLC_REMOTE_DATA', r'D:\Data')
         self.local_save_dir = os.environ.get('HPLC_LOCAL_DATA', os.path.join(os.path.dirname(__file__), 'Data'))
 
         # 启动阶段日志，参照 GCMS Worker 的可见输出体验

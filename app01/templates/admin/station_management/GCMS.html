@@ -328,6 +328,21 @@
                         </div>
                     </div>
                     
+                    
+                    <!-- 峰信息工具栏（列表在右侧抽屉，不占用图表高度） -->
+                    <div class="mt-2 d-flex align-items-center gap-3 flex-wrap">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="togglePeaksOverlay">
+                            <label class="form-check-label" for="togglePeaksOverlay">在色谱图上叠加峰心与面积</label>
+                        </div>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="peaks actions">
+                            <button class="btn btn-outline-secondary" id="refreshPeaksBtn" type="button">刷新峰</button>
+                            <button class="btn btn-outline-primary" id="openPeaksBtn" type="button" data-bs-toggle="offcanvas" data-bs-target="#peaksOffcanvas" aria-controls="peaksOffcanvas">峰列表</button>
+                            <button class="btn btn-outline-success" id="exportPeaksBtn" type="button">导出峰表</button>
+                        </div>
+                        <small id="peaksStatusText" class="text-muted"></small>
+                    </div>
+
                     <!-- 下半部分：质谱图 -->
                     <div class="section-half">
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -342,6 +357,17 @@
                     </div>
                 </div>
                 
+                <!-- 峰列表右侧抽屉 -->
+                <div class="offcanvas offcanvas-end" tabindex="-1" id="peaksOffcanvas" aria-labelledby="peaksOffcanvasLabel">
+                    <div class="offcanvas-header">
+                        <h5 id="peaksOffcanvasLabel">峰列表（按保留时间升序）</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+                    </div>
+                    <div class="offcanvas-body p-0" id="peaksOffcanvasBody">
+                        <div class="p-3 text-muted">暂无峰数据</div>
+                    </div>
+                </div>
+
                 <div id="resultMessage" class="alert alert-warning mt-3" style="display:none;"></div>
             </div>
             <div class="modal-footer">
@@ -357,6 +383,37 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+// 自定义插件：在峰心点上绘制面积文字
+const peaksLabelPlugin = {
+  id: 'peaksLabelPlugin',
+  afterDatasetsDraw(chart, args, pluginOptions) {
+    const { ctx, data } = chart;
+    if (!data || !data.datasets) return;
+    const ds = data.datasets.find(d => d && d._isPeaks && !d.hidden);
+    if (!ds || !Array.isArray(ds.data) || ds.data.length === 0) return;
+    const meta = chart.getDatasetMeta(data.datasets.indexOf(ds));
+    if (!meta || !meta.data) return;
+    ctx.save();
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(220,53,69,0.95)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    // 仅在叠加开启时绘制
+    // 已通过 ds.hidden 控制
+    for (let i = 0; i < meta.data.length; i++) {
+      const el = meta.data[i];
+      const pt = ds.data[i];
+      if (!el || !pt) continue;
+      const { x, y } = el.getProps(['x', 'y'], true);
+      const area = typeof pt.area === 'number' ? pt.area : null;
+      const label = area != null ? area.toFixed(2) : '';
+      if (label) ctx.fillText(label, x, y - 3);
+    }
+    ctx.restore();
+  }
+};
+try { Chart.register(peaksLabelPlugin); } catch(e) {}
+
 document.addEventListener('DOMContentLoaded', function () {
     // --- 全局变量定义 ---
     let totalRuntimeInterval = null;
@@ -714,6 +771,15 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
     const massSpectrumStatus = document.getElementById('massSpectrumStatus');
     const downloadChromatogramPngBtn = document.getElementById('downloadChromatogramPngBtn');
     const downloadMassSpectrumPngBtn = document.getElementById('downloadMassSpectrumPngBtn');
+
+    // 峰信息相关 DOM
+    const togglePeaksOverlay = document.getElementById('togglePeaksOverlay');
+    // 阈值固定为 1%，不提供 UI 调整
+    const refreshPeaksBtn = document.getElementById('refreshPeaksBtn');
+    const peaksStatusText = document.getElementById('peaksStatusText');
+    const openPeaksBtn = document.getElementById('openPeaksBtn');
+    const exportPeaksBtn = document.getElementById('exportPeaksBtn');
+    const peaksOffcanvasBody = document.getElementById('peaksOffcanvasBody');
     
     let resultChartInstance = null;
     let massSpectrumChartInstance = null;
@@ -726,6 +792,12 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
     let chromatogramYData = [];  // 保存色谱图的 Y 数据
     let sliderTimeout = null;    // 防止频繁请求
     let currentRtValue = null;   // 当前滑块对应的RT值（分钟）
+    // 色谱时间轴范围（用于让滑块与横轴一一对应）
+    let chromMinX = null;
+    let chromMaxX = null;
+    // 峰信息状态
+    let peaksData = [];
+
     // 对齐滑块与图表绘图区：直接设置滑块宽度与左边距，保证拇指与红线同列
     function alignSliderWithYAxis(){
         if (!resultChartInstance || !sliderWrapEl || !retentionTimeSlider) return;
@@ -748,6 +820,19 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
         } catch(e){}
     }
     window.addEventListener('resize', alignSliderWithYAxis);
+
+    // 峰信息交互
+    if (togglePeaksOverlay){
+        togglePeaksOverlay.addEventListener('change', () => {
+            // 无数据则触发一次获取
+            if (togglePeaksOverlay.checked && (!Array.isArray(peaksData) || peaksData.length === 0)){
+                requestPeaks();
+            }
+            updatePeaksOverlay();
+        });
+    }
+    if (refreshPeaksBtn){ refreshPeaksBtn.addEventListener('click', requestPeaks); }
+
 
     //（已禁用）垂直参考线插件，避免个别环境下 Chart.js 抛出 “class does not have id” 的兼容性错误。
     // 如需开启，可引入 chartjs-plugin-annotation 或改为内置 dataset 方案绘制垂直线。
@@ -784,13 +869,15 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
         // 更新滑块范围
         const minX = Math.min(...xSlice);
         const maxX = Math.max(...xSlice);
+        chromMinX = minX;
+        chromMaxX = maxX;
         retentionTimeSlider.min = 0;
         retentionTimeSlider.max = 100;
         retentionTimeSlider.value = 0;
-        sliderMinLabel.textContent = minX.toFixed(2);
-        sliderMaxLabel.textContent = maxX.toFixed(2);
-        currentRetentionTimeDisplay.textContent = minX.toFixed(2);
+        sliderMinLabel.textContent = String(minX);
+        sliderMaxLabel.textContent = String(maxX);
         currentRtValue = minX;
+        currentRetentionTimeDisplay.textContent = String(currentRtValue);
         
         const ctx = resultChartCanvas.getContext('2d');
         if (resultChartInstance) { resultChartInstance.destroy(); }
@@ -837,6 +924,20 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
                         xAxisID: 'x',
                         yAxisID: 'y',
                         _isVLine: true // 自定义标记，便于后续更新
+                    },
+                    {
+                        label: '峰心',
+                        data: [],
+                        parsing: false,
+                        xAxisID: 'x',
+                        yAxisID: 'y',
+                        showLine: false,
+                        pointRadius: 3,
+                        pointBackgroundColor: 'rgba(220, 53, 69, 0.9)',
+                        pointBorderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 0,
+                        hidden: true,
+                        _isPeaks: true
                     }
                 ] 
             },
@@ -850,8 +951,30 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
                     title: { display: false },
                     tooltip: { 
                         callbacks: { 
-                            title: function(items){ return items && items.length ? `时间: ${Number(items[0].parsed.x).toFixed(2)} 分钟` : ''; }, 
-                            label: function(context){ return `强度: ${Number(context.parsed.y).toFixed(0)}`; } 
+                            title: function(items){ 
+                                if (!items || !items.length) return ''; 
+                                const it = items[0];
+                                const ds = it.dataset;
+                                if (ds && ds._isPeaks) {
+                                    const pt = ds.data && ds.data[it.dataIndex];
+                                    if (pt && (pt.centerXOriginal !== undefined)) {
+                                        return `时间: ${Number(pt.centerXOriginal).toFixed(4)} 分钟`;
+                                    }
+                                }
+                                return `时间: ${it.parsed.x} 分钟`;
+                            }, 
+                            label: function(context){ 
+                                try {
+                                    const ds = context.dataset;
+                                    if (ds && ds._isPeaks) {
+                                        const pt = ds.data && ds.data[context.dataIndex];
+                                        const area = pt && pt.area ? Number(pt.area) : null;
+                                        if (area != null) return `面积: ${area.toFixed(2)}`;
+                                        return '峰心';
+                                    }
+                                } catch(e) {}
+                                return `强度: ${Number(context.parsed.y).toFixed(0)}`; 
+                            } 
                         } 
                     } 
                 }, 
@@ -876,6 +999,168 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
         setTimeout(alignSliderWithYAxis, 0);
         
         downloadMassSpectrumPngBtn.style.display = 'none';
+    }
+
+    // 根据 RT 找到最近的 Y 值（用于峰心散点定位）
+    function getNearestYAtRt(rt){
+        if (!chromatogramXData || chromatogramXData.length === 0) return 0;
+        // 二分或线性近邻（数据量不大，线性即可）
+        let bestIdx = 0;
+        let bestDiff = Infinity;
+        for (let i=0;i<chromatogramXData.length;i++){
+            const d = Math.abs(chromatogramXData[i] - rt);
+            if (d < bestDiff){ bestDiff = d; bestIdx = i; }
+        }
+        return chromatogramYData[bestIdx] || 0;
+    }
+
+    function updatePeaksOverlay(){
+        if (!resultChartInstance) return;
+        const dsPeaks = resultChartInstance.data.datasets.find(d => d && d._isPeaks);
+        if (!dsPeaks) return;
+        if (!Array.isArray(peaksData) || peaksData.length === 0){
+            dsPeaks.data = [];
+        } else {
+            // 按时间排序，最多取前 200 个，避免过密
+            const sorted = [...peaksData].sort((a,b)=> Number(a.centerX||0) - Number(b.centerX||0)).slice(0, 200);
+            dsPeaks.data = sorted.map(p => {
+            const cx = Number(p.centerX||0);
+            const yv = getNearestYAtRt(cx);
+            return { x: cx, y: yv, area: Number(p.area||0), centerXOriginal: cx };
+        });
+        }
+        dsPeaks.hidden = !togglePeaksOverlay.checked;
+        resultChartInstance.update('none');
+    }
+
+    function renderPeaksPanel(){
+        const body = document.getElementById('peaksOffcanvasBody');
+        if (!body) return;
+        if (!Array.isArray(peaksData) || peaksData.length === 0){
+            body.innerHTML = '<div class="p-3 text-muted">暂无峰数据</div>';
+            return;
+        }
+        // 按中心RT升序
+        const sorted = [...peaksData].sort((a,b)=> Number(a.centerX||0) - Number(b.centerX||0));
+        const rows = sorted.map((p, idx) => {
+            const idxStr = `峰 ${idx+1}`;
+            const center = Number(p.centerX||0).toFixed(4);
+            const area = Number(p.area||0).toFixed(2);
+            const startX = Number(p.startX||0).toFixed(4);
+            const endX = Number(p.endX||0).toFixed(4);
+            const width = Number(p.width||0).toFixed(4);
+            const baseline = (p.baselineIsLinear === true) ? '是' : (p.baselineIsLinear === false ? '否' : 'N/A');
+            return `<tr>
+                <td>${idxStr}</td>
+                <td>${center}</td>
+                <td>${area}</td>
+                <td>${startX}</td>
+                <td>${endX}</td>
+                <td>${width}</td>
+                <td>${baseline}</td>
+                <td><button class="btn btn-sm btn-outline-primary" data-rt="${center}">定位</button></td>
+            </tr>`;
+        }).join('');
+        const table = `
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:80px;">峰号</th>
+                            <th style="width:160px;">中心RT时间 (centerX)</th>
+                            <th style="width:160px;">面积 (area)</th>
+                            <th style="width:160px;">起始时间 (startX)</th>
+                            <th style="width:160px;">结束时间 (endX)</th>
+                            <th style="width:120px;">峰宽 (width)</th>
+                            <th style="width:120px;">基线是否线性</th>
+                            <th style="width:100px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>`;
+        body.innerHTML = table;
+        // 绑定定位
+        body.querySelectorAll('button[data-rt]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const rt = Number(btn.getAttribute('data-rt'));
+                if (chromatogramXData && chromatogramXData.length){
+                    let bestIdx = 0; let bestDiff = Infinity;
+                    for (let i=0;i<chromatogramXData.length;i++){
+                        const d = Math.abs(chromatogramXData[i] - rt);
+                        if (d < bestDiff){ bestDiff = d; bestIdx = i; }
+                    }
+                    const percent = (bestIdx / (chromatogramXData.length - 1)) * 100;
+                    retentionTimeSlider.value = percent.toFixed(2);
+                    retentionTimeSlider.dispatchEvent(new Event('input'));
+                }
+            });
+        });
+    }
+
+    function requestPeaks(){
+        if (activeSequenceIndex == null) return;
+        peaksStatusText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 正在获取峰信息...';
+        if (activeArchiveId){
+            sendMessage(`get_peaks_${activeSequenceIndex}_${activeArchiveId}`);
+        } else {
+            sendMessage(`get_peaks_${activeSequenceIndex}`);
+        }
+    }
+
+    // 导出峰表 CSV（BOM 头确保 Excel 正常显示中文）
+    if (exportPeaksBtn){
+        exportPeaksBtn.addEventListener('click', function(){
+            if (!Array.isArray(peaksData) || peaksData.length === 0){
+                alert('暂无可导出的峰数据');
+                return;
+            }
+            const sorted = [...peaksData].sort((a,b)=> Number(a.centerX||0) - Number(b.centerX||0));
+            const header = ['峰号','中心RT时间 (centerX)','面积 (area)','起始时间 (startX)','结束时间 (endX)','峰宽 (width)','基线是否线性'];
+            const rows = sorted.map((p, idx) => [
+                `峰 ${idx+1}`,
+                Number(p.centerX||0).toFixed(4),
+                Number(p.area||0).toFixed(2),
+                Number(p.startX||0).toFixed(4),
+                Number(p.endX||0).toFixed(4),
+                Number(p.width||0).toFixed(4),
+                (p.baselineIsLinear === true) ? '是' : (p.baselineIsLinear === false ? '否' : 'N/A')
+            ]);
+            const csvLines = [header.join(','), ...rows.map(r => r.join(','))];
+            const blob = new Blob(['\ufeff' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `peaks_${Date.now()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    // 当打开/关闭峰列表抽屉时，刷新图表尺寸，避免显示不完整
+    const peaksOffcanvasEl = document.getElementById('peaksOffcanvas');
+    if (peaksOffcanvasEl){
+        peaksOffcanvasEl.addEventListener('show.bs.offcanvas', () => {
+            // 打开抽屉前先渲染一次
+            try { renderPeaksPanel(); } catch(e){}
+        });
+        peaksOffcanvasEl.addEventListener('shown.bs.offcanvas', () => {
+            if (resultChartInstance) { try { resultChartInstance.resize(); } catch(e){} }
+            if (massSpectrumChartInstance) { try { massSpectrumChartInstance.resize(); } catch(e){} }
+        });
+        peaksOffcanvasEl.addEventListener('hidden.bs.offcanvas', () => {
+            if (resultChartInstance) { try { resultChartInstance.resize(); } catch(e){} }
+            if (massSpectrumChartInstance) { try { massSpectrumChartInstance.resize(); } catch(e){} }
+        });
+    }
+
+    // 点击“峰列表”按钮时，也尝试渲染一次（兜底）
+    if (openPeaksBtn){
+        openPeaksBtn.addEventListener('click', () => { try { renderPeaksPanel(); } catch(e){} });
     }
     
     function renderMassSpectrumChart(mzArr, intensityArr, rtValue) {
@@ -952,19 +1237,14 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
     // 滑块事件监听
     retentionTimeSlider.addEventListener('input', function() {
         if (!chromatogramXData || chromatogramXData.length === 0) return;
-        // 按“数据点索引”与滑块百分比对应，确保滚轴从色谱图横坐标起点开始，并精确对齐到某个采样点
-        const n = chromatogramXData.length;
+        // 与横轴一一对应：线性映射 0..100 -> chromMinX..chromMaxX（不再吸附数据点）
+        if (chromMinX == null || chromMaxX == null) return;
         const rawPercent = Math.max(0, Math.min(1, parseFloat(this.value) / 100));
-        // 将滑块位置“吸附”到最近的数据点，保证滑块拇指与红线严格同一竖线
-        const idx = Math.max(0, Math.min(n - 1, Math.round(rawPercent * (n - 1))));
-        const snappedPercent = (idx / (n - 1)) * 100;
-        // 回写滑块值（让拇指位置与数据点像素对齐）
-        this.value = snappedPercent.toFixed(2);
-        const rtValue = chromatogramXData[idx];
+        const rtValue = chromMinX + rawPercent * (chromMaxX - chromMinX);
         
-        // 更新显示（对齐到采样点）
+        // 更新显示（显示原始精度）
         currentRtValue = rtValue;
-        currentRetentionTimeDisplay.textContent = Number(rtValue).toFixed(2);
+        currentRetentionTimeDisplay.textContent = String(rtValue);
 
         // 更新色谱图中的竖直指示线（更新第二个数据集）
         try {
@@ -1010,6 +1290,8 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
         if (cached && Array.isArray(cached.x) && Array.isArray(cached.y)){
             renderChromatogramChart(cached.x, cached.y, `序列 ${task.sequenceIndex} 结果（缓存）`);
             setViewResultButtonState(taskId, '');
+            // 渲染完色谱后实时获取峰信息
+            requestPeaks();
             return;
         }
         showResultLoading('正在请求结果数据...');
@@ -1170,6 +1452,8 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
                             await updateTaskOnServer(t.dbId, { archiveId: t.archiveId });
                         }
                     }
+                    // 渲染完色谱后，实时获取峰信息
+                    requestPeaks();
                 } else {
                     showResultMessage('结果数据格式不正确');
                     if (activeResultTaskId) setViewResultButtonState(activeResultTaskId, 'error');
@@ -1184,6 +1468,21 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
                     renderMassSpectrumChart(mz, intensity, message.retention_time);
                 } else {
                     massSpectrumStatus.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> 质谱数据格式不正确';
+                }
+                break;
+            case 'peaks_result':
+                if (!message.available) {
+                    peaksData = [];
+                    peaksStatusText.innerHTML = `<span class="text-warning"><i class="fas fa-exclamation-triangle"></i> ${message.message || '未获取到峰信息'}</span>`;
+                    updatePeaksOverlay();
+                    renderPeaksPanel();
+                } else {
+                    peaksData = Array.isArray(message.peaks) ? message.peaks : [];
+                    const count = peaksData.length;
+                    const thresh = Number(message.relative_area_percent != null ? message.relative_area_percent : 1.0);
+                    peaksStatusText.innerHTML = `<span class=\"text-success\"><i class=\"fas fa-check-circle\"></i> 已获取 ${count} 个峰（面积≥${thresh}%）</span>`;
+                    updatePeaksOverlay();
+                    renderPeaksList();
                 }
                 break;
         }
@@ -1341,5 +1640,11 @@ resultModalEl.addEventListener('shown.bs.modal', alignSliderWithYAxis);
 /* 下半区自动占剩余空间 */
 .slider-wrap { padding: 0 4px; }
 .slider-range-labels { font-size: 12px; color: #666; }
+/* 峰列表右侧抽屉样式微调：更宽+更紧凑的表格与按钮 */
+#peaksOffcanvas { width: 680px; max-width: 90vw; }
+#peaksOffcanvasBody { font-size: 12px; }
+#peaksOffcanvas .table>:not(caption)>*>* { padding: .25rem .4rem; }
+#peaksOffcanvas .btn { padding: .15rem .4rem; font-size: 12px; }
+#peaksOffcanvas .table thead th { white-space: nowrap; }
 </style>
 {% endblock %}

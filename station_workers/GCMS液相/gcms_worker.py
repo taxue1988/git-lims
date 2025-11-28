@@ -39,6 +39,9 @@ except Exception:
         MSPlotter = None
 
 import csv
+import urllib.request
+import urllib.error
+
 
 class GcmsWorker:
     def __init__(self, server_url=None):
@@ -60,6 +63,9 @@ class GcmsWorker:
         self.current_sequence_index = None
         self.current_data_folder = None
         self.current_data_mtime = None
+
+        # 峰提取（MassHunter Qual 服务）
+        self.qual_base_url = os.environ.get("GCMS_QUAL_BASE_URL", "http://192.168.58.125:8082")
 
         # 初始化 GCMS 模块
         self.init_gcms_module()
@@ -186,6 +192,34 @@ class GcmsWorker:
                     self.send_response({'type': 'error', 'message': f"质谱请求指令格式错误: {command}"})
                     return
                 self.handle_get_mass_spectrum(sequence_index, retention_time, archive_id)
+            elif command.startswith("get_peaks_"):
+                # 支持格式:
+                # 1) get_peaks_{sequence_index}_{archiveId...}  -> 默认 1%
+                # 2) get_peaks_{sequence_index}_{percent}_{archiveId...}（percent 必须在 0~100 之间）
+                try:
+                    payload = command[len("get_peaks_"):]
+                    parts = payload.split("_")
+                    if len(parts) < 1:
+                        raise ValueError("参数数量不正确")
+                    sequence_index = int(parts[0])
+                    relative_percent = 1.0
+                    archive_id = None
+                    if len(parts) >= 2:
+                        token = parts[1]
+                        # 仅当 token 可解析为 [0,100] 的数字时才视为百分比，否则视为 archiveId 的开始
+                        try:
+                            v = float(token)
+                            if 0.0 <= v <= 100.0:
+                                relative_percent = v
+                                archive_id = "_".join(parts[2:]) if len(parts) > 2 else None
+                            else:
+                                archive_id = "_".join(parts[1:]) if len(parts) > 1 else None
+                        except Exception:
+                            archive_id = "_".join(parts[1:]) if len(parts) > 1 else None
+                except Exception:
+                    self.send_response({'type': 'error', 'message': f"峰信息请求指令格式错误: {command}"})
+                    return
+                self.handle_get_peaks(sequence_index, archive_id, relative_percent)
             else:
                 self.send_response({'type': 'error', 'message': f"未知指令: {command}"})
                 
@@ -433,6 +467,117 @@ class GcmsWorker:
                 'message': f'获取质谱图失败: {str(e)}'
             })
     
+    def _resolve_data_folder_for_sequence(self, sequence_index, archive_id=None):
+        """根据 archive_id 或 CSV 参数解析 .D 数据目录路径。"""
+        # 优先：归档 meta
+        if archive_id:
+            try:
+                archive_dir = self._ensure_archive_dir()
+                meta_path = os.path.join(archive_dir, f"{archive_id}.meta.json")
+                if os.path.isfile(meta_path):
+                    with open(meta_path, 'r', encoding='utf-8') as mf:
+                        meta = json.load(mf)
+                        d = meta.get('data_folder')
+                        if d and os.path.isdir(d):
+                            return os.path.normpath(d)
+            except Exception:
+                pass
+        # 回退：CSV 参数表
+        params = load_sequence_params_map()
+        triple = params.get(sequence_index)
+        if not triple:
+            raise RuntimeError(f"未找到序列 {sequence_index} 的参数")
+        _seq_file, data_name, data_path = triple
+        folder_name = data_name if data_name.lower().endswith('.d') else f"{data_name}.D"
+        data_folder = os.path.normpath(os.path.join(data_path, folder_name))
+        if os.path.isdir(data_folder):
+            return data_folder
+        # 回退：在 data_path 下模糊匹配最新 .D 目录
+        candidates = []
+        try:
+            for entry in os.listdir(data_path):
+                if entry.lower().startswith(data_name.lower()) and entry.lower().endswith('.d'):
+                    p = os.path.join(data_path, entry)
+                    try:
+                        mtime = os.path.getmtime(p)
+                    except Exception:
+                        mtime = 0
+                    candidates.append((mtime, os.path.normpath(p)))
+        except Exception:
+            pass
+        if candidates:
+            candidates.sort(reverse=True)
+            return candidates[0][1]
+        raise RuntimeError(f"未找到序列 {sequence_index} 对应的数据目录")
+
+    def _call_qual_find_peaks(self, data_dir, relative_area_percent=1.0):
+        """调用 MassHunter Qual 的 /qual/findPeaks 服务，返回列表。"""
+        url = f"{self.qual_base_url}/qual/findPeaks"
+        payload = {
+            "dataDir": data_dir,
+            "filter": {
+                "msLevel": "All",
+                "scanType": "All",
+                "chromatogramType": "TotalIon",
+                "smoothFunction": "Gaussian",
+                "smoothGaussianWidth": 5,
+                "smoothFunctionWidth": 15,
+                "relativeAreaPercent": float(relative_area_percent) / 100.0
+            }
+        }
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'}, method='POST')
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            text = resp.read().decode('utf-8', errors='ignore')
+            return json.loads(text)
+
+    def handle_get_peaks(self, sequence_index, archive_id=None, relative_area_percent=1.0):
+        """实时获取峰信息（centerX/area 等），每次查看都从当前路径重新拉取。"""
+        try:
+            data_folder = self._resolve_data_folder_for_sequence(sequence_index, archive_id)
+            peaks = self._call_qual_find_peaks(data_folder, relative_area_percent=relative_area_percent)
+            if not isinstance(peaks, list):
+                raise RuntimeError("峰信息返回格式异常")
+            # 仅回传关心字段，避免过大
+            simplified = []
+            for p in peaks:
+                try:
+                    simplified.append({
+                        'centerX': float(p.get('centerX', 0) or 0),
+                        'area': float(p.get('area', 0) or 0),
+                        'startX': float(p.get('startX', 0) or 0),
+                        'endX': float(p.get('endX', 0) or 0),
+                        'width': float(p.get('width', 0) or 0),
+                        'baselineIsLinear': p.get('baselineIsLinear', None)
+                    })
+                except Exception:
+                    continue
+            self.send_response({
+                'type': 'peaks_result',
+                'sequence_index': sequence_index,
+                'archive_id': archive_id,
+                'available': True,
+                'relative_area_percent': float(relative_area_percent),
+                'data_folder': data_folder,
+                'peaks': simplified
+            })
+        except urllib.error.HTTPError as e:
+            self.send_response({
+                'type': 'peaks_result',
+                'sequence_index': sequence_index,
+                'archive_id': archive_id,
+                'available': False,
+                'message': f'Qual服务错误: {e.code} {e.reason}'
+            })
+        except Exception as e:
+            self.send_response({
+                'type': 'peaks_result',
+                'sequence_index': sequence_index,
+                'archive_id': archive_id,
+                'available': False,
+                'message': f'获取峰失败: {str(e)}'
+            })
+
     def handle_get_arm_status(self):
         """获取机械臂状态"""
         try:
