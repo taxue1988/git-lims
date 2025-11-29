@@ -338,6 +338,12 @@
 {% block extra_js %}
 <script src="{% static 'js/marked.min.js' %}"></script>
 <script>
+if (typeof marked === 'undefined') {
+    // Fallback CDN if local load fails or 404
+    document.write('<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>');
+}
+</script>
+<script>
 $(document).ready(function() {
     let currentSessionId = null;
     let currentMessages = [];
@@ -536,6 +542,14 @@ $(document).ready(function() {
                     }
                     return;
                 }
+                
+                // Ensure marked is available
+                const parseMarkdown = (text) => {
+                    if (typeof marked !== 'undefined') {
+                        return marked.parse(text);
+                    }
+                    return text; // Fallback to plain text
+                };
 
                 // Handle Reasoning
                 if (data.reasoning_content) {
@@ -555,7 +569,7 @@ $(document).ready(function() {
                 // Handle Content
                 if (data.content) {
                     fullContent += data.content;
-                    markdownDiv.html(marked.parse(fullContent));
+                    markdownDiv.html(parseMarkdown(fullContent));
                     
                     if (reasoningDiv) {
                         reasoningDiv.find('.reasoning-header').html('<i class="fas fa-brain me-1"></i> 思考过程 (点击展开/收起)');
