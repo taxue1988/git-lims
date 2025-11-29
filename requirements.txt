@@ -42,3 +42,7 @@ redis==5.0.1                  # Redis缓存（如果需要）
 
 # API 请求
 requests==2.32.5
+
+# WebSocket支持
+channels==4.0.0
+daphne==4.0.0
