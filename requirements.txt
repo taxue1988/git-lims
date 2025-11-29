@@ -41,6 +41,7 @@ redis==5.0.1                  # Redis缓存（如果需要）
 # coverage==7.3.2
 
 # API 请求
+urllib3<2.0.0
 requests==2.32.5
 
 # WebSocket支持
