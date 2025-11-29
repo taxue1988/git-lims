@@ -11,4 +11,6 @@ websocket_urlpatterns = [
     re_path(r'ws/gcms/$', consumers.GcmsConsumer.as_asgi()),
     # HPLC 专用路由
     re_path(r'ws/hplc/$', consumers.HplcConsumer.as_asgi()),
+    # AI Chat WebSocket
+    re_path(r'ws/ai-chat/$', consumers.AIChatConsumer.as_asgi()),
 ]

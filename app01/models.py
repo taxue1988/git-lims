@@ -53,6 +53,86 @@ class User(AbstractUser):
 # endregion
 
 
+# region AI大模型配置(AIModelConfig)
+class AIModelConfig(models.Model):
+    """
+    AI模型配置
+    """
+    PROVIDER_CHOICES = (
+        ('deepseek', 'DeepSeek'),
+        ('kimi', 'Kimi'),
+        ('other', 'Other'),
+    )
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="用户")
+    provider = models.CharField(max_length=50, choices=PROVIDER_CHOICES, verbose_name="模型提供商")
+    api_key = models.CharField(max_length=255, verbose_name="API Key")
+    model_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="模型名称") # e.g. deepseek-chat
+    base_url = models.CharField(max_length=255, blank=True, null=True, verbose_name="Base URL") # For compatible APIs
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "ai_model_config"
+        verbose_name = "AI模型配置"
+        verbose_name_plural = "AI模型配置"
+        unique_together = ('user', 'provider') 
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_provider_display()}"
+
+# endregion
+
+
+# region AI对话相关模型(AIChatSession, AIChatMessage)
+class AIChatSession(models.Model):
+    """
+    AI对话会话，用于隔离不同对话
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="用户")
+    title = models.CharField(max_length=200, verbose_name="会话标题", default="新对话")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        db_table = "ai_chat_session"
+        verbose_name = "AI对话会话"
+        verbose_name_plural = "AI对话会话"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.title}"
+
+
+class AIChatMessage(models.Model):
+    """
+    AI对话消息
+    """
+    ROLE_CHOICES = (
+        ('user', '用户'),
+        ('assistant', 'AI助手'),
+        ('system', '系统'),
+    )
+
+    session = models.ForeignKey(AIChatSession, on_delete=models.CASCADE, related_name="messages", verbose_name="所属会话")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, verbose_name="角色")
+    content = models.TextField(verbose_name="消息内容")
+    reasoning_content = models.TextField(blank=True, null=True, verbose_name="思考/推理内容")
+    model_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="使用模型")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = "ai_chat_message"
+        verbose_name = "AI对话消息"
+        verbose_name_plural = "AI对话消息"
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.session.title} - {self.role}: {self.content[:20]}"
+# endregion
+
+
 # region 任务状态枚举(TaskStatus)
 class TaskStatus(models.TextChoices):
     """

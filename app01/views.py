@@ -3,12 +3,13 @@ import json
 import re
 import random
 import time
+import requests
 from django.shortcuts import render, redirect  # pyright: ignore[reportMissingImports]
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.contrib.auth import logout
-from django.http import JsonResponse, HttpRequest
+from django.http import JsonResponse, HttpRequest, StreamingHttpResponse
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
@@ -28,7 +29,7 @@ from decimal import Decimal
 from datetime import datetime
 from django.core.exceptions import ValidationError
 # 精简并修正模型导入：去除不存在的模型，保留实际使用的模型
-from .models import TaskStatusManager, BayesianOptTask, BOIteration, BOTrial
+from .models import TaskStatusManager, BayesianOptTask, BOIteration, BOTrial, AIModelConfig, AIChatSession, AIChatMessage
 User = get_user_model()
 # endregion
 
@@ -7764,3 +7765,306 @@ def api_occupied_preparation_containers(request):
 
 
 # endregion
+
+
+# region AI大模型功能(AI Chat)
+
+@login_required
+def user_ai_chat(request):
+    """
+    AI对话页面
+    """
+    configs = AIModelConfig.objects.filter(user=request.user, is_active=True)
+    config_dict = {c.provider: c.model_name or '' for c in configs}
+    
+    # 获取用户最近的会话
+    sessions = AIChatSession.objects.filter(user=request.user).order_by("-updated_at")[:20]
+    
+    context = {
+        "configs": config_dict,
+        "has_deepseek": 'deepseek' in config_dict,
+        "has_kimi": 'kimi' in config_dict,
+        "sessions": sessions,
+    }
+    return render(request, "user/ai_chat.html", context)
+
+@login_required
+@require_http_methods(["GET", "POST", "DELETE"])
+def api_ai_sessions(request):
+    """
+    会话管理接口
+    """
+    if request.method == "GET":
+        # 获取会话列表
+        sessions = AIChatSession.objects.filter(user=request.user).order_by("-updated_at")
+        data = [{
+            "id": s.id,
+            "title": s.title,
+            "updated_at": s.updated_at.strftime("%Y-%m-%d %H:%M")
+        } for s in sessions]
+        return JsonResponse({"success": True, "sessions": data})
+        
+    elif request.method == "POST":
+        # 创建新会话
+        try:
+            data = json.loads(request.body)
+            title = data.get("title", "新对话")
+            session = AIChatSession.objects.create(user=request.user, title=title)
+            return JsonResponse({
+                "success": True, 
+                "session": {
+                    "id": session.id,
+                    "title": session.title,
+                    "updated_at": session.updated_at.strftime("%Y-%m-%d %H:%M")
+                }
+            })
+        except Exception as e:
+            return JsonResponse({"success": False, "message": str(e)}, status=500)
+            
+    elif request.method == "DELETE":
+        # 删除会话
+        try:
+            data = json.loads(request.body)
+            session_id = data.get("id")
+            AIChatSession.objects.filter(id=session_id, user=request.user).delete()
+            return JsonResponse({"success": True})
+        except Exception as e:
+            return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+@login_required
+@require_http_methods(["GET"])
+def api_ai_history(request):
+    """
+    获取会话历史消息
+    """
+    session_id = request.GET.get("session_id")
+    if not session_id:
+        return JsonResponse({"success": False, "message": "缺少session_id"}, status=400)
+        
+    try:
+        session = AIChatSession.objects.get(id=session_id, user=request.user)
+        messages = session.messages.all().order_by("created_at")
+        
+        data = []
+        for msg in messages:
+            data.append({
+                "role": msg.role,
+                "content": msg.content,
+                "reasoning_content": msg.reasoning_content,
+                "model": msg.model_name,
+                "created_at": msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            })
+            
+        return JsonResponse({"success": True, "messages": data})
+    except AIChatSession.DoesNotExist:
+        return JsonResponse({"success": False, "message": "会话不存在"}, status=404)
+
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def api_ai_key_manage(request):
+    """
+    管理AI API Key
+    """
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            provider = data.get("provider")
+            api_key = data.get("api_key")
+            model_name = data.get("model_name", "")
+            base_url = data.get("base_url", "")
+            
+            if not provider or not api_key:
+                return JsonResponse({"success": False, "message": "缺少必要参数"}, status=400)
+            
+            config, created = AIModelConfig.objects.update_or_create(
+                user=request.user,
+                provider=provider,
+                defaults={
+                    "api_key": api_key,
+                    "model_name": model_name,
+                    "base_url": base_url,
+                    "is_active": True
+                }
+            )
+            
+            return JsonResponse({"success": True, "message": "保存成功"})
+        except Exception as e:
+            return JsonResponse({"success": False, "message": str(e)}, status=500)
+            
+    elif request.method == "DELETE":
+        try:
+            data = json.loads(request.body)
+            provider = data.get("provider")
+            
+            if not provider:
+                 return JsonResponse({"success": False, "message": "缺少必要参数"}, status=400)
+            
+            AIModelConfig.objects.filter(user=request.user, provider=provider).delete()
+            return JsonResponse({"success": True, "message": "删除成功"})
+        except Exception as e:
+            return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+@login_required
+@require_http_methods(["POST"])
+def api_ai_chat(request):
+    """
+    AI对话代理接口，支持会话保存和流式输出
+    """
+    try:
+        data = json.loads(request.body)
+        provider = data.get("provider")
+        messages = data.get("messages", [])
+        stream = data.get("stream", True)
+        session_id = data.get("session_id")
+        
+        if not provider or not messages:
+            return JsonResponse({"success": False, "message": "缺少必要参数"}, status=400)
+            
+        config = AIModelConfig.objects.filter(user=request.user, provider=provider, is_active=True).first()
+        if not config:
+             return JsonResponse({"success": False, "message": f"未配置 {provider} 的API Key"}, status=400)
+
+        # 获取或创建会话
+        session = None
+        if session_id:
+            try:
+                session = AIChatSession.objects.get(id=session_id, user=request.user)
+            except AIChatSession.DoesNotExist:
+                pass
+        
+        if not session:
+            # 默认标题取第一条消息的前20个字符
+            title = messages[0]['content'][:20] if messages else "新对话"
+            session = AIChatSession.objects.create(user=request.user, title=title)
+
+        # 保存用户消息
+        last_user_msg = messages[-1]
+        if last_user_msg['role'] == 'user':
+            AIChatMessage.objects.create(
+                session=session,
+                role='user',
+                content=last_user_msg['content'],
+                model_name=config.model_name
+            )
+        
+        # 配置请求
+        api_key = config.api_key
+        base_url = config.base_url
+        model = config.model_name
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "messages": messages,
+            "stream": stream
+        }
+        
+        url = ""
+        if provider == "deepseek":
+            url = "https://api.deepseek.com/chat/completions"
+            if not model: model = "deepseek-chat"
+        elif provider == "kimi":
+            url = "https://api.moonshot.cn/v1/chat/completions"
+            if not model: model = "moonshot-v1-8k"
+        else:
+             # 自定义或其他
+             if base_url:
+                 url = base_url if base_url.endswith("/chat/completions") else f"{base_url.rstrip('/')}/chat/completions"
+             else:
+                 return JsonResponse({"success": False, "message": "未知的提供商且未提供Base URL"}, status=400)
+                 
+        payload["model"] = model
+        
+        # 发起请求
+        print(f"DEBUG: Requesting {url} with model {model}")
+        try:
+            # 强制不使用代理
+            response = requests.post(url, json=payload, headers=headers, stream=stream, timeout=60, proxies={"http": None, "https": None})
+            
+            if response.status_code != 200:
+                 print(f"DEBUG: API Error {response.status_code}: {response.text}")
+            response.raise_for_status()
+            
+            if stream:
+                def event_stream():
+                    # 累积回复内容用于保存
+                    full_content = ""
+                    full_reasoning = ""
+                    
+                    try:
+                        for line in response.iter_lines():
+                            if line:
+                                # 确保 line 是 bytes
+                                line_decoded = line.decode('utf-8') if isinstance(line, bytes) else line
+                                print(f"DEBUG: Stream chunk: {line_decoded[:50]}...") # Log first 50 chars
+                                yield line + b"\n\n"
+                                
+                                if line_decoded.startswith("data: "):
+                                    data_str = line_decoded[6:]
+                                    if data_str == "[DONE]":
+                                        continue
+                                    try:
+                                        chunk = json.loads(data_str)
+                                        delta = chunk['choices'][0]['delta']
+                                        
+                                        # 累积内容
+                                        content = delta.get('content', '')
+                                        reasoning = delta.get('reasoning_content', '')
+                                        
+                                        if content: full_content += content
+                                        if reasoning: full_reasoning += reasoning
+                                    except Exception as e:
+                                        print(f"DEBUG: Parse error in stream: {e}")
+                    except Exception as e:
+                        print(f"DEBUG: Stream interruption: {e}")
+                    
+                    # 流结束后保存助手消息
+                    print(f"DEBUG: Stream finished. Content len: {len(full_content)}, Reasoning len: {len(full_reasoning)}")
+                    if full_content or full_reasoning:
+                        try:
+                            AIChatMessage.objects.create(
+                                session=session,
+                                role='assistant',
+                                content=full_content,
+                                reasoning_content=full_reasoning,
+                                model_name=model
+                            )
+                            # 更新会话时间
+                            session.updated_at = timezone.now()
+                            session.save()
+                            print("DEBUG: Assistant message saved.")
+                        except Exception as e:
+                            print(f"DEBUG: Failed to save message: {e}")
+
+                return StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+            else:
+                # 非流式响应处理
+                json_response = response.json()
+                content = json_response['choices'][0]['message']['content']
+                reasoning = json_response['choices'][0]['message'].get('reasoning_content', '')
+                
+                AIChatMessage.objects.create(
+                    session=session,
+                    role='assistant',
+                    content=content,
+                    reasoning_content=reasoning,
+                    model_name=model
+                )
+                session.updated_at = timezone.now()
+                session.save()
+                
+                return JsonResponse(json_response)
+                
+        except requests.RequestException as e:
+             print(f"DEBUG: Request Exception: {str(e)}")
+             return JsonResponse({"success": False, "message": f"API请求失败: {str(e)}"}, status=502)
+             
+    except Exception as e:
+        print(f"DEBUG: General Exception: {str(e)}")
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+# endregion
+

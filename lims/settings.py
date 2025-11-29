@@ -110,11 +110,14 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'lims5',
+            'NAME': 'lims',
             'USER': 'root',
-            'PASSWORD': 'root123456',
+            'PASSWORD': '',
             'HOST': '127.0.0.1',
             'PORT': '3306',
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+            },
         }
     }
 

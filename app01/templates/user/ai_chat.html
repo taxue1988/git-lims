@@ -1,0 +1,688 @@
+{% extends "user_base.html" %}
+{% load static %}
+
+{% block title %}AI 助手 - 自动实验管理系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-layout {
+        display: flex;
+        height: calc(100vh - 120px);
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        overflow: hidden;
+    }
+    
+    .chat-sidebar {
+        width: 260px;
+        border-right: 1px solid #eee;
+        background: #f8f9fa;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .sidebar-header {
+        padding: 15px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .session-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+    
+    .session-item {
+        padding: 10px 15px;
+        margin-bottom: 5px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.9em;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .session-item:hover {
+        background: #e9ecef;
+    }
+    
+    .session-item.active {
+        background: #e7f1ff;
+        color: #0d6efd;
+    }
+    
+    .session-item .delete-btn {
+        opacity: 0;
+        transition: opacity 0.2s;
+        font-size: 0.8em;
+        padding: 2px 5px;
+    }
+    
+    .session-item:hover .delete-btn {
+        opacity: 1;
+    }
+    
+    .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0; /* Prevent flex item from overflowing */
+    }
+    
+    .chat-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: #fff;
+    }
+    
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .message {
+        max-width: 85%;
+        padding: 0;
+        position: relative;
+        line-height: 1.6;
+    }
+    
+    .message.user {
+        align-self: flex-end;
+    }
+    
+    .message.assistant {
+        align-self: flex-start;
+    }
+    
+    .message-content {
+        padding: 12px 16px;
+        border-radius: 12px;
+        word-wrap: break-word;
+    }
+    
+    .message.user .message-content {
+        background-color: #0d6efd;
+        color: white;
+        border-bottom-right-radius: 2px;
+    }
+    
+    .message.assistant .message-content {
+        background-color: #f8f9fa;
+        color: #212529;
+        border: 1px solid #eee;
+        border-bottom-left-radius: 2px;
+    }
+    
+    .chat-input-area {
+        padding: 20px;
+        border-top: 1px solid #eee;
+        background-color: #fff;
+    }
+    
+    .reasoning-block {
+        margin-bottom: 10px;
+        border-left: 3px solid #ddd;
+        padding-left: 10px;
+        color: #666;
+        font-size: 0.9em;
+        background: #fafafa;
+        padding: 8px 12px;
+        border-radius: 4px;
+    }
+    
+    .reasoning-header {
+        font-size: 0.8em;
+        color: #999;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+    }
+    
+    .reasoning-content {
+        font-style: italic;
+        white-space: pre-wrap;
+    }
+    
+    .model-badge {
+        font-size: 0.75em;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #e9ecef;
+        color: #666;
+        margin-bottom: 4px;
+        display: inline-block;
+    }
+    
+    /* Markdown Styles */
+    .message-content pre {
+        background: #2d2d2d;
+        color: #ccc;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 10px 0;
+    }
+    
+    .message-content code {
+        font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        background: rgba(0,0,0,0.05);
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+    }
+    
+    .message.user .message-content code {
+        background: rgba(255,255,255,0.2);
+    }
+    
+    .message.user .message-content pre {
+        background: rgba(0,0,0,0.2);
+        color: #fff;
+    }
+</style>
+{% endblock %}
+
+{% block main_content %}
+<div class="container-fluid h-100 p-3">
+    <div class="row h-100">
+        <div class="col-12">
+            <div class="chat-layout">
+                <!-- Sidebar -->
+                <div class="chat-sidebar">
+                    <div class="sidebar-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">历史对话</h6>
+                        <button class="btn btn-sm btn-outline-primary" id="newChatBtn">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="session-list" id="sessionList">
+                        <!-- Sessions will be loaded here -->
+                        {% for session in sessions %}
+                        <div class="session-item" data-id="{{ session.id }}">
+                            <span class="title">{{ session.title }}</span>
+                            <i class="fas fa-trash delete-btn text-danger" title="删除"></i>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Main Chat Area -->
+                <div class="chat-main">
+                    <div class="chat-header">
+                        <div class="d-flex align-items-center">
+                            <h5 class="mb-0 me-3"><i class="fas fa-robot me-2"></i>AI 助手</h5>
+                            <select id="modelSelect" class="form-select form-select-sm" style="width: 160px;">
+                                {% if has_deepseek %}<option value="deepseek" selected>DeepSeek</option>{% endif %}
+                                {% if has_kimi %}<option value="kimi">Kimi</option>{% endif %}
+                                {% for provider in configs %}
+                                    {% if provider != 'deepseek' and provider != 'kimi' %}
+                                        <option value="{{ provider }}">{{ provider }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            {% if not configs %}
+                                <span class="text-danger ms-2 small"><i class="fas fa-exclamation-circle"></i> 请先配置API Key</span>
+                            {% endif %}
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="chatMessages" class="chat-messages">
+                        <div class="message assistant">
+                            <div class="message-content">
+                                你好！我是你的实验助手。请在左侧选择历史对话，或点击"+"开始新对话。
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-area">
+                        <div class="input-group">
+                            <textarea id="messageInput" class="form-control" rows="2" placeholder="输入你的问题... (Shift+Enter 换行)" style="resize:none;"></textarea>
+                            <button id="sendBtn" class="btn btn-primary px-4">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">API 设置</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs mb-3" id="settingTabs">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#deepseek-tab">DeepSeek</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#kimi-tab">Kimi</button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <!-- DeepSeek Settings -->
+                    <div class="tab-pane fade show active" id="deepseek-tab">
+                        <form class="api-form" data-provider="deepseek">
+                            <div class="mb-3">
+                                <label class="form-label">API Key</label>
+                                <input type="password" name="api_key" class="form-control" placeholder="sk-..." value="{{ configs.deepseek.api_key|default:'' }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">模型名称</label>
+                                <input type="text" name="model_name" class="form-control" placeholder="deepseek-chat" value="{{ configs.deepseek|default:'deepseek-chat' }}">
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                {% if has_deepseek %}
+                                <button type="button" class="btn btn-outline-danger btn-sm delete-key" data-provider="deepseek">删除配置</button>
+                                {% else %}
+                                <div></div>
+                                {% endif %}
+                                <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Kimi Settings -->
+                    <div class="tab-pane fade" id="kimi-tab">
+                        <form class="api-form" data-provider="kimi">
+                            <div class="mb-3">
+                                <label class="form-label">API Key</label>
+                                <input type="password" name="api_key" class="form-control" placeholder="sk-..." value="{{ configs.kimi.api_key|default:'' }}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">模型名称</label>
+                                <input type="text" name="model_name" class="form-control" placeholder="moonshot-v1-8k" value="{{ configs.kimi|default:'moonshot-v1-8k' }}">
+                            </div>
+                             <div class="d-flex justify-content-between">
+                                {% if has_kimi %}
+                                <button type="button" class="btn btn-outline-danger btn-sm delete-key" data-provider="kimi">删除配置</button>
+                                {% else %}
+                                <div></div>
+                                {% endif %}
+                                <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/marked.min.js' %}"></script>
+<script>
+$(document).ready(function() {
+    let currentSessionId = null;
+    let currentMessages = [];
+
+    // Init
+    function init() {
+        // If there are sessions, load the first one, otherwise start new
+        const firstSession = $('.session-item').first();
+        if(firstSession.length) {
+            loadSession(firstSession.data('id'));
+        } else {
+            startNewChat();
+        }
+    }
+
+    // Create New Chat
+    $('#newChatBtn').on('click', function() {
+        startNewChat();
+    });
+    
+    function startNewChat() {
+        currentSessionId = null;
+        currentMessages = [];
+        $('#chatMessages').empty();
+        appendSystemMessage('你好！我是你的实验助手。请开始新的对话。');
+        $('.session-item').removeClass('active');
+    }
+
+    // Load Session
+    $('#sessionList').on('click', '.session-item', function(e) {
+        if($(e.target).hasClass('delete-btn')) return;
+        const id = $(this).data('id');
+        loadSession(id);
+    });
+
+    function loadSession(id) {
+        currentSessionId = id;
+        $('.session-item').removeClass('active');
+        $(`.session-item[data-id="${id}"]`).addClass('active');
+        
+        // Fetch messages
+        $.get('{% url "api_ai_history" %}', {session_id: id}, function(res) {
+            if(res.success) {
+                $('#chatMessages').empty();
+                currentMessages = []; // Reset local history, will rebuild from UI or server if needed
+                // Rebuild messages
+                res.messages.forEach(msg => {
+                    if(msg.role === 'user') {
+                        appendMessage('user', msg.content, null, msg.model);
+                        currentMessages.push({role: 'user', content: msg.content});
+                    } else if(msg.role === 'assistant') {
+                        appendMessage('assistant', msg.content, msg.reasoning_content, msg.model);
+                        currentMessages.push({role: 'assistant', content: msg.content}); // Reasoning not usually sent back in context
+                    }
+                });
+                scrollToBottom();
+            }
+        });
+    }
+
+    // Delete Session
+    $('#sessionList').on('click', '.delete-btn', function(e) {
+        e.stopPropagation();
+        if(!confirm('确定删除此会话？')) return;
+        const item = $(this).closest('.session-item');
+        const id = item.data('id');
+        
+        $.ajax({
+            url: '{% url "api_ai_sessions" %}',
+            method: 'DELETE',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': getCookie('csrftoken')},
+            data: JSON.stringify({id: id}),
+            success: function(res) {
+                if(res.success) {
+                    item.remove();
+                    if(currentSessionId === id) {
+                        startNewChat();
+                    }
+                }
+            }
+        });
+    });
+
+    // --- Chat Core ---
+
+    function appendSystemMessage(content) {
+        const msgDiv = $(`
+            <div class="message assistant">
+                <div class="message-content">${marked.parse(content)}</div>
+            </div>
+        `);
+        $('#chatMessages').append(msgDiv);
+        return msgDiv;
+    }
+
+    function appendMessage(role, content, reasoning = null, modelName = null) {
+        const msgDiv = $(`<div class="message ${role}"></div>`);
+        
+        // Model Badge for Assistant
+        if (role === 'assistant' && modelName) {
+            msgDiv.append(`<div class="model-badge">${modelName}</div>`);
+        }
+
+        // Content Container
+        const contentDiv = $(`<div class="message-content"></div>`);
+        
+        if (role === 'assistant') {
+            // Reasoning Block
+            if (reasoning) {
+                const reasoningHtml = `
+                    <div class="reasoning-block">
+                        <div class="reasoning-header" onclick="$(this).next().toggle()">
+                            <i class="fas fa-brain me-1"></i> 思考过程 (点击展开/收起)
+                        </div>
+                        <div class="reasoning-content" style="display:block;">${escapeHtml(reasoning)}</div>
+                    </div>
+                `;
+                contentDiv.append(reasoningHtml);
+            }
+            // Main Content
+            const mainContentDiv = $(`<div class="markdown-body"></div>`);
+            mainContentDiv.html(marked.parse(content));
+            contentDiv.append(mainContentDiv);
+        } else {
+            contentDiv.text(content);
+        }
+        
+        msgDiv.append(contentDiv);
+        $('#chatMessages').append(msgDiv);
+        scrollToBottom();
+        return {msgDiv, contentDiv};
+    }
+
+    async function sendMessage() {
+        const input = $('#messageInput');
+        const content = input.val().trim();
+        const provider = $('#modelSelect').val();
+        
+        if(!content) return;
+        if(!provider) {
+            alert('请先选择模型');
+            return;
+        }
+        
+        // Add User Message
+        appendMessage('user', content);
+        currentMessages.push({role: 'user', content: content});
+        input.val('');
+        
+        // Prepare UI for Stream
+        const msgContainer = $(`<div class="message assistant"></div>`);
+        const modelName = $('#modelSelect option:selected').text();
+        msgContainer.append(`<div class="model-badge">${modelName}</div>`);
+        
+        const contentWrapper = $(`<div class="message-content"></div>`);
+        msgContainer.append(contentWrapper);
+        $('#chatMessages').append(msgContainer);
+        
+        let fullContent = '';
+        let fullReasoning = '';
+        let reasoningDiv = null;
+        let markdownDiv = $(`<div class="markdown-body"></div>`);
+        contentWrapper.append(markdownDiv);
+        
+        scrollToBottom();
+
+        // --- WebSocket Implementation ---
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/ai-chat/`;
+        const socket = new WebSocket(wsUrl);
+
+        socket.onopen = function() {
+            socket.send(JSON.stringify({
+                command: 'start_chat',
+                provider: provider,
+                messages: currentMessages,
+                session_id: currentSessionId
+            }));
+        };
+
+        socket.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.error) {
+                    markdownDiv.append(`<div class="text-danger">Error: ${data.error}</div>`);
+                    socket.close();
+                    return;
+                }
+
+                if (data.type === 'session_info') {
+                    if (!currentSessionId) {
+                        currentSessionId = data.session_id;
+                        refreshSessionList();
+                    }
+                    return;
+                }
+
+                // Handle Reasoning
+                if (data.reasoning_content) {
+                    if (!reasoningDiv) {
+                        reasoningDiv = $(`
+                            <div class="reasoning-block">
+                                <div class="reasoning-header"><i class="fas fa-brain me-1"></i> 思考中...</div>
+                                <div class="reasoning-content"></div>
+                            </div>
+                        `);
+                        contentWrapper.prepend(reasoningDiv);
+                    }
+                    fullReasoning += data.reasoning_content;
+                    reasoningDiv.find('.reasoning-content').text(fullReasoning);
+                }
+
+                // Handle Content
+                if (data.content) {
+                    fullContent += data.content;
+                    markdownDiv.html(marked.parse(fullContent));
+                    
+                    if (reasoningDiv) {
+                        reasoningDiv.find('.reasoning-header').html('<i class="fas fa-brain me-1"></i> 思考过程 (点击展开/收起)');
+                    }
+                }
+                
+                scrollToBottom();
+            } catch (e) {
+                console.error("WS Parse Error:", e);
+            }
+        };
+
+        socket.onclose = function() {
+            if (fullContent) {
+                currentMessages.push({role: 'assistant', content: fullContent});
+            }
+        };
+
+        socket.onerror = function(error) {
+            markdownDiv.append(`<div class="text-danger">WebSocket Error</div>`);
+            console.error("WebSocket Error:", error);
+        };
+    }
+    
+    function refreshSessionList() {
+        $.get('{% url "api_ai_sessions" %}', function(res) {
+            if(res.success) {
+                const list = $('#sessionList');
+                list.empty();
+                res.sessions.forEach(s => {
+                    const activeClass = (s.id === currentSessionId) ? 'active' : '';
+                    list.append(`
+                        <div class="session-item ${activeClass}" data-id="${s.id}">
+                            <span class="title">${s.title}</span>
+                            <i class="fas fa-trash delete-btn text-danger" title="删除"></i>
+                        </div>
+                    `);
+                });
+                // Update currentSessionId if it was null (newly created)
+                if(!currentSessionId && res.sessions.length > 0) {
+                    // The most recent one is first
+                    currentSessionId = res.sessions[0].id;
+                    $(`.session-item[data-id="${currentSessionId}"]`).addClass('active');
+                }
+            }
+        });
+    }
+
+    function scrollToBottom() {
+        const container = $('#chatMessages');
+        container.scrollTop(container[0].scrollHeight);
+    }
+    
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Event Bindings
+    $('#sendBtn').on('click', sendMessage);
+    $('#messageInput').on('keypress', function(e) {
+        if(e.which === 13 && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // API Key Settings Logic (Same as before)
+    $('.api-form').on('submit', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const provider = form.data('provider');
+        const apiKey = form.find('input[name="api_key"]').val();
+        const modelName = form.find('input[name="model_name"]').val();
+        
+        if(!apiKey) { alert('请输入API Key'); return; }
+        
+        $.ajax({
+            url: '{% url "api_ai_key_manage" %}',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': getCookie('csrftoken')},
+            data: JSON.stringify({ provider, api_key: apiKey, model_name: modelName }),
+            success: function(res) {
+                if(res.success) { alert('保存成功'); location.reload(); }
+                else { alert('保存失败: ' + res.message); }
+            }
+        });
+    });
+    
+    $('.delete-key').on('click', function() {
+        if(!confirm('确定要删除该配置吗？')) return;
+        const provider = $(this).data('provider');
+        $.ajax({
+            url: '{% url "api_ai_key_manage" %}',
+            method: 'DELETE',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': getCookie('csrftoken')},
+            data: JSON.stringify({ provider }),
+            success: function(res) {
+                if(res.success) { location.reload(); }
+                else { alert('删除失败: ' + res.message); }
+            }
+        });
+    });
+
+    // Initialize
+    init();
+});
+</script>
+{% endblock %}

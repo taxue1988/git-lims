@@ -1,4 +1,4 @@
-﻿# Django LIMS项目依赖包
+# Django LIMS项目依赖包
 # 核心框架
 Django==4.2.7
 
@@ -39,3 +39,6 @@ redis==5.0.1                  # Redis缓存（如果需要）
 # pytest==7.4.3
 # pytest-django==4.7.0
 # coverage==7.3.2
+
+# API 请求
+requests==2.32.5

@@ -68,6 +68,13 @@ urlpatterns = [
     path('ml/task-management/', views.ml_task_management, name='ml_task_management'),
     path('ml/task/<int:task_id>/', views.ml_task_detail, name='ml_task_detail'),
 
+    # ==================== AI大模型功能路由 ====================
+    path('user/ai_chat/', views.user_ai_chat, name='user_ai_chat'),
+    path('api/ai/key-manage/', views.api_ai_key_manage, name='api_ai_key_manage'),
+    path('api/ai/chat/', views.api_ai_chat, name='api_ai_chat'),
+    path('api/ai/sessions/', views.api_ai_sessions, name='api_ai_sessions'),
+    path('api/ai/history/', views.api_ai_history, name='api_ai_history'),
+
     # ==================== 贝叶斯优化页面（用户） ====================
     path('bo/home/', views.bo_home, name='bo_home'),
     path('bo/tasks/', views.bo_task_center, name='bo_task_center'),
