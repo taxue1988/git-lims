@@ -30,7 +30,10 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost,62.234.51.178,192.168.58.8').split(',')
 
-CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1', 'http://localhost', 'http://62.234.51.178', 'http://192.168.58.8']
+CSRF_TRUSTED_ORIGINS = [
+    'http://127.0.0.1', 'http://localhost', 'http://62.234.51.178', 'http://192.168.58.8',
+    'https://62.234.51.178'
+]
 
 # 关闭用户注册功能
 REGISTRATION_ENABLED = False
@@ -81,11 +84,29 @@ WSGI_APPLICATION = 'lims.wsgi.application'
 ASGI_APPLICATION = 'lims.asgi.application'
 
 # Channels
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
+# 生产建议：使用 Redis 作为 Channel Layer（支持多进程/多机通讯）
+# 当设置环境变量 REDIS_URL 或 CHANNEL_LAYER_BACKEND=redis 时启用 Redis
+if os.environ.get('REDIS_URL') or os.environ.get('CHANNEL_LAYER_BACKEND') == 'redis':
+    redis_url = os.environ.get('REDIS_URL')  # 例如：redis://127.0.0.1:6379/1
+    if not redis_url:
+        host = os.environ.get('REDIS_HOST', '127.0.0.1')
+        port = os.environ.get('REDIS_PORT', '6379')
+        db = os.environ.get('REDIS_DB', '1')
+        redis_url = f'redis://{host}:{port}/{db}'
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [redis_url],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 
 

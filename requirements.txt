@@ -13,8 +13,13 @@ mysqlclient==2.1.1
 # django-extensions==3.2.3     # Django扩展工具
 
 # 生产环境推荐
-gunicorn==21.2.0              # WSGI服务器
+gunicorn==21.2.0              # WSGI服务器（仅用于纯WSGI；本项目WebSocket使用Daphne）
 whitenoise==6.6.0             # 静态文件服务
+
+# Channels + Daphne（ASGI & WebSocket）
+channels==4.1.0
+daphne==4.1.2
+channels-redis==4.2.0         # 生产建议：使用Redis作为Channel Layer
 
 # 安全相关
 python-decouple==3.8          # 环境变量管理

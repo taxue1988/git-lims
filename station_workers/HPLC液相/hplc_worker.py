@@ -33,7 +33,7 @@ class HplcWorker:
         self.server_url = (
                 server_url
                 or os.environ.get("HPLC_SERVER_URL")
-                or "ws://192.168.58.8:8000/ws/hplc/"
+                or "ws://62.234.51.178/ws/hplc/"
         )
         self.ws = None
         self.is_connected = False

@@ -26,21 +26,38 @@ http {
     include             /etc/nginx/mime.types;
     default_type        application/octet-stream;
 
-    upstream django {
+    # uWSGI（HTTP 页面）
+    upstream django_uwsgi {
         server 127.0.0.1:9000;
+    }
+    # Daphne（WebSocket/ASGI）
+    upstream daphne_asgi {
+        server 127.0.0.1:8001;
     }
 
     server {
         listen  80;
         listen  [::]:80;
-        # 建议添加server_name，例如：server_name your-domain.com或_;
+        server_name 62.234.51.178 _;
 
-        location /static {
-            alias /data/git_lims_static/;
+        # 静态文件
+        location /static/ {
+            alias /data/git-lims/git_lims_static/;
         }
 
+        # WebSocket 路由交给 Daphne
+        location /ws/ {
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 600s;
+            proxy_pass http://daphne_asgi;
+        }
+
+        # 其余 HTTP 路由走 uWSGI（如需完全切到 Daphne，可把这里改成 proxy_pass http://daphne_asgi;）
         location / {
-            uwsgi_pass  django;
             include     uwsgi_params;
+            uwsgi_pass  django_uwsgi;
         }
     }
